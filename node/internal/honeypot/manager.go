@@ -170,25 +170,34 @@ func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch str
 	}
 	m.emitLog(potID, hpType, "install.progress", "git clone complete")
 
-	// Run optional install commands (e.g. pip install -r requirements.txt).
-	if len(opts.InstallCmds) > 0 {
-		m.emitLog(potID, hpType, "install.progress", "running install command: "+strings.Join(opts.InstallCmds, " "))
-		if err := m.runInstallCmd(ctx, potID, hpType, dir, opts.InstallCmds); err != nil {
+	// Type-specific post-install setup.
+	switch hpType {
+	case "cowrie":
+		if err := m.postInstallCowrie(ctx, potID, dir); err != nil {
 			_ = os.RemoveAll(dir)
-			m.emitLog(potID, hpType, "install.error", "install command failed: "+err.Error())
-			return nil, fmt.Errorf("install cmd: %w", err)
+			return nil, err
 		}
-		m.emitLog(potID, hpType, "install.progress", "install command complete")
+	default:
+		// Run generic install commands from potstore catalog, if any.
+		if len(opts.InstallCmds) > 0 {
+			m.emitLog(potID, hpType, "install.progress", "running install command: "+strings.Join(opts.InstallCmds, " "))
+			if err := m.runInstallCmd(ctx, potID, hpType, dir, opts.InstallCmds); err != nil {
+				_ = os.RemoveAll(dir)
+				m.emitLog(potID, hpType, "install.error", "install command failed: "+err.Error())
+				return nil, fmt.Errorf("install cmd: %w", err)
+			}
+			m.emitLog(potID, hpType, "install.progress", "install command complete")
+		}
 	}
 
-	// Determine entrypoint: explicit > auto-detect.
+	// Determine entrypoint: explicit > auto-detect (not used for cowrie which uses twistd).
 	entry := opts.Entrypoint
-	if entry == "" {
+	if entry == "" && hpType != "cowrie" {
 		entry = findEntrypoint(dir)
 	}
 	if entry != "" {
 		m.emitLog(potID, hpType, "install.progress", "entrypoint: "+entry)
-	} else if len(opts.RunCmd) == 0 {
+	} else if len(opts.RunCmd) == 0 && hpType != "cowrie" {
 		m.emitLog(potID, hpType, "install.warning", "no entrypoint detected — pot may need manual configuration")
 	}
 
@@ -382,6 +391,55 @@ func findEntrypoint(dir string) string {
 	return ""
 }
 
+// postInstallCowrie handles cowrie-specific setup after git clone:
+// creates a Python venv, upgrades pip, installs requirements.txt, and
+// creates the var/ directories that cowrie expects at runtime.
+func (m *Manager) postInstallCowrie(ctx context.Context, potID, dir string) error {
+	pythonCmd := "python3"
+	if runtime.GOOS == "windows" {
+		pythonCmd = "python"
+	}
+
+	venvDir := filepath.Join(dir, "cowrie-env")
+	m.emitLog(potID, "cowrie", "install.progress", "creating Python virtual environment")
+	if err := m.runInstallCmd(ctx, potID, "cowrie", dir, []string{pythonCmd, "-m", "venv", venvDir}); err != nil {
+		return fmt.Errorf("create venv: %w", err)
+	}
+
+	var pipPath string
+	if runtime.GOOS == "windows" {
+		pipPath = filepath.Join(venvDir, "Scripts", "pip")
+	} else {
+		pipPath = filepath.Join(venvDir, "bin", "pip")
+	}
+
+	// Upgrade pip (ignore errors — non-fatal)
+	_ = m.runInstallCmd(ctx, potID, "cowrie", dir, []string{pipPath, "install", "--upgrade", "pip"})
+
+	// Install requirements if present
+	reqPath := filepath.Join(dir, "requirements.txt")
+	if _, err := os.Stat(reqPath); err == nil {
+		m.emitLog(potID, "cowrie", "install.progress", "installing Python requirements (this may take a while)")
+		if err := m.runInstallCmd(ctx, potID, "cowrie", dir, []string{pipPath, "install", "-r", reqPath}); err != nil {
+			return fmt.Errorf("pip install requirements: %w", err)
+		}
+	}
+
+	// Create directories cowrie needs at runtime
+	for _, sub := range []string{
+		filepath.Join("var", "log", "cowrie"),
+		filepath.Join("var", "lib", "cowrie", "tty"),
+		filepath.Join("var", "lib", "cowrie", "downloads"),
+		filepath.Join("var", "run", "cowrie"),
+	} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			return fmt.Errorf("mkdir %s: %w", sub, err)
+		}
+	}
+	m.emitLog(potID, "cowrie", "install.progress", "cowrie setup complete")
+	return nil
+}
+
 // runInstallCmd runs a single install command (argv slice) from dir, streaming output via LogFn.
 func (m *Manager) runInstallCmd(ctx context.Context, potID, hpType, dir string, args []string) error {
 	if len(args) == 0 {
@@ -415,7 +473,26 @@ func (m *Manager) runInstallCmd(ctx context.Context, potID, hpType, dir string, 
 }
 
 func buildCommand(mf *Manifest) (*exec.Cmd, error) {
-	// RunCmd takes precedence — use it verbatim.
+	// Cowrie: use venv twistd + PYTHONPATH instead of the cowrie shell script.
+	if mf.HoneypotType == "cowrie" {
+		venvDir := filepath.Join(mf.InstallDir, "cowrie-env")
+		var twistdPath string
+		if runtime.GOOS == "windows" {
+			twistdPath = filepath.Join(venvDir, "Scripts", "twistd.exe")
+		} else {
+			twistdPath = filepath.Join(venvDir, "bin", "twistd")
+		}
+		if _, err := os.Stat(twistdPath); err != nil {
+			return nil, fmt.Errorf("twistd not found at %s — cowrie venv setup may have failed", twistdPath)
+		}
+		cmd := exec.Command(twistdPath, "-n", "-l", "-", "cowrie")
+		cmd.Env = append(os.Environ(),
+			fmt.Sprintf("PYTHONPATH=%s", filepath.Join(mf.InstallDir, "src")),
+		)
+		return cmd, nil
+	}
+
+	// RunCmd takes precedence over Entrypoint for other types.
 	if len(mf.RunCmd) > 0 {
 		exe, err := exec.LookPath(mf.RunCmd[0])
 		if err != nil {
