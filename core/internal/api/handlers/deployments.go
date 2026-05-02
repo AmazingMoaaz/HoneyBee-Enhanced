@@ -136,18 +136,18 @@ func (h *DeploymentsHandler) UpdateConfig(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// Logs returns paginated pot_logs for a deployment.
+// Logs returns paginated pot_logs for a deployment, in chronological order.
 func (h *DeploymentsHandler) Logs(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgID(r.Context())
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	dep, err := h.Store.GetDeployment(r.Context(), orgID, id)
-	if err != nil {
+	// Verify deployment belongs to this org.
+	if _, err := h.Store.GetDeployment(r.Context(), orgID, id); err != nil {
 		writeError(w, http.StatusNotFound, "deployment")
 		return
 	}
-	limit := queryInt(r, "limit", 100)
+	limit := queryInt(r, "limit", 500)
 	offset := queryInt(r, "offset", 0)
-	logs, err := h.Store.ListPotLogs(r.Context(), orgID, dep.PotID, limit, offset)
+	logs, err := h.Store.ListPotLogsByDeployment(r.Context(), id, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list logs")
 		return

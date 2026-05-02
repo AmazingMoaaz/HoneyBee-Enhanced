@@ -152,3 +152,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     INDEX idx_audit_org_time (org_id, created_at),
     FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- idempotent migrations
+ALTER TABLE pot_logs ADD COLUMN IF NOT EXISTS deployment_id BIGINT NULL AFTER node_id;
+ALTER TABLE pot_logs ADD INDEX IF NOT EXISTS idx_potlogs_dep (deployment_id);

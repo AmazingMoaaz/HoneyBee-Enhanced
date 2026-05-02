@@ -176,6 +176,10 @@ func (d *Dispatcher) handlePotLog(ctx context.Context, sess *Session, env *proto
 	if entry.LoggedAt.IsZero() {
 		entry.LoggedAt = time.Now().UTC()
 	}
+	// Attach the deployment_id so logs are scoped per-deployment (not all-time per pot).
+	if dep, err := d.store.GetDeploymentByPotID(ctx, sess.nodeID, pl.PotID); err == nil {
+		entry.DeploymentID = &dep.ID
+	}
 	if _, err := d.store.InsertPotLog(ctx, entry); err != nil {
 		d.logger.Warn("insert pot_log", slog.Any("err", err))
 		return

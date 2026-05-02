@@ -107,14 +107,15 @@ type Event struct {
 
 // PotLogEntry mirrors the pot_logs table row.
 type PotLogEntry struct {
-	ID       int64     `json:"id" db:"id"`
-	OrgID    int64     `json:"org_id" db:"org_id"`
-	NodeID   int64     `json:"node_id" db:"node_id"`
-	PotID    string    `json:"pot_id" db:"pot_id"`
-	PotType  string    `json:"pot_type" db:"pot_type"`
-	LogType  string    `json:"log_type" db:"log_type"`
-	Data     string    `json:"data" db:"data"`
-	LoggedAt time.Time `json:"logged_at" db:"logged_at"`
+	ID           int64     `json:"id" db:"id"`
+	OrgID        int64     `json:"org_id" db:"org_id"`
+	NodeID       int64     `json:"node_id" db:"node_id"`
+	DeploymentID *int64    `json:"deployment_id,omitempty" db:"deployment_id"`
+	PotID        string    `json:"pot_id" db:"pot_id"`
+	PotType      string    `json:"pot_type" db:"pot_type"`
+	LogType      string    `json:"log_type" db:"log_type"`
+	Data         string    `json:"data" db:"data"`
+	LoggedAt     time.Time `json:"logged_at" db:"logged_at"`
 }
 
 // Session is a captured attacker session.

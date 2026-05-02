@@ -409,6 +409,12 @@ func (m *Manager) postInstallCowrie(ctx context.Context, potID, dir string) erro
 	if pythonCmd == "" {
 		return fmt.Errorf("Python not found in PATH (tried: %v) — install Python 3 and ensure it is on PATH", pythonCandidates)
 	}
+	// Sanity check: the launcher (py.exe) exists on Windows even without Python installed.
+	// Run a quick test to confirm a real interpreter is available.
+	testCmd := exec.CommandContext(ctx, pythonCmd, "-c", "import sys")
+	if err := testCmd.Run(); err != nil {
+		return fmt.Errorf("Python found at %s but failed to run — install Python 3 from python.org and add it to PATH", pythonCmd)
+	}
 	m.emitLog(potID, "cowrie", "install.progress", "using Python: "+pythonCmd)
 
 	venvDir := filepath.Join(dir, "cowrie-env")
