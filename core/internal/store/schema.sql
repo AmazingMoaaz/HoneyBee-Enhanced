@@ -96,16 +96,18 @@ CREATE TABLE IF NOT EXISTS events (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS pot_logs (
-    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-    org_id      BIGINT NOT NULL,
-    node_id     BIGINT NOT NULL,
-    pot_id      VARCHAR(128) NOT NULL,
-    pot_type    VARCHAR(64)  NOT NULL,
-    log_type    VARCHAR(64)  NOT NULL,
-    data        JSON NOT NULL,
-    logged_at   TIMESTAMP(6) NOT NULL,
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    org_id          BIGINT NOT NULL,
+    node_id         BIGINT NOT NULL,
+    deployment_id   BIGINT NULL,
+    pot_id          VARCHAR(128) NOT NULL,
+    pot_type        VARCHAR(64)  NOT NULL,
+    log_type        VARCHAR(64)  NOT NULL,
+    data            JSON NOT NULL,
+    logged_at       TIMESTAMP(6) NOT NULL,
     INDEX idx_potlogs_pot_time (pot_id, logged_at),
     INDEX idx_potlogs_org_time (org_id, logged_at),
+    INDEX idx_potlogs_dep      (deployment_id),
     FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE,
     FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -153,6 +155,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
     FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- idempotent migrations
-ALTER TABLE pot_logs ADD COLUMN IF NOT EXISTS deployment_id BIGINT NULL AFTER node_id;
-ALTER TABLE pot_logs ADD INDEX IF NOT EXISTS idx_potlogs_dep (deployment_id);
+-- idempotent migrations (MySQL 8: duplicate column/key errors are suppressed in Go)
+ALTER TABLE pot_logs ADD COLUMN deployment_id BIGINT NULL AFTER node_id;
+ALTER TABLE pot_logs ADD INDEX idx_potlogs_dep (deployment_id);

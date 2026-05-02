@@ -5,11 +5,12 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	mysql "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -41,7 +42,10 @@ func (s *Store) Close() error {
 	return s.DB.Close()
 }
 
-// Migrate applies the embedded up migration. Idempotent (uses IF NOT EXISTS).
+// Migrate applies the embedded up migration. Idempotent.
+// MySQL 8 does not support ADD COLUMN IF NOT EXISTS; instead we suppress
+// error 1060 (duplicate column) and 1061 (duplicate key name) which simply
+// mean the statement was already applied on a previous run.
 func (s *Store) Migrate(ctx context.Context) error {
 	data, err := migrationFS.ReadFile("schema.sql")
 	if err != nil {
@@ -53,6 +57,12 @@ func (s *Store) Migrate(ctx context.Context) error {
 			continue
 		}
 		if _, err := s.DB.ExecContext(ctx, stmt); err != nil {
+			var myErr *mysql.MySQLError
+			if errors.As(err, &myErr) && (myErr.Number == 1060 || myErr.Number == 1061) {
+				// 1060 = duplicate column name, 1061 = duplicate key name
+				// column/index already exists from a previous migration run — safe to skip
+				continue
+			}
 			return fmt.Errorf("exec migration: %w\nstatement: %s", err, stmt)
 		}
 	}
