@@ -3,8 +3,11 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -69,7 +72,10 @@ func Build(
 			r.Post("/auth/logout", authH.Logout)
 		})
 
-		// Public node-agent binary download — redirects to the GitHub release asset.
+		// Public node-agent binary download.
+		// Serves a locally-built binary from /app/bin/ if present (preferred in
+		// development — ensures the running code matches local source).
+		// Falls back to redirecting to the configured GitHub release asset.
 		// Query params: ?os=linux|darwin|windows  ?arch=amd64|arm64  (defaults: linux/amd64)
 		r.Get("/download/node-agent", func(w http.ResponseWriter, req *http.Request) {
 			goos := req.URL.Query().Get("os")
@@ -84,6 +90,21 @@ func Build(
 			if goos == "windows" {
 				asset += ".exe"
 			}
+			// Serve local binary if available (built into the image at /app/bin/).
+			localPath := filepath.Join("/app/bin", asset)
+			if f, err := os.Open(localPath); err == nil {
+				defer f.Close()
+				if goos == "windows" {
+					w.Header().Set("Content-Type", "application/octet-stream")
+					w.Header().Set("Content-Disposition", "attachment; filename=\"hb-node.exe\"")
+				} else {
+					w.Header().Set("Content-Type", "application/octet-stream")
+					w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", asset))
+				}
+				_, _ = io.Copy(w, f)
+				return
+			}
+			// Fall back to GitHub release.
 			tag := cfg.Node.GitHubReleaseTag
 			var assetURL string
 			if tag == "" || tag == "latest" {

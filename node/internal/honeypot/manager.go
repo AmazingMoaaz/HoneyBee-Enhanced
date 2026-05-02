@@ -579,6 +579,37 @@ func (m *Manager) postInstallCowrie(ctx context.Context, potID, dir string, cfg 
 		}
 	}
 
+	// Install cowrie as an editable package (required — cowrie's __init__.py
+	// raises an error if the package is not importable via pip install -e .).
+	// SETUPTOOLS_SCM_PRETEND_VERSION is needed because after flattenSubdir the
+	// .git dir belongs to the honeybee_potstore monorepo (no cowrie version
+	// tags), so setuptools-scm cannot infer the version on its own.
+	m.emitLog(potID, "cowrie", "install.progress", "installing cowrie package (pip install -e .)")
+	{
+		cmd := exec.CommandContext(ctx, pipPath, "install", "-e", ".")
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "SETUPTOOLS_SCM_PRETEND_VERSION=2.9.0")
+		pr, pw := io.Pipe()
+		cmd.Stdout = pw
+		cmd.Stderr = pw
+		doneScan := make(chan struct{})
+		go func() {
+			defer close(doneScan)
+			streamOutput(pr, func(line string) { m.emitLog(potID, "cowrie", "install.progress", line) })
+		}()
+		if err := cmd.Start(); err != nil {
+			_ = pw.Close()
+			<-doneScan
+			return fmt.Errorf("pip install -e . start: %w", err)
+		}
+		runErr := cmd.Wait()
+		_ = pw.Close()
+		<-doneScan
+		if runErr != nil {
+			return fmt.Errorf("pip install -e .: %w", runErr)
+		}
+	}
+
 	// Runtime directories cowrie expects.
 	for _, sub := range []string{
 		filepath.Join("var", "log", "cowrie"),
