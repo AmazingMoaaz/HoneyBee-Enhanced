@@ -1,0 +1,25 @@
+version: "3.9"
+
+# Production overlay: enables TLS + restart policies + secrets via env file.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  mysql:
+    restart: always
+    env_file: [.env.prod]
+
+  core:
+    restart: always
+    env_file: [.env.prod]
+    environment:
+      LOG_LEVEL: "warn"
+    volumes:
+      - ./certs:/app/certs:ro
+      - ./configs/core-prod.yaml:/app/configs/core.yaml:ro
+
+  dashboard:
+    restart: always
+    ports: ["443:443", "80:80"]
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+      - ./configs/nginx-prod.conf:/etc/nginx/conf.d/default.conf:ro

@@ -1,0 +1,193 @@
+package handlers
+
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/honeybee-enhanced/core/internal/api/middleware"
+	"github.com/honeybee-enhanced/core/internal/nodeserver"
+	"github.com/honeybee-enhanced/core/internal/potstore"
+	"github.com/honeybee-enhanced/core/internal/store"
+	"github.com/honeybee-enhanced/shared/protocol"
+)
+
+// DeploymentsHandler handles /deployments and /nodes/{id}/deployments.
+type DeploymentsHandler struct {
+	Store      *store.Store
+	NodeServer *nodeserver.Server
+	PotStore   *potstore.Client
+}
+
+// NewDeploymentsHandler constructs.
+func NewDeploymentsHandler(s *store.Store, ns *nodeserver.Server, ps *potstore.Client) *DeploymentsHandler {
+	return &DeploymentsHandler{Store: s, NodeServer: ns, PotStore: ps}
+}
+
+// List returns deployments for the org with optional filters.
+func (h *DeploymentsHandler) List(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgID(r.Context())
+	nodeID := queryInt64(r, "node_id", 0)
+	status := r.URL.Query().Get("status")
+	deps, err := h.Store.ListDeployments(r.Context(), orgID, nodeID, status)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list")
+		return
+	}
+	writeJSON(w, http.StatusOK, deps)
+}
+
+type deployReq struct {
+	PotID        string         `json:"pot_id"`
+	HoneypotType string         `json:"honeypot_type"`
+	Config       map[string]any `json:"config"`
+	AutoStart    bool           `json:"auto_start"`
+}
+
+// CreateForNode deploys a honeypot on a node.
+func (h *DeploymentsHandler) CreateForNode(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgID(r.Context())
+	nodeID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if _, err := h.Store.GetNode(r.Context(), orgID, nodeID); err != nil {
+		writeError(w, http.StatusNotFound, "node")
+		return
+	}
+	var req deployReq
+	if err := readJSON(r, &req); err != nil || req.PotID == "" || req.HoneypotType == "" {
+		writeError(w, http.StatusBadRequest, "missing fields")
+		return
+	}
+	entry, ok := h.PotStore.Lookup(req.HoneypotType)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unknown honeypot type")
+		return
+	}
+	cfgBytes, _ := json.Marshal(req.Config)
+	depID, err := h.Store.CreateDeployment(r.Context(), orgID, nodeID, req.PotID, req.HoneypotType, string(cfgBytes))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "create")
+		return
+	}
+	payload := protocol.InstallPotPayload{
+		PotID:        req.PotID,
+		HoneypotType: req.HoneypotType,
+		GitURL:       entry.GitURL,
+		GitBranch:    entry.GitBranch,
+		Config:       req.Config,
+		AutoStart:    req.AutoStart,
+	}
+	if err := h.queueAndSend(r, orgID, nodeID, &depID, protocol.CmdInstallPot, payload); err != nil {
+		writeError(w, http.StatusInternalServerError, "queue task")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"deployment_id": depID})
+}
+
+// Action covers start/stop/restart/remove on a deployment.
+func (h *DeploymentsHandler) Action(action string) http.HandlerFunc {
+	cmd := map[string]string{
+		"start":   protocol.CmdStartPot,
+		"stop":    protocol.CmdStopPot,
+		"restart": protocol.CmdRestartPot,
+		"remove":  protocol.CmdRemovePot,
+	}[action]
+	return func(w http.ResponseWriter, r *http.Request) {
+		orgID := middleware.OrgID(r.Context())
+		id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		dep, err := h.Store.GetDeployment(r.Context(), orgID, id)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "deployment")
+			return
+		}
+		payload := protocol.PotControlPayload{PotID: dep.PotID}
+		if err := h.queueAndSend(r, orgID, dep.NodeID, &dep.ID, cmd, payload); err != nil {
+			writeError(w, http.StatusInternalServerError, "queue task")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "queued"})
+	}
+}
+
+// UpdateConfig pushes a new config + queues update_config task.
+func (h *DeploymentsHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgID(r.Context())
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	dep, err := h.Store.GetDeployment(r.Context(), orgID, id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "deployment")
+		return
+	}
+	var cfg map[string]any
+	if err := readJSON(r, &cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "bad json")
+		return
+	}
+	cfgBytes, _ := json.Marshal(cfg)
+	_ = h.Store.UpdateDeploymentConfig(r.Context(), orgID, id, string(cfgBytes))
+	payload := protocol.UpdateConfigPayload{PotID: dep.PotID, Config: cfg}
+	if err := h.queueAndSend(r, orgID, dep.NodeID, &dep.ID, protocol.CmdUpdateConfig, payload); err != nil {
+		writeError(w, http.StatusInternalServerError, "queue task")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// Logs returns paginated pot_logs for a deployment.
+func (h *DeploymentsHandler) Logs(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgID(r.Context())
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	dep, err := h.Store.GetDeployment(r.Context(), orgID, id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "deployment")
+		return
+	}
+	limit := queryInt(r, "limit", 100)
+	offset := queryInt(r, "offset", 0)
+	logs, err := h.Store.ListPotLogs(r.Context(), orgID, dep.PotID, limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list logs")
+		return
+	}
+	writeJSON(w, http.StatusOK, logs)
+}
+
+// RequestMetrics queues a get_pot_metrics task; client polls via WS.
+func (h *DeploymentsHandler) RequestMetrics(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgID(r.Context())
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	dep, err := h.Store.GetDeployment(r.Context(), orgID, id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "deployment")
+		return
+	}
+	payload := protocol.PotControlPayload{PotID: dep.PotID}
+	taskID, err := h.queueAndSendReturnID(r, orgID, dep.NodeID, &dep.ID, protocol.CmdGetPotMetrics, payload)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "queue task")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"task_id": taskID})
+}
+
+func (h *DeploymentsHandler) queueAndSend(r *http.Request, orgID, nodeID int64, depID *int64, cmd string, payload any) error {
+	_, err := h.queueAndSendReturnID(r, orgID, nodeID, depID, cmd, payload)
+	return err
+}
+
+func (h *DeploymentsHandler) queueAndSendReturnID(r *http.Request, orgID, nodeID int64, depID *int64, cmd string, payload any) (int64, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 0, err
+	}
+	taskID, err := h.Store.CreateTask(r.Context(), orgID, nodeID, depID, cmd, string(body))
+	if err != nil {
+		return 0, err
+	}
+	if h.NodeServer.IsOnline(nodeID) {
+		if err := h.NodeServer.SendToNode(nodeID, taskID, cmd, payload); err == nil {
+			_ = h.Store.MarkTaskSent(r.Context(), taskID)
+		}
+	}
+	return taskID, nil
+}

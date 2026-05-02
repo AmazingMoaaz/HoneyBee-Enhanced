@@ -1,0 +1,18 @@
+node:
+  name: "node-1"
+  data_dir: "./node_data"
+
+server:
+  address: "127.0.0.1:9001"
+  token: "REPLACE_WITH_NODE_TOKEN"
+  tls: false
+  insecure_skip_verify: true
+
+eventfwd:
+  listen: "127.0.0.1:9100"
+
+session:
+  cowrie_tty_dir: ""
+
+log:
+  level: "info"

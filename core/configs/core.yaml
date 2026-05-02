@@ -1,0 +1,32 @@
+server:
+  http_addr: "0.0.0.0:5100"
+  node_addr: "0.0.0.0:9001"
+  allowed_origins:
+    - "http://localhost:5173"
+
+database:
+  dsn: "root:password@tcp(127.0.0.1:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4"
+  max_open: 25
+  max_idle: 5
+
+tls:
+  enabled: false
+  cert_file: "certs/server.crt"
+  key_file:  "certs/server.key"
+
+jwt:
+  secret: "change-me-in-prod"
+  access_ttl: "15m"
+  refresh_ttl: "168h"
+
+potstore:
+  repo_url: "https://raw.githubusercontent.com/H0neyBe/honeybee_potstore/main/potstore.json"
+  sync_interval: "1h"
+
+node:
+  github_repo: "AmazingMoaaz/HoneyBee-Enhanced"
+  github_release_tag: "latest"
+  github_token: ""
+
+log:
+  level: "info"
