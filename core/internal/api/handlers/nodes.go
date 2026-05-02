@@ -237,22 +237,36 @@ log:
   level: "info"
 "@ | Set-Content "$BinDir\node.yaml"
 
-Write-Host "[3/4] Registering scheduled task (runs at startup as SYSTEM)..."
 $taskName = "HoneyBeeNode"
-Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-
 $exe  = "$BinDir\hb-node.exe"
 $args = "--config " + '"' + "$BinDir\node.yaml" + '"'
-$action    = New-ScheduledTaskAction -Execute $exe -Argument $args
-$trigger   = New-ScheduledTaskTrigger -AtStartup
-$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-$settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
-Start-ScheduledTask -TaskName $taskName
+$action   = New-ScheduledTaskAction -Execute $exe -Argument $args
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable
 
-Write-Host "[4/4] Done. Node '$NodeName' (ID $NodeID) is running."
-Write-Host "      Manage: Get-ScheduledTask -TaskName HoneyBeeNode"
-Write-Host "      Logs:   $BinDir\data (stdout goes to Task Scheduler history)"
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if ($isAdmin) {
+    Write-Host "[3/4] Registering scheduled task (runs at startup as SYSTEM)..."
+    $trigger   = New-ScheduledTaskTrigger -AtStartup
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+    Start-ScheduledTask -TaskName $taskName
+    Write-Host "[4/4] Done. Node '$NodeName' (ID $NodeID) is running as SYSTEM."
+    Write-Host "      Manage: Get-ScheduledTask -TaskName HoneyBeeNode"
+} else {
+    Write-Host "[3/4] Registering scheduled task (runs at logon for current user)..."
+    $trigger   = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+    $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+    Write-Host "      (No admin rights - task runs at logon instead of startup)"
+    Write-Host "      To run as SYSTEM at startup, re-run this script from an elevated PowerShell."
+    Start-Process -FilePath $exe -ArgumentList $args -WindowStyle Hidden
+    Write-Host "[4/4] Done. Node '$NodeName' (ID $NodeID) started in background."
+    Write-Host "      Manage: Get-ScheduledTask -TaskName HoneyBeeNode"
+}
+Write-Host "      Logs:   $BinDir\data"
 `, n.ID, n.Name, rawToken, httpBase, nodeAddr)
 
 	default: // bash (Linux / macOS)
