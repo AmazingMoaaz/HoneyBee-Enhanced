@@ -387,46 +387,76 @@ func findEntrypoint(dir string) string {
 	return ""
 }
 
+// findPythonInterpreter returns the absolute path to a working Python 3
+// interpreter, probing PATH candidates first and then well-known install
+// locations on Windows (so it works even when the node agent started before
+// Python was added to the system PATH).
+func findPythonInterpreter(ctx context.Context) (string, error) {
+	// PATH-based candidates (preferred — works on all platforms).
+	pathCandidates := []string{"python", "python3", "py", "python.exe", "python3.exe"}
+	if runtime.GOOS != "windows" {
+		pathCandidates = []string{"python3", "python"}
+	}
+
+	var absCandidates []string
+	for _, c := range pathCandidates {
+		if p, err := exec.LookPath(c); err == nil {
+			absCandidates = append(absCandidates, p)
+		}
+	}
+
+	// On Windows, also scan well-known install directories so we find
+	// Python even when the agent process inherited a stale PATH (e.g. the
+	// agent was started before the user installed Python and updated PATH).
+	if runtime.GOOS == "windows" {
+		roots := []string{
+			os.Getenv("LOCALAPPDATA"),
+			os.Getenv("APPDATA"),
+			`C:\`,
+			`C:\Program Files`,
+			`C:\Program Files (x86)`,
+		}
+		for _, root := range roots {
+			if root == "" {
+				continue
+			}
+			// Match e.g. Python311, Python312, Python3 ...
+			matches, _ := filepath.Glob(filepath.Join(root, "Programs", "Python", "Python3*", "python.exe"))
+			matches2, _ := filepath.Glob(filepath.Join(root, "Python3*", "python.exe"))
+			absCandidates = append(absCandidates, matches...)
+			absCandidates = append(absCandidates, matches2...)
+		}
+	}
+
+	seen := map[string]bool{}
+	tried := []string{}
+	for _, p := range absCandidates {
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err := exec.CommandContext(probeCtx, p, "-c", "import sys; sys.exit(0)").Run()
+		cancel()
+		if err == nil {
+			return p, nil
+		}
+		tried = append(tried, fmt.Sprintf("%s: %v", p, err))
+	}
+
+	if len(tried) == 0 {
+		return "", fmt.Errorf("no Python interpreter found — install Python 3 from python.org and add it to PATH")
+	}
+	return "", fmt.Errorf("found Python executables but none worked [%s] — reinstall Python 3 from python.org", strings.Join(tried, "; "))
+}
+
 // postInstallCowrie handles cowrie-specific setup after git clone:
 // creates a Python venv, upgrades pip, installs requirements.txt, and
 // creates the var/ directories that cowrie expects at runtime.
 func (m *Manager) postInstallCowrie(ctx context.Context, potID, dir string) error {
-	// Find a *working* Python interpreter. We try several candidates and pick
-	// the first one that both resolves on PATH AND can actually execute code.
-	// This matters on Windows because C:\WINDOWS\py.exe (the Python Launcher
-	// stub) exists even when no Python interpreter is installed; running it
-	// without Python returns exit 112. We must skip such broken entries and
-	// continue searching instead of giving up on the first failure.
-	var pythonCandidates []string
-	if runtime.GOOS == "windows" {
-		pythonCandidates = []string{"python", "python3", "py", "py.exe", "python.exe"}
-	} else {
-		pythonCandidates = []string{"python3", "python"}
-	}
-
-	pythonCmd := ""
-	tried := make([]string, 0, len(pythonCandidates))
-	for _, c := range pythonCandidates {
-		p, err := exec.LookPath(c)
-		if err != nil {
-			continue
-		}
-		// Confirm this binary can actually run Python code (not a launcher stub).
-		// Use a short timeout-bounded check derived from the parent context.
-		probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		probeErr := exec.CommandContext(probeCtx, p, "-c", "import sys; sys.exit(0)").Run()
-		cancel()
-		if probeErr == nil {
-			pythonCmd = p
-			break
-		}
-		tried = append(tried, fmt.Sprintf("%s (%s: %v)", c, p, probeErr))
-	}
-	if pythonCmd == "" {
-		if len(tried) == 0 {
-			return fmt.Errorf("no Python interpreter found in PATH (tried: %v) — install Python 3 from python.org and ensure it is on PATH", pythonCandidates)
-		}
-		return fmt.Errorf("found Python launcher(s) but none could execute code [%s] — install Python 3 from python.org (check 'Add Python to PATH' during install)", strings.Join(tried, "; "))
+	pythonCmd, err := findPythonInterpreter(ctx)
+	if err != nil {
+		return err
 	}
 	m.emitLog(potID, "cowrie", "install.progress", "using Python: "+pythonCmd)
 
