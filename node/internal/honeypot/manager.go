@@ -2,15 +2,18 @@
 package honeypot
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -40,6 +43,10 @@ type running struct {
 type Manager struct {
 	root   string // base data dir
 	logger *slog.Logger
+
+	// LogFn is an optional callback invoked for every install/lifecycle log line.
+	// Set it after construction (e.g. in main) to stream live logs to core.
+	LogFn func(potID, potType, logType, line string)
 
 	mu       sync.Mutex
 	manifest map[string]*Manifest // pot_id -> manifest
@@ -91,6 +98,14 @@ func (m *Manager) saveManifest(mf *Manifest) error {
 	return os.WriteFile(filepath.Join(mf.InstallDir, "pot_manifest.json"), b, 0o644)
 }
 
+// emitLog calls LogFn (if set) and logs at debug level.
+func (m *Manager) emitLog(potID, potType, logType, line string) {
+	m.logger.Debug("pot log", slog.String("pot_id", potID), slog.String("log_type", logType))
+	if m.LogFn != nil {
+		m.LogFn(potID, potType, logType, line)
+	}
+}
+
 // Install clones a honeypot repo and writes a manifest.
 func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch string, cfg map[string]any) (*Manifest, error) {
 	dir := filepath.Join(m.root, potID)
@@ -100,17 +115,54 @@ func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch str
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	args := []string{"clone", "--depth=1"}
+	m.emitLog(potID, hpType, "install.start", fmt.Sprintf("installing %s from %s", hpType, gitURL))
+	args := []string{"clone", "--depth=1", "--progress"}
 	if branch != "" {
 		args = append(args, "--branch", branch)
 	}
 	args = append(args, gitURL, dir)
 	cmd := exec.CommandContext(ctx, "git", args...)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	pr, pw := io.Pipe()
+	cmd.Stdout = pw
+	cmd.Stderr = pw
+
+	doneScan := make(chan struct{})
+	go func() {
+		defer close(doneScan)
+		sc := bufio.NewScanner(pr)
+		for sc.Scan() {
+			line := strings.TrimRight(sc.Text(), "\r\t ")
+			if line != "" {
+				m.emitLog(potID, hpType, "install.progress", line)
+			}
+		}
+	}()
+
+	if err := cmd.Start(); err != nil {
+		_ = pw.Close()
+		<-doneScan
 		_ = os.RemoveAll(dir)
-		return nil, fmt.Errorf("git clone: %w (%s)", err, string(out))
+		m.emitLog(potID, hpType, "install.error", "failed to start git: "+err.Error())
+		return nil, fmt.Errorf("git clone start: %w", err)
 	}
+	cloneErr := cmd.Wait()
+	_ = pw.Close()
+	<-doneScan
+
+	if cloneErr != nil {
+		_ = os.RemoveAll(dir)
+		m.emitLog(potID, hpType, "install.error", "git clone failed: "+cloneErr.Error())
+		return nil, fmt.Errorf("git clone: %w", cloneErr)
+	}
+	m.emitLog(potID, hpType, "install.progress", "git clone complete")
+
 	entry := findEntrypoint(dir)
+	if entry != "" {
+		m.emitLog(potID, hpType, "install.progress", "entrypoint found: "+entry)
+	} else {
+		m.emitLog(potID, hpType, "install.warning", "no entrypoint detected — pot may need manual configuration")
+	}
+
 	mf := &Manifest{
 		PotID:        potID,
 		HoneypotType: hpType,
@@ -127,6 +179,7 @@ func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch str
 	m.mu.Lock()
 	m.manifest[potID] = mf
 	m.mu.Unlock()
+	m.emitLog(potID, hpType, "install.complete", "installation complete")
 	return mf, nil
 }
 
@@ -141,8 +194,10 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 	if !ok {
 		return errors.New("not installed")
 	}
+	m.emitLog(potID, mf.HoneypotType, "start.progress", "launching honeypot process")
 	cmd, err := buildCommand(mf)
 	if err != nil {
+		m.emitLog(potID, mf.HoneypotType, "start.error", "build command failed: "+err.Error())
 		return err
 	}
 	cmd.Dir = mf.InstallDir
@@ -153,10 +208,12 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 		cmd.Stderr = logFile
 	}
 	if err := cmd.Start(); err != nil {
+		m.emitLog(potID, mf.HoneypotType, "start.error", "process start failed: "+err.Error())
 		return err
 	}
 	m.procs[potID] = &running{cmd: cmd, pid: cmd.Process.Pid, startedAt: time.Now().UTC()}
 	go func() { _ = cmd.Wait() }()
+	m.emitLog(potID, mf.HoneypotType, "start.complete", fmt.Sprintf("process started (pid=%d)", cmd.Process.Pid))
 	return nil
 }
 
@@ -164,12 +221,18 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 func (m *Manager) Stop(potID string) error {
 	m.mu.Lock()
 	r, ok := m.procs[potID]
+	mf := m.manifest[potID]
 	if !ok {
 		m.mu.Unlock()
 		return errors.New("not running")
 	}
 	delete(m.procs, potID)
 	m.mu.Unlock()
+	hpType := ""
+	if mf != nil {
+		hpType = mf.HoneypotType
+	}
+	m.emitLog(potID, hpType, "stop.info", "stopping honeypot")
 	if runtime.GOOS == "windows" {
 		_ = r.cmd.Process.Kill()
 	} else {
@@ -182,6 +245,7 @@ func (m *Manager) Stop(potID string) error {
 			_ = r.cmd.Process.Kill()
 		}
 	}
+	m.emitLog(potID, hpType, "stop.complete", "honeypot stopped")
 	return nil
 }
 
@@ -201,9 +265,15 @@ func (m *Manager) Remove(potID string) error {
 		m.mu.Unlock()
 		return errors.New("not installed")
 	}
+	hpType := mf.HoneypotType
 	delete(m.manifest, potID)
 	m.mu.Unlock()
-	return os.RemoveAll(mf.InstallDir)
+	m.emitLog(potID, hpType, "remove.info", "removing honeypot files")
+	err := os.RemoveAll(mf.InstallDir)
+	if err == nil {
+		m.emitLog(potID, hpType, "remove.complete", "honeypot removed")
+	}
+	return err
 }
 
 // IsRunning reports whether a pot has a tracked running process.

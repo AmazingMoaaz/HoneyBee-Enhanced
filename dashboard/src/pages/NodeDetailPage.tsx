@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/client";
 
@@ -8,6 +8,8 @@ export default function NodeDetailPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [showUninstall, setShowUninstall] = useState(false);
+  const [activeDeployID, setActiveDeployID] = useState<number | null>(null);
+  const logEndRef = useRef<HTMLDivElement>(null);
   const { data } = useQuery({
     queryKey: ["node", id],
     queryFn: async () => (await api.get(`/nodes/${id}`)).data,
@@ -26,8 +28,26 @@ export default function NodeDetailPage() {
       (await api.post(`/nodes/${id}/deployments`, {
         pot_id: potID, honeypot_type: hpType, auto_start: true, config: {},
       })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["node", id] }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["node", id] });
+      if (res?.deployment_id) setActiveDeployID(res.deployment_id);
+    },
   });
+
+  // Live log query — polls every 2s while a deployment is active
+  const activeDep = (data?.deployments ?? []).find((d: any) => d.id === activeDeployID);
+  const depDone = activeDep && ["running", "failed", "stopped", "removed"].includes(activeDep.status);
+  const { data: installLogs } = useQuery({
+    queryKey: ["deploy-logs", activeDeployID],
+    queryFn: async () => (await api.get(`/deployments/${activeDeployID}/logs?limit=200`)).data as any[],
+    enabled: !!activeDeployID,
+    refetchInterval: depDone ? false : 2000,
+  });
+
+  // Auto-scroll log panel to bottom on new entries
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [installLogs]);
 
   const action = useMutation({
     mutationFn: async (p: { depID: number; action: string }) =>
@@ -113,6 +133,49 @@ export default function NodeDetailPage() {
         </div>
       </div>
 
+      {/* Live install log panel */}
+      {activeDeployID && (
+        <div className="bg-slate-950 border border-slate-700 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-700">
+            <span className="text-xs font-mono text-slate-300">
+              Install logs — deployment #{activeDeployID}
+              {activeDep && (
+                <span className={`ml-2 px-1.5 py-0.5 rounded text-xs font-semibold ${
+                  activeDep.status === "running" ? "bg-emerald-900 text-emerald-300" :
+                  activeDep.status === "failed"  ? "bg-red-900 text-red-300" :
+                  "bg-slate-800 text-slate-400"
+                }`}>{activeDep.status}</span>
+              )}
+            </span>
+            <button className="text-slate-500 hover:text-slate-200 text-xs" onClick={() => setActiveDeployID(null)}>✕</button>
+          </div>
+          <div className="h-64 overflow-y-auto p-3 font-mono text-xs space-y-0.5">
+            {(installLogs ?? []).length === 0 && (
+              <div className="text-slate-500 italic">waiting for logs…</div>
+            )}
+            {[...(installLogs ?? [])].reverse().map((entry: any) => {
+              let line = entry.data;
+              try { line = JSON.parse(entry.data)?.line ?? entry.data; } catch { /* raw */ }
+              const ts = new Date(entry.logged_at).toLocaleTimeString();
+              const color =
+                entry.log_type?.includes("error")    ? "text-red-400"     :
+                entry.log_type?.includes("warning")  ? "text-yellow-400"  :
+                entry.log_type?.includes("complete")  ? "text-emerald-400" :
+                entry.log_type?.includes("start") && !entry.log_type?.includes("auto") ? "text-cyan-400" :
+                "text-slate-300";
+              return (
+                <div key={entry.id} className="flex gap-2 leading-5">
+                  <span className="text-slate-600 shrink-0">{ts}</span>
+                  <span className="text-slate-500 shrink-0 w-32 truncate">{entry.log_type}</span>
+                  <span className={color}>{line}</span>
+                </div>
+              );
+            })}
+            <div ref={logEndRef} />
+          </div>
+        </div>
+      )}
+
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
         <h3 className="font-semibold mb-3">Deployments</h3>
         <table className="w-full text-sm">
@@ -127,6 +190,10 @@ export default function NodeDetailPage() {
                 <td>{d.honeypot_type}</td>
                 <td>{d.status}</td>
                 <td className="space-x-2">
+                  <button key="logs" className="text-slate-400 hover:text-slate-200"
+                          onClick={() => setActiveDeployID(d.id)}>
+                    logs
+                  </button>
                   {["start", "stop", "restart", "remove"].map((a) => (
                     <button key={a} className="text-honey-400 hover:underline"
                             onClick={() => action.mutate({ depID: d.id, action: a })}>

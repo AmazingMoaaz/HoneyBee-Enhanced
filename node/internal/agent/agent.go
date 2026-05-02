@@ -360,6 +360,19 @@ func (a *Agent) sendPotStatus(potID, potType, status, msg string) {
 	})
 }
 
+// SendPotLog sends a structured lifecycle/install log line to core.
+// Safe to call from any goroutine; silently drops if not connected.
+func (a *Agent) SendPotLog(potID, potType, logType, line string) {
+	_ = a.send(protocol.MsgPotLog, protocol.PotLog{
+		NodeID:    a.nodeID,
+		PotID:     potID,
+		PotType:   potType,
+		LogType:   logType,
+		Data:      map[string]any{"line": line},
+		Timestamp: time.Now().UTC(),
+	})
+}
+
 // ----- session.Sender impl -----
 
 // SendSessionStart implements session.Sender.
