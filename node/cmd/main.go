@@ -46,6 +46,7 @@ func main() {
 	}
 	a := agent.New(cfg, logger, hp)
 	hp.LogFn = a.SendPotLog
+	hp.ExitFn = a.SendPotStatus
 
 	go func() {
 		ef := eventfwd.New(cfg.EventFwd.Listen, logger, a)

@@ -366,6 +366,12 @@ func (a *Agent) sendPotStatus(potID, potType, status, msg string) {
 	})
 }
 
+// SendPotStatus sends a pot status update to core.
+// Safe to call from any goroutine; silently drops if not connected.
+func (a *Agent) SendPotStatus(potID, potType, status, msg string) {
+	a.sendPotStatus(potID, potType, status, msg)
+}
+
 // SendPotLog sends a structured lifecycle/install log line to core.
 // Safe to call from any goroutine; silently drops if not connected.
 func (a *Agent) SendPotLog(potID, potType, logType, line string) {

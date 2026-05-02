@@ -62,6 +62,11 @@ type Manager struct {
 	// Set it after construction (e.g. in main) to stream live logs to core.
 	LogFn func(potID, potType, logType, line string)
 
+	// ExitFn is called when a managed process exits on its own (crash or clean).
+	// status is "failed" for non-zero exit, "stopped" for clean exit.
+	// Set it after construction so the agent can push a PotStatus update to core.
+	ExitFn func(potID, potType, status, msg string)
+
 	mu       sync.Mutex
 	manifest map[string]*Manifest // pot_id -> manifest
 	procs    map[string]*running  // pot_id -> running process
@@ -312,11 +317,17 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 		delete(m.procs, potID)
 		m.mu.Unlock()
 		if waitErr != nil {
-			m.emitLog(potID, hpType, "process.exit",
-				fmt.Sprintf("process exited with error: %v — check process.output lines above or %s",
-					waitErr, filepath.Join(mf.InstallDir, "cowrie-debug.log")))
+			exitMsg := fmt.Sprintf("process exited with error: %v — check process.output lines above or %s",
+				waitErr, filepath.Join(mf.InstallDir, "cowrie-debug.log"))
+			m.emitLog(potID, hpType, "process.exit", exitMsg)
+			if m.ExitFn != nil {
+				m.ExitFn(potID, hpType, "failed", exitMsg)
+			}
 		} else {
 			m.emitLog(potID, hpType, "process.exit", "process exited cleanly")
+			if m.ExitFn != nil {
+				m.ExitFn(potID, hpType, "stopped", "process exited cleanly")
+			}
 		}
 	}()
 
@@ -956,6 +967,9 @@ func buildCommand(mf *Manifest) (*exec.Cmd, error) {
 		launcherPath := filepath.Join(mf.InstallDir, "cowrie-launch.py")
 		debugLog := filepath.ToSlash(filepath.Join(mf.InstallDir, "cowrie-debug.log"))
 		srcDir := filepath.ToSlash(filepath.Join(mf.InstallDir, "src"))
+		// pidFile is written by twistd in daemon mode. In nodaemon (-n) mode
+		// Twisted 25.x no longer accepts --pidfile, so we track the path but
+		// do not pass it on the command line.
 		pidFile := filepath.ToSlash(filepath.Join(mf.InstallDir, "var", "run", "cowrie", "twistd.pid"))
 
 		// The launcher:
@@ -999,7 +1013,7 @@ except Exception as e:
     sys.exit(1)
 
 _pidfile = %q
-sys.argv = ['twistd', '-n', '--pidfile=' + _pidfile, 'cowrie']
+sys.argv = ['twistd', '-n', 'cowrie']
 _w(f'calling run() | sys.argv={sys.argv}')
 _dbg.flush()
 
