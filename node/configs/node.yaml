@@ -4,7 +4,7 @@ node:
 
 server:
   address: "127.0.0.1:9001"
-  token: "REPLACE_WITH_NODE_TOKEN"
+  token: "110368ae724fe6c1a852b33c8cce38465fdc56b2c2d40ce70750219849d74156"
   tls: false
   insecure_skip_verify: true
 

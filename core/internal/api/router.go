@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -68,9 +69,33 @@ func Build(
 			r.Post("/auth/logout", authH.Logout)
 		})
 
-		// Public node-agent download stub
-		r.Get("/download/node-agent", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "https://github.com/"+cfg.Node.GitHubRepo+"/releases/"+cfg.Node.GitHubReleaseTag, http.StatusFound)
+		// Public node-agent binary download — redirects to the GitHub release asset.
+		// Query params: ?os=linux|darwin|windows  ?arch=amd64|arm64  (defaults: linux/amd64)
+		r.Get("/download/node-agent", func(w http.ResponseWriter, req *http.Request) {
+			goos := req.URL.Query().Get("os")
+			arch := req.URL.Query().Get("arch")
+			if goos == "" {
+				goos = "linux"
+			}
+			if arch == "" {
+				arch = "amd64"
+			}
+			asset := "honeybee-node-" + goos + "-" + arch
+			if goos == "windows" {
+				asset += ".exe"
+			}
+			tag := cfg.Node.GitHubReleaseTag
+			var assetURL string
+			if tag == "" || tag == "latest" {
+				assetURL = fmt.Sprintf(
+					"https://github.com/%s/releases/latest/download/%s",
+					cfg.Node.GitHubRepo, asset)
+			} else {
+				assetURL = fmt.Sprintf(
+					"https://github.com/%s/releases/download/%s/%s",
+					cfg.Node.GitHubRepo, tag, asset)
+			}
+			http.Redirect(w, req, assetURL, http.StatusFound)
 		})
 
 		// Install script may use ?token=<raw_node_token> or JWT

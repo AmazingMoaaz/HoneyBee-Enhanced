@@ -24,6 +24,9 @@ type Config struct {
 type ServerConfig struct {
 	HTTPAddr       string   `yaml:"http_addr"`
 	NodeAddr       string   `yaml:"node_addr"`
+	// NodePublicAddr is the address node agents use to reach the TCP server.
+	// If empty the install script derives it from the HTTP request host + node port.
+	NodePublicAddr string   `yaml:"node_public_addr"`
 	AllowedOrigins []string `yaml:"allowed_origins"`
 }
 
@@ -58,7 +61,7 @@ type PotStoreConfig struct {
 type NodeRelease struct {
 	GitHubRepo       string `yaml:"github_repo"`
 	GitHubReleaseTag string `yaml:"github_release_tag"`
-	GitHubToken      string `yaml:"github_token"`
+	GitHubToken      string `yaml:"github_token"` // optional – for private repos
 }
 
 // LogConfig configures logging.

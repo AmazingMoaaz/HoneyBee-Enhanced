@@ -16,6 +16,9 @@ import (
 	"github.com/honeybee-enhanced/node/internal/session"
 )
 
+// Version is set at build time via -ldflags "-X main.Version=v1.2.3".
+var Version = "dev"
+
 func main() {
 	cfgPath := flag.String("config", "configs/node.yaml", "path to YAML config")
 	flag.Parse()
@@ -26,6 +29,7 @@ func main() {
 	}
 	logger := newLogger(cfg.Log.Level)
 	logger.Info("starting honeybee-enhanced node",
+		slog.String("version", Version),
 		slog.String("server", cfg.Server.Address),
 		slog.String("name", cfg.Node.Name))
 

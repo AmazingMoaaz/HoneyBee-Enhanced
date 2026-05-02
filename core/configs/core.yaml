@@ -1,6 +1,9 @@
 server:
   http_addr: "0.0.0.0:5100"
   node_addr: "0.0.0.0:9001"
+  # Public address node agents use to dial the TCP server.
+  # Leave empty to auto-derive from the HTTP request host + node port.
+  node_public_addr: ""
   allowed_origins:
     - "http://localhost:5173"
 
@@ -26,7 +29,7 @@ potstore:
 node:
   github_repo: "AmazingMoaaz/HoneyBee-Enhanced"
   github_release_tag: "latest"
-  github_token: ""
+  github_token: ""  # optional – for private repos
 
 log:
   level: "info"

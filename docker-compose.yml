@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mysql:
     image: mysql:8.4
@@ -9,8 +7,8 @@ services:
       MYSQL_DATABASE: honeybee_enhanced
       MYSQL_USER: honeybee
       MYSQL_PASSWORD: honeybeepw
-    ports: ["3306:3306"]
     volumes: ["mysql_data:/var/lib/mysql"]
+    # host port binding removed — core reaches mysql via internal network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpw"]
       interval: 10s
