@@ -193,7 +193,12 @@ func (h *NodesHandler) InstallScript(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	httpBase := scheme + "://" + r.Host
+	// Use explicit public address from config (production), else derive from
+	// the Host header — nginx passes $http_host which preserves the port.
+	httpBase := h.Cfg.Server.PublicHTTPAddr
+	if httpBase == "" {
+		httpBase = scheme + "://" + r.Host
+	}
 	nodeAddr := h.nodePublicAddr(r)
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -201,7 +206,7 @@ func (h *NodesHandler) InstallScript(w http.ResponseWriter, r *http.Request) {
 	case "ps", "powershell", "windows":
 		// PowerShell script — no backtick characters so Go raw-string literal is safe.
 		fmt.Fprintf(w, `# HoneyBee-Enhanced node install (Windows / PowerShell)
-# Run as Administrator for service registration.
+# Run as Administrator.
 $ErrorActionPreference = 'Stop'
 
 $NodeID    = %d
@@ -215,6 +220,7 @@ $Arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
 
 $BinDir = "$env:LOCALAPPDATA\HoneyBeeNode"
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
+New-Item -ItemType Directory -Force -Path "$BinDir\data" | Out-Null
 
 Write-Host "[1/4] Downloading honeybee-node (windows/$Arch)..."
 Invoke-WebRequest "$HBServer/api/v1/download/node-agent?os=windows&arch=$Arch" -OutFile "$BinDir\hb-node.exe"
@@ -231,17 +237,22 @@ log:
   level: "info"
 "@ | Set-Content "$BinDir\node.yaml"
 
-Write-Host "[3/4] Registering Windows service..."
-$svc = "HoneyBeeNode"
-if (Get-Service -Name $svc -ErrorAction SilentlyContinue) {
-    Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
-    sc.exe delete $svc | Out-Null
-}
-$binPath = '"' + $BinDir + '\hb-node.exe" --config "' + $BinDir + '\node.yaml"'
-New-Service -Name $svc -DisplayName "HoneyBee Node Agent" -BinaryPathName $binPath -StartupType Automatic | Out-Null
-Start-Service -Name $svc
+Write-Host "[3/4] Registering scheduled task (runs at startup as SYSTEM)..."
+$taskName = "HoneyBeeNode"
+Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 
-Write-Host "[4/4] Done. Node '$NodeName' (ID $NodeID) running as Windows service '$svc'."
+$exe  = "$BinDir\hb-node.exe"
+$args = "--config " + '"' + "$BinDir\node.yaml" + '"'
+$action    = New-ScheduledTaskAction -Execute $exe -Argument $args
+$trigger   = New-ScheduledTaskTrigger -AtStartup
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable $true
+Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+Start-ScheduledTask -TaskName $taskName
+
+Write-Host "[4/4] Done. Node '$NodeName' (ID $NodeID) is running."
+Write-Host "      Manage: Get-ScheduledTask -TaskName HoneyBeeNode"
+Write-Host "      Logs:   $BinDir\data (stdout goes to Task Scheduler history)"
 `, n.ID, n.Name, rawToken, httpBase, nodeAddr)
 
 	default: // bash (Linux / macOS)

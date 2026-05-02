@@ -4,6 +4,9 @@ server:
   # Public address node agents use to dial the TCP server.
   # Leave empty to auto-derive from the HTTP request host + node port.
   node_public_addr: ""
+  # Full base URL used in generated install scripts (e.g. https://honeybee.example.com).
+  # Leave empty to derive from the request Host header (works for local dev via nginx).
+  public_http_addr: ""
   allowed_origins:
     - "http://localhost:5173"
 

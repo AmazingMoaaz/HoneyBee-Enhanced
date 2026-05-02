@@ -27,6 +27,10 @@ type ServerConfig struct {
 	// NodePublicAddr is the address node agents use to reach the TCP server.
 	// If empty the install script derives it from the HTTP request host + node port.
 	NodePublicAddr string   `yaml:"node_public_addr"`
+	// PublicHTTPAddr is the full base URL used in generated install scripts.
+	// Example: "https://honeybee.example.com"
+	// If empty, derived from the incoming request Host header.
+	PublicHTTPAddr string   `yaml:"public_http_addr"`
 	AllowedOrigins []string `yaml:"allowed_origins"`
 }
 
