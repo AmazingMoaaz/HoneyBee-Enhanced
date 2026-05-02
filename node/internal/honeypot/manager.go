@@ -236,30 +236,55 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 		return err
 	}
 	cmd.Dir = mf.InstallDir
-	logFile, err := os.OpenFile(filepath.Join(mf.InstallDir, "pot.log"),
+
+	// Pipe stdout+stderr so we can stream to dashboard AND write to pot.log.
+	pr, pw := io.Pipe()
+	logFile, _ := os.OpenFile(filepath.Join(mf.InstallDir, "pot.log"),
 		os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err == nil {
-		cmd.Stdout = logFile
-		cmd.Stderr = logFile
+	if logFile != nil {
+		cmd.Stdout = io.MultiWriter(logFile, pw)
+		cmd.Stderr = io.MultiWriter(logFile, pw)
+	} else {
+		cmd.Stdout = pw
+		cmd.Stderr = pw
 	}
+
 	if err := cmd.Start(); err != nil {
+		_ = pw.Close()
+		if logFile != nil {
+			_ = logFile.Close()
+		}
 		m.emitLog(potID, mf.HoneypotType, "start.error", "process start failed: "+err.Error())
 		return err
 	}
-	m.procs[potID] = &running{cmd: cmd, pid: cmd.Process.Pid, startedAt: time.Now().UTC()}
+
 	hpType := mf.HoneypotType
+	m.procs[potID] = &running{cmd: cmd, pid: cmd.Process.Pid, startedAt: time.Now().UTC()}
+	m.emitLog(potID, mf.HoneypotType, "start.complete", fmt.Sprintf("process started (pid=%d)", cmd.Process.Pid))
+
+	// Stream process output lines to the dashboard in real time.
+	go streamOutput(pr, func(line string) {
+		m.emitLog(potID, hpType, "process.output", line)
+	})
+
+	// Monitor the process and surface exit/crash in the dashboard.
 	go func() {
-		err := cmd.Wait()
+		waitErr := cmd.Wait()
+		_ = pw.Close() // unblocks streamOutput goroutine
+		if logFile != nil {
+			_ = logFile.Close()
+		}
 		m.mu.Lock()
 		delete(m.procs, potID)
 		m.mu.Unlock()
-		if err != nil {
-			m.emitLog(potID, hpType, "process.exit", fmt.Sprintf("process exited with error: %v — check pot.log for details", err))
+		if waitErr != nil {
+			m.emitLog(potID, hpType, "process.exit",
+				fmt.Sprintf("process exited with error: %v — see process.output lines above or pot.log for details", waitErr))
 		} else {
 			m.emitLog(potID, hpType, "process.exit", "process exited cleanly")
 		}
 	}()
-	m.emitLog(potID, mf.HoneypotType, "start.complete", fmt.Sprintf("process started (pid=%d)", cmd.Process.Pid))
+
 	return nil
 }
 
@@ -602,7 +627,10 @@ func buildCommand(mf *Manifest) (*exec.Cmd, error) {
 		if _, err := os.Stat(twistdPath); err != nil {
 			return nil, fmt.Errorf("twistd not found at %s — cowrie venv setup may have failed", twistdPath)
 		}
-		cmd := exec.Command(twistdPath, "-n", "-l", "-", "cowrie")
+		// -n = no-daemon (runs in foreground, logs to stdout automatically).
+		// Do NOT add "-l -": on Windows twistd interprets that as a literal
+		// file path named "-" and crashes immediately.
+		cmd := exec.Command(twistdPath, "-n", "cowrie")
 		cmd.Env = append(os.Environ(),
 			fmt.Sprintf("PYTHONPATH=%s", filepath.Join(mf.InstallDir, "src")),
 		)
