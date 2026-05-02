@@ -391,29 +391,42 @@ func findEntrypoint(dir string) string {
 // creates a Python venv, upgrades pip, installs requirements.txt, and
 // creates the var/ directories that cowrie expects at runtime.
 func (m *Manager) postInstallCowrie(ctx context.Context, potID, dir string) error {
-	// Find Python: on Windows try py (launcher) → python → python3;
-	// on Unix try python3 → python.
+	// Find a *working* Python interpreter. We try several candidates and pick
+	// the first one that both resolves on PATH AND can actually execute code.
+	// This matters on Windows because C:\WINDOWS\py.exe (the Python Launcher
+	// stub) exists even when no Python interpreter is installed; running it
+	// without Python returns exit 112. We must skip such broken entries and
+	// continue searching instead of giving up on the first failure.
 	var pythonCandidates []string
 	if runtime.GOOS == "windows" {
-		pythonCandidates = []string{"py", "python", "python3"}
+		pythonCandidates = []string{"python", "python3", "py", "py.exe", "python.exe"}
 	} else {
 		pythonCandidates = []string{"python3", "python"}
 	}
+
 	pythonCmd := ""
+	tried := make([]string, 0, len(pythonCandidates))
 	for _, c := range pythonCandidates {
-		if p, err := exec.LookPath(c); err == nil {
+		p, err := exec.LookPath(c)
+		if err != nil {
+			continue
+		}
+		// Confirm this binary can actually run Python code (not a launcher stub).
+		// Use a short timeout-bounded check derived from the parent context.
+		probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		probeErr := exec.CommandContext(probeCtx, p, "-c", "import sys; sys.exit(0)").Run()
+		cancel()
+		if probeErr == nil {
 			pythonCmd = p
 			break
 		}
+		tried = append(tried, fmt.Sprintf("%s (%s: %v)", c, p, probeErr))
 	}
 	if pythonCmd == "" {
-		return fmt.Errorf("Python not found in PATH (tried: %v) — install Python 3 and ensure it is on PATH", pythonCandidates)
-	}
-	// Sanity check: the launcher (py.exe) exists on Windows even without Python installed.
-	// Run a quick test to confirm a real interpreter is available.
-	testCmd := exec.CommandContext(ctx, pythonCmd, "-c", "import sys")
-	if err := testCmd.Run(); err != nil {
-		return fmt.Errorf("Python found at %s but failed to run — install Python 3 from python.org and add it to PATH", pythonCmd)
+		if len(tried) == 0 {
+			return fmt.Errorf("no Python interpreter found in PATH (tried: %v) — install Python 3 from python.org and ensure it is on PATH", pythonCandidates)
+		}
+		return fmt.Errorf("found Python launcher(s) but none could execute code [%s] — install Python 3 from python.org (check 'Add Python to PATH' during install)", strings.Join(tried, "; "))
 	}
 	m.emitLog(potID, "cowrie", "install.progress", "using Python: "+pythonCmd)
 
