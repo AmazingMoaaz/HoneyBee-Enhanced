@@ -615,32 +615,63 @@ func (m *Manager) runInstallCmd(ctx context.Context, potID, hpType, dir string, 
 }
 
 func buildCommand(mf *Manifest) (*exec.Cmd, error) {
-	// Cowrie: use venv twistd + PYTHONPATH instead of the cowrie shell script.
+	// Cowrie: run via the venv python.exe directly (NOT via twistd.exe).
+	//
+	// Why not twistd.exe?
+	//   On Windows, twistd.exe is a pip-generated console-script launcher.
+	//   When its stdout/stderr are attached to a Go io.Pipe (not a real TTY),
+	//   the native launcher wrapper can silently swallow output — even with
+	//   PYTHONUNBUFFERED=1 — because the env var propagation through the
+	//   wrapper is unreliable on Windows service accounts.
+	//
+	// By running python.exe -u <launcher.py> we guarantee:
+	//   - stdout/stderr are our pipe handles from the very first byte
+	//   - -u is applied at the interpreter level (most reliable unbuffered mode)
+	//   - any import error appears in process.output before the process exits
 	if mf.HoneypotType == "cowrie" {
 		venvDir := filepath.Join(mf.InstallDir, "cowrie-env")
-		var twistdPath string
+
+		// Locate venv python.
+		var pythonExe string
 		if runtime.GOOS == "windows" {
-			twistdPath = filepath.Join(venvDir, "Scripts", "twistd.exe")
+			pythonExe = filepath.Join(venvDir, "Scripts", "python.exe")
 		} else {
-			twistdPath = filepath.Join(venvDir, "bin", "twistd")
+			pythonExe = filepath.Join(venvDir, "bin", "python3")
+			if _, err := os.Stat(pythonExe); err != nil {
+				pythonExe = filepath.Join(venvDir, "bin", "python")
+			}
 		}
-		if _, err := os.Stat(twistdPath); err != nil {
-			return nil, fmt.Errorf("twistd not found at %s — cowrie venv setup may have failed", twistdPath)
+		if _, err := os.Stat(pythonExe); err != nil {
+			return nil, fmt.Errorf("Python not found in cowrie venv (%s) — venv setup may have failed", pythonExe)
 		}
-		// twistd flags:
-		//   -n           run in foreground (don't daemonise) and log to stdout
-		//   --pidfile=   suppress writing twistd.pid (it would land in cwd and may fail on Windows)
-		//   cowrie       the twisted plugin name (resolved via PYTHONPATH=src/)
-		// Do NOT pass "-l -": twistd reads it as a literal filename and crashes on Windows.
-		cmd := exec.Command(twistdPath, "-n", "--pidfile=", "cowrie")
-		cmd.Env = append(os.Environ(),
-			fmt.Sprintf("PYTHONPATH=%s", filepath.Join(mf.InstallDir, "src")),
-			// PYTHONUNBUFFERED is critical: without it, Python buffers stdout/stderr
-			// and any error message is lost when the process dies, leaving the
-			// dashboard with a silent "process exited cleanly" and zero output.
-			"PYTHONUNBUFFERED=1",
-			"PYTHONIOENCODING=utf-8",
+
+		// Generate (or regenerate) the launcher script.
+		// Using filepath.ToSlash gives forward-slash paths that Python accepts on
+		// all platforms, and Go's %%q verb double-quotes + escapes them safely.
+		launcherPath := filepath.Join(mf.InstallDir, "cowrie-launch.py")
+		srcDir := filepath.ToSlash(filepath.Join(mf.InstallDir, "src"))
+		pidFile := filepath.ToSlash(filepath.Join(mf.InstallDir, "var", "run", "cowrie", "twistd.pid"))
+		launcher := fmt.Sprintf(
+			"# HoneyBee cowrie launcher — auto-generated, do not edit.\n"+
+				"import sys\n"+
+				"sys.path.insert(0, %q)\n"+
+				"# Pre-flight: surface ImportError immediately so it reaches the dashboard log.\n"+
+				"try:\n"+
+				"    import cowrie  # noqa: F401\n"+
+				"except ImportError as _e:\n"+
+				"    print('COWRIE IMPORT ERROR:', _e, flush=True)\n"+
+				"    print('Hint: ensure pip install -r requirements.txt completed without errors', flush=True)\n"+
+				"    sys.exit(1)\n"+
+				"_pidfile = %q\n"+
+				"sys.argv = ['twistd', '-n', '--pidfile=' + _pidfile, '--reactor=select', 'cowrie']\n"+
+				"from twisted.scripts.twistd import run\n"+
+				"run()\n",
+			srcDir, pidFile,
 		)
+		_ = os.WriteFile(launcherPath, []byte(launcher), 0o644)
+
+		cmd := exec.Command(pythonExe, "-u", launcherPath)
+		cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 		return cmd, nil
 	}
 
