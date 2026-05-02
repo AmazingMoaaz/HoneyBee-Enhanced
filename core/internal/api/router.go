@@ -166,6 +166,8 @@ func Build(
 				r.Post("/deployments/{id}/stop", depsH.Action("stop"))
 				r.Post("/deployments/{id}/restart", depsH.Action("restart"))
 				r.Post("/deployments/{id}/remove", depsH.Action("remove"))
+				r.Delete("/deployments/{id}", depsH.Delete)
+				r.Post("/deployments/cleanup", depsH.Cleanup)
 				r.Patch("/deployments/{id}/config", depsH.UpdateConfig)
 				r.Post("/deployments/{id}/metrics", depsH.RequestMetrics)
 			})

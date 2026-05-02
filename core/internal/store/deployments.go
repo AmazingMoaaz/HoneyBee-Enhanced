@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/honeybee-enhanced/shared/models"
 )
@@ -104,4 +105,36 @@ func (s *Store) CountRunningDeployments(ctx context.Context, orgID int64) (int64
 	err := s.DB.GetContext(ctx, &n,
 		`SELECT COUNT(*) FROM deployments WHERE org_id = ? AND status = 'running'`, orgID)
 	return n, err
+}
+
+// DeleteDeployment removes a single deployment record from the DB (org-scoped).
+// This only deletes the DB row — it does NOT send a remove command to the node.
+// Use for stale/failed/pending records where no node-side cleanup is needed.
+func (s *Store) DeleteDeployment(ctx context.Context, orgID, id int64) error {
+	_, err := s.DB.ExecContext(ctx,
+		`DELETE FROM deployments WHERE id = ? AND org_id = ?`, id, orgID)
+	return err
+}
+
+// DeleteDeploymentsByStatus bulk-deletes all deployments whose status matches
+// one of the given values (org-scoped). Used for cleanup of failed/pending rows.
+func (s *Store) DeleteDeploymentsByStatus(ctx context.Context, orgID int64, statuses []string) (int64, error) {
+	if len(statuses) == 0 {
+		return 0, nil
+	}
+	// Build a parameterised IN clause.
+	args := []any{orgID}
+	placeholders := make([]string, len(statuses))
+	for i, s := range statuses {
+		placeholders[i] = "?"
+		args = append(args, s)
+	}
+	q := fmt.Sprintf(
+		`DELETE FROM deployments WHERE org_id = ? AND status IN (%s)`,
+		strings.Join(placeholders, ","))
+	res, err := s.DB.ExecContext(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }

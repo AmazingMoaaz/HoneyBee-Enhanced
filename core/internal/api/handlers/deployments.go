@@ -137,6 +137,38 @@ func (h *DeploymentsHandler) UpdateConfig(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// Delete removes a deployment record from the DB without sending any node command.
+// Use for stale failed/pending records where no node-side cleanup is needed.
+func (h *DeploymentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgID(r.Context())
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err := h.Store.DeleteDeployment(r.Context(), orgID, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "delete deployment")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// Cleanup bulk-deletes all failed and pending deployment records from the DB.
+// Accepts optional JSON body {"statuses": ["failed","pending"]} to control which
+// statuses are purged; defaults to failed + pending + stopped.
+func (h *DeploymentsHandler) Cleanup(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgID(r.Context())
+	statuses := []string{"failed", "pending", "stopped"}
+	var body struct {
+		Statuses []string `json:"statuses"`
+	}
+	if err := readJSON(r, &body); err == nil && len(body.Statuses) > 0 {
+		statuses = body.Statuses
+	}
+	n, err := h.Store.DeleteDeploymentsByStatus(r.Context(), orgID, statuses)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "cleanup deployments")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": n, "statuses": statuses})
+}
+
 // Logs returns paginated pot_logs for a deployment, in chronological order.
 func (h *DeploymentsHandler) Logs(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgID(r.Context())
