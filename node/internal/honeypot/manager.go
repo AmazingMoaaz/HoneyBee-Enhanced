@@ -29,8 +29,19 @@ type Manifest struct {
 	GitBranch    string         `json:"git_branch"`
 	InstallDir   string         `json:"install_dir"`
 	Entrypoint   string         `json:"entrypoint"`
+	RunCmd       []string       `json:"run_cmd,omitempty"`
 	Config       map[string]any `json:"config"`
 	InstalledAt  time.Time      `json:"installed_at"`
+}
+
+// InstallOptions carries optional deployment metadata from the potstore catalog.
+type InstallOptions struct {
+	// Entrypoint overrides auto-detection when non-empty.
+	Entrypoint string
+	// InstallCmds is a single command (argv) to run from InstallDir after cloning.
+	InstallCmds []string
+	// RunCmd is the argv used to launch the pot process; overrides Entrypoint if set.
+	RunCmd []string
 }
 
 type running struct {
@@ -107,7 +118,10 @@ func (m *Manager) emitLog(potID, potType, logType, line string) {
 }
 
 // Install clones a honeypot repo and writes a manifest.
-func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch string, cfg map[string]any) (*Manifest, error) {
+func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch string, cfg map[string]any, opts *InstallOptions) (*Manifest, error) {
+	if opts == nil {
+		opts = &InstallOptions{}
+	}
 	dir := filepath.Join(m.root, potID)
 	if _, err := os.Stat(dir); err == nil {
 		return nil, errors.New("already installed")
@@ -156,10 +170,25 @@ func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch str
 	}
 	m.emitLog(potID, hpType, "install.progress", "git clone complete")
 
-	entry := findEntrypoint(dir)
+	// Run optional install commands (e.g. pip install -r requirements.txt).
+	if len(opts.InstallCmds) > 0 {
+		m.emitLog(potID, hpType, "install.progress", "running install command: "+strings.Join(opts.InstallCmds, " "))
+		if err := m.runInstallCmd(ctx, potID, hpType, dir, opts.InstallCmds); err != nil {
+			_ = os.RemoveAll(dir)
+			m.emitLog(potID, hpType, "install.error", "install command failed: "+err.Error())
+			return nil, fmt.Errorf("install cmd: %w", err)
+		}
+		m.emitLog(potID, hpType, "install.progress", "install command complete")
+	}
+
+	// Determine entrypoint: explicit > auto-detect.
+	entry := opts.Entrypoint
+	if entry == "" {
+		entry = findEntrypoint(dir)
+	}
 	if entry != "" {
-		m.emitLog(potID, hpType, "install.progress", "entrypoint found: "+entry)
-	} else {
+		m.emitLog(potID, hpType, "install.progress", "entrypoint: "+entry)
+	} else if len(opts.RunCmd) == 0 {
 		m.emitLog(potID, hpType, "install.warning", "no entrypoint detected — pot may need manual configuration")
 	}
 
@@ -170,6 +199,7 @@ func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch str
 		GitBranch:    branch,
 		InstallDir:   dir,
 		Entrypoint:   entry,
+		RunCmd:       opts.RunCmd,
 		Config:       cfg,
 		InstalledAt:  time.Now().UTC(),
 	}
@@ -339,8 +369,9 @@ func (m *Manager) ListInstalled() []*Manifest {
 
 func findEntrypoint(dir string) string {
 	candidates := []string{
-		"start.sh", "run.sh", "bin/cowrie", "src/cowrie/cli.py",
-		"main.py", "app.py", "honeypot.py", "index.php", "standalone.php",
+		"start.sh", "run.sh",
+		"main.py", "app.py", "honeypot.py",
+		"index.php", "standalone.php",
 	}
 	for _, c := range candidates {
 		p := filepath.Join(dir, c)
@@ -351,7 +382,54 @@ func findEntrypoint(dir string) string {
 	return ""
 }
 
+// runInstallCmd runs a single install command (argv slice) from dir, streaming output via LogFn.
+func (m *Manager) runInstallCmd(ctx context.Context, potID, hpType, dir string, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.Dir = dir
+	pr, pw := io.Pipe()
+	cmd.Stdout = pw
+	cmd.Stderr = pw
+	doneScan := make(chan struct{})
+	go func() {
+		defer close(doneScan)
+		sc := bufio.NewScanner(pr)
+		for sc.Scan() {
+			line := strings.TrimRight(sc.Text(), "\r\t ")
+			if line != "" {
+				m.emitLog(potID, hpType, "install.progress", line)
+			}
+		}
+	}()
+	if err := cmd.Start(); err != nil {
+		_ = pw.Close()
+		<-doneScan
+		return fmt.Errorf("start %s: %w", args[0], err)
+	}
+	runErr := cmd.Wait()
+	_ = pw.Close()
+	<-doneScan
+	return runErr
+}
+
 func buildCommand(mf *Manifest) (*exec.Cmd, error) {
+	// RunCmd takes precedence — use it verbatim.
+	if len(mf.RunCmd) > 0 {
+		exe, err := exec.LookPath(mf.RunCmd[0])
+		if err != nil {
+			// Not in PATH — try relative to InstallDir.
+			rel := filepath.Join(mf.InstallDir, mf.RunCmd[0])
+			if _, statErr := os.Stat(rel); statErr == nil {
+				exe = rel
+			} else {
+				return nil, fmt.Errorf("run_cmd executable %q not found in PATH or install dir", mf.RunCmd[0])
+			}
+		}
+		return exec.Command(exe, mf.RunCmd[1:]...), nil
+	}
+	// Fall back to Entrypoint-based detection.
 	full := filepath.Join(mf.InstallDir, mf.Entrypoint)
 	switch {
 	case mf.Entrypoint == "":

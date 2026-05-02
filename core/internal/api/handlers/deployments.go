@@ -74,6 +74,9 @@ func (h *DeploymentsHandler) CreateForNode(w http.ResponseWriter, r *http.Reques
 		HoneypotType: req.HoneypotType,
 		GitURL:       entry.GitURL,
 		GitBranch:    entry.GitBranch,
+		Entrypoint:   entry.EntryPoint,
+		InstallCmds:  entry.InstallCmd,
+		RunCmd:       entry.RunCmd,
 		Config:       req.Config,
 		AutoStart:    req.AutoStart,
 	}

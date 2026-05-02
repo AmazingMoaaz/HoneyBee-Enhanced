@@ -202,6 +202,14 @@ type InstallPotPayload struct {
 	HoneypotType string         `json:"honeypot_type"`
 	GitURL       string         `json:"git_url"`
 	GitBranch    string         `json:"git_branch,omitempty"`
+	// Entrypoint is the file/command to use when starting the pot.
+	// If empty, the node will auto-detect based on cloned files.
+	Entrypoint  string   `json:"entrypoint,omitempty"`
+	// InstallCmds is a list of commands (each as argv) to run after cloning.
+	InstallCmds []string `json:"install_cmds,omitempty"`
+	// RunCmd is the full command argv to launch the pot process.
+	// If set it overrides Entrypoint and auto-detection.
+	RunCmd      []string `json:"run_cmd,omitempty"`
 	Config       map[string]any `json:"config,omitempty"`
 	AutoStart    bool           `json:"auto_start"`
 }

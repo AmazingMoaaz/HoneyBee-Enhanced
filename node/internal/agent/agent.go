@@ -243,7 +243,12 @@ func (a *Agent) handleTask(ctx context.Context, ta protocol.TaskAssign) {
 	case protocol.CmdInstallPot:
 		var p protocol.InstallPotPayload
 		_ = json.Unmarshal(ta.Payload, &p)
-		_, err := a.hp.Install(ctx, p.PotID, p.HoneypotType, p.GitURL, p.GitBranch, p.Config)
+		opts := &honeypot.InstallOptions{
+			Entrypoint:  p.Entrypoint,
+			InstallCmds: p.InstallCmds,
+			RunCmd:      p.RunCmd,
+		}
+		_, err := a.hp.Install(ctx, p.PotID, p.HoneypotType, p.GitURL, p.GitBranch, p.Config, opts)
 		if err != nil {
 			status, msg = protocol.TaskStatusFailed, err.Error()
 		} else {

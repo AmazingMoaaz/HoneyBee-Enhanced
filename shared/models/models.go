@@ -164,6 +164,7 @@ type PotStoreEntry struct {
 	GitBranch   string         `json:"git_branch"`
 	EntryPoint  string         `json:"entry_point"`
 	InstallCmd  []string       `json:"install_cmd"`
+	RunCmd      []string       `json:"run_cmd"`
 	DefaultPorts map[string]int `json:"default_ports"`
 	Language    string         `json:"language"`
 }
