@@ -9,9 +9,13 @@ import (
 	"time"
 )
 
-// selfUninstall writes a shell cleanup script and exits; the script removes all node files.
+// selfUninstall stops every running pot, then writes a shell cleanup script
+// that removes systemd units, the binary, and the install directory.
 func (a *Agent) selfUninstall() {
-	time.Sleep(500 * time.Millisecond)
+	for _, mf := range a.hp.ListInstalled() {
+		_ = a.hp.Stop(mf.PotID)
+	}
+	time.Sleep(2 * time.Second)
 	binDir := a.cfg.Node.DataDir
 	if binDir == "" {
 		exe, _ := os.Executable()

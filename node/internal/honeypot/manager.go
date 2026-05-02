@@ -627,12 +627,19 @@ func buildCommand(mf *Manifest) (*exec.Cmd, error) {
 		if _, err := os.Stat(twistdPath); err != nil {
 			return nil, fmt.Errorf("twistd not found at %s — cowrie venv setup may have failed", twistdPath)
 		}
-		// -n = no-daemon (runs in foreground, logs to stdout automatically).
-		// Do NOT add "-l -": on Windows twistd interprets that as a literal
-		// file path named "-" and crashes immediately.
-		cmd := exec.Command(twistdPath, "-n", "cowrie")
+		// twistd flags:
+		//   -n           run in foreground (don't daemonise) and log to stdout
+		//   --pidfile=   suppress writing twistd.pid (it would land in cwd and may fail on Windows)
+		//   cowrie       the twisted plugin name (resolved via PYTHONPATH=src/)
+		// Do NOT pass "-l -": twistd reads it as a literal filename and crashes on Windows.
+		cmd := exec.Command(twistdPath, "-n", "--pidfile=", "cowrie")
 		cmd.Env = append(os.Environ(),
 			fmt.Sprintf("PYTHONPATH=%s", filepath.Join(mf.InstallDir, "src")),
+			// PYTHONUNBUFFERED is critical: without it, Python buffers stdout/stderr
+			// and any error message is lost when the process dies, leaving the
+			// dashboard with a silent "process exited cleanly" and zero output.
+			"PYTHONUNBUFFERED=1",
+			"PYTHONIOENCODING=utf-8",
 		)
 		return cmd, nil
 	}

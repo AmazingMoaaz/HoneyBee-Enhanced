@@ -411,18 +411,27 @@ func (h *NodesHandler) UninstallScript(w http.ResponseWriter, r *http.Request) {
 	if platform == "windows" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprint(w, `# HoneyBee-Enhanced node uninstall — Windows
+$ErrorActionPreference = 'SilentlyContinue'
 $taskName = "HoneyBeeNode"
 $BinDir   = "$env:LOCALAPPDATA\HoneyBeeNode"
 
-Write-Host "[1/3] Stopping scheduled task..."
-Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+Write-Host "[1/4] Stopping scheduled task..."
+Stop-ScheduledTask -TaskName $taskName
 
-Write-Host "[2/3] Removing scheduled task..."
-Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+Write-Host "[2/4] Removing scheduled task..."
+Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 
-Write-Host "[3/3] Deleting files..."
-Start-Sleep -Seconds 1
-Remove-Item -Recurse -Force $BinDir -ErrorAction SilentlyContinue
+Write-Host "[3/4] Killing any honeypot child processes (python.exe, twistd.exe ...) running from $BinDir..."
+Get-CimInstance Win32_Process | Where-Object {
+    $_.ExecutablePath -and $_.ExecutablePath.StartsWith($BinDir, [System.StringComparison]::OrdinalIgnoreCase)
+} | ForEach-Object {
+    Write-Host "  killing PID $($_.ProcessId) - $($_.ExecutablePath)"
+    Stop-Process -Id $_.ProcessId -Force
+}
+
+Write-Host "[4/4] Deleting files..."
+Start-Sleep -Seconds 3
+Remove-Item -Recurse -Force $BinDir
 
 Write-Host "Done. HoneyBeeNode has been removed from this device."
 `)
