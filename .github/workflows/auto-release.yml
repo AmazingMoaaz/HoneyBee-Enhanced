@@ -1,7 +1,7 @@
 name: auto-release
 
 # Runs after the CI workflow completes successfully on main.
-# Bumps the patch version, pushes a new tag, which then triggers release-node.yml.
+# Bumps the patch version, pushes a new tag, builds binaries, and publishes a GitHub Release.
 on:
   workflow_run:
     workflows: [ci]
@@ -9,17 +9,19 @@ on:
     branches: [main]
 
 jobs:
+  # ── Step 1: compute and push new tag ───────────────────────────────────────
   tag:
-    # Only proceed if CI succeeded
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history needed to find latest tag
+          fetch-depth: 0
 
       - name: Compute next patch version
         id: bump
@@ -41,3 +43,68 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "${{ steps.bump.outputs.new_tag }}"
           git push origin "${{ steps.bump.outputs.new_tag }}"
+
+  # ── Step 2: build node binary for every platform ───────────────────────────
+  build:
+    needs: tag
+    name: build/${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: node/go.sum
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          EXT=""
+          [[ "${{ matrix.goos }}" == "windows" ]] && EXT=".exe"
+          ASSET="honeybee-node-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}"
+          mkdir -p dist
+          cd node
+          go build \
+            -ldflags="-s -w -X main.Version=${{ needs.tag.outputs.new_tag }}" \
+            -o "../dist/${ASSET}" ./cmd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: honeybee-node-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+
+  # ── Step 3: publish GitHub Release ─────────────────────────────────────────
+  release:
+    needs: [tag, build]
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -lh dist/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.tag.outputs.new_tag }}
+          files: dist/**
+          generate_release_notes: true
