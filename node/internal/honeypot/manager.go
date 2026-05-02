@@ -263,14 +263,22 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 	m.emitLog(potID, mf.HoneypotType, "start.complete", fmt.Sprintf("process started (pid=%d)", cmd.Process.Pid))
 
 	// Stream process output lines to the dashboard in real time.
-	go streamOutput(pr, func(line string) {
-		m.emitLog(potID, hpType, "process.output", line)
-	})
+	// streamDone is closed when all lines have been emitted — we MUST
+	// wait for it before emitting process.exit so the dashboard always
+	// shows the error output BEFORE the exit event.
+	streamDone := make(chan struct{})
+	go func() {
+		streamOutput(pr, func(line string) {
+			m.emitLog(potID, hpType, "process.output", line)
+		})
+		close(streamDone)
+	}()
 
 	// Monitor the process and surface exit/crash in the dashboard.
 	go func() {
 		waitErr := cmd.Wait()
-		_ = pw.Close() // unblocks streamOutput goroutine
+		_ = pw.Close() // sends EOF to streamOutput goroutine
+		<-streamDone   // wait until every output line has been emitted
 		if logFile != nil {
 			_ = logFile.Close()
 		}
@@ -279,7 +287,8 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 		m.mu.Unlock()
 		if waitErr != nil {
 			m.emitLog(potID, hpType, "process.exit",
-				fmt.Sprintf("process exited with error: %v — see process.output lines above or pot.log for details", waitErr))
+				fmt.Sprintf("process exited with error: %v — check process.output lines above or %s",
+					waitErr, filepath.Join(mf.InstallDir, "cowrie-debug.log")))
 		} else {
 			m.emitLog(potID, hpType, "process.exit", "process exited cleanly")
 		}
@@ -645,30 +654,73 @@ func buildCommand(mf *Manifest) (*exec.Cmd, error) {
 			return nil, fmt.Errorf("Python not found in cowrie venv (%s) — venv setup may have failed", pythonExe)
 		}
 
-		// Generate (or regenerate) the launcher script.
-		// Using filepath.ToSlash gives forward-slash paths that Python accepts on
-		// all platforms, and Go's %%q verb double-quotes + escapes them safely.
+		// Generate (or regenerate) the launcher script every time so it
+		// always reflects the current install directory.
 		launcherPath := filepath.Join(mf.InstallDir, "cowrie-launch.py")
+		debugLog := filepath.ToSlash(filepath.Join(mf.InstallDir, "cowrie-debug.log"))
 		srcDir := filepath.ToSlash(filepath.Join(mf.InstallDir, "src"))
 		pidFile := filepath.ToSlash(filepath.Join(mf.InstallDir, "var", "run", "cowrie", "twistd.pid"))
-		launcher := fmt.Sprintf(
-			"# HoneyBee cowrie launcher — auto-generated, do not edit.\n"+
-				"import sys\n"+
-				"sys.path.insert(0, %q)\n"+
-				"# Pre-flight: surface ImportError immediately so it reaches the dashboard log.\n"+
-				"try:\n"+
-				"    import cowrie  # noqa: F401\n"+
-				"except ImportError as _e:\n"+
-				"    print('COWRIE IMPORT ERROR:', _e, flush=True)\n"+
-				"    print('Hint: ensure pip install -r requirements.txt completed without errors', flush=True)\n"+
-				"    sys.exit(1)\n"+
-				"_pidfile = %q\n"+
-				"sys.argv = ['twistd', '-n', '--pidfile=' + _pidfile, '--reactor=select', 'cowrie']\n"+
-				"from twisted.scripts.twistd import run\n"+
-				"run()\n",
-			srcDir, pidFile,
-		)
-		_ = os.WriteFile(launcherPath, []byte(launcher), 0o644)
+
+		// The launcher:
+		//  - writes every step to BOTH stdout (captured by our pipe) AND
+		//    cowrie-debug.log (survives pipe failures, readable directly)
+		//  - wraps every import in try/except so the actual error is always visible
+		//  - does NOT specify --reactor so twisted picks the platform default
+		launcher := fmt.Sprintf(`# HoneyBee cowrie launcher — auto-generated, do not edit.
+import sys, os, traceback, datetime
+
+_dbg = open(%q, 'w', buffering=1, encoding='utf-8')
+
+def _w(msg):
+    ts = datetime.datetime.now().strftime('%%H:%%M:%%S.%%f')
+    line = f'[{ts}] {msg}'
+    print(line, flush=True)
+    _dbg.write(line + '\n')
+    _dbg.flush()
+
+_w(f'launcher started | Python {sys.version} | exe={sys.executable}')
+_w(f'CWD={os.getcwd()}')
+sys.path.insert(0, %q)
+_w(f'sys.path[0]={sys.path[0]}')
+
+try:
+    import cowrie
+    _w(f'import cowrie OK ({cowrie.__file__})')
+except Exception as e:
+    _w(f'IMPORT ERROR cowrie: {e}')
+    _dbg.write(traceback.format_exc())
+    traceback.print_exc()
+    sys.exit(1)
+
+try:
+    from twisted.scripts.twistd import run
+    _w('import twisted.scripts.twistd OK')
+except Exception as e:
+    _w(f'IMPORT ERROR twisted.scripts.twistd: {e}')
+    _dbg.write(traceback.format_exc())
+    traceback.print_exc()
+    sys.exit(1)
+
+_pidfile = %q
+sys.argv = ['twistd', '-n', '--pidfile=' + _pidfile, 'cowrie']
+_w(f'calling run() | sys.argv={sys.argv}')
+_dbg.flush()
+
+try:
+    run()
+except SystemExit as e:
+    _w(f'SystemExit: {e.code}')
+    sys.exit(e.code)
+except Exception as e:
+    _w(f'run() exception: {e}')
+    _dbg.write(traceback.format_exc())
+    traceback.print_exc()
+    sys.exit(1)
+`, debugLog, srcDir, pidFile)
+
+		if err := os.WriteFile(launcherPath, []byte(launcher), 0o644); err != nil {
+			return nil, fmt.Errorf("write cowrie launcher: %w", err)
+		}
 
 		cmd := exec.Command(pythonExe, "-u", launcherPath)
 		cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
