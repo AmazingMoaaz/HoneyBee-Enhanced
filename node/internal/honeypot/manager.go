@@ -247,7 +247,18 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 		return err
 	}
 	m.procs[potID] = &running{cmd: cmd, pid: cmd.Process.Pid, startedAt: time.Now().UTC()}
-	go func() { _ = cmd.Wait() }()
+	hpType := mf.HoneypotType
+	go func() {
+		err := cmd.Wait()
+		m.mu.Lock()
+		delete(m.procs, potID)
+		m.mu.Unlock()
+		if err != nil {
+			m.emitLog(potID, hpType, "process.exit", fmt.Sprintf("process exited with error: %v — check pot.log for details", err))
+		} else {
+			m.emitLog(potID, hpType, "process.exit", "process exited cleanly")
+		}
+	}()
 	m.emitLog(potID, mf.HoneypotType, "start.complete", fmt.Sprintf("process started (pid=%d)", cmd.Process.Pid))
 	return nil
 }
@@ -522,6 +533,29 @@ func (m *Manager) postInstallCowrie(ctx context.Context, potID, dir string) erro
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			return fmt.Errorf("mkdir %s: %w", sub, err)
 		}
+	}
+
+	// Write etc/cowrie.cfg so cowrie binds to 0.0.0.0:2222 (not just localhost).
+	// cowrie reads etc/cowrie.cfg.dist first as defaults, then etc/cowrie.cfg
+	// as overrides — so we only need to specify what we want to change.
+	cowrieCfg := `[honeypot]
+hostname = svr04
+
+[ssh]
+listen_addr = 0.0.0.0
+listen_port = 2222
+
+[telnet]
+enabled = false
+listen_addr = 0.0.0.0
+listen_port = 2223
+`
+	etcDir := filepath.Join(dir, "etc")
+	if err := os.MkdirAll(etcDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir etc: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(etcDir, "cowrie.cfg"), []byte(cowrieCfg), 0o644); err != nil {
+		return fmt.Errorf("write cowrie.cfg: %w", err)
 	}
 	m.emitLog(potID, "cowrie", "install.progress", "cowrie setup complete")
 	return nil
