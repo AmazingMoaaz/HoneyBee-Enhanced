@@ -387,6 +387,42 @@ func findEntrypoint(dir string) string {
 	return ""
 }
 
+// windowsPythonRoots returns directories to glob for python.exe on Windows.
+// It does NOT rely on environment variables (which may be missing in service
+// processes), and instead uses Go standard-library calls (os.UserHomeDir,
+// os.UserCacheDir) plus a fixed list of system-wide locations.
+func windowsPythonRoots() []string {
+	roots := []string{
+		`C:\Program Files`,
+		`C:\Program Files (x86)`,
+	}
+
+	// os.UserHomeDir() calls the Windows API (GetUserProfileDirectory) and
+	// works even when USERPROFILE / LOCALAPPDATA env vars are not set.
+	if home, err := os.UserHomeDir(); err == nil {
+		// Per-user install: %LOCALAPPDATA%\Programs\Python\...
+		localAppData := filepath.Join(home, "AppData", "Local")
+		roots = append(roots, localAppData)
+		// Roaming install (less common but possible)
+		roots = append(roots, filepath.Join(home, "AppData", "Roaming"))
+	}
+
+	// Also glob across ALL user profiles on the machine (covers cases where
+	// the agent runs under a different account than the one that installed Python).
+	if profileMatches, err := filepath.Glob(`C:\Users\*\AppData\Local`); err == nil {
+		roots = append(roots, profileMatches...)
+	}
+
+	// Also honour env-var based roots if they happen to be set.
+	for _, env := range []string{"LOCALAPPDATA", "APPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)"} {
+		if v := os.Getenv(env); v != "" {
+			roots = append(roots, v)
+		}
+	}
+
+	return roots
+}
+
 // findPythonInterpreter returns the absolute path to a working Python 3
 // interpreter, probing PATH candidates first and then well-known install
 // locations on Windows (so it works even when the node agent started before
@@ -406,25 +442,16 @@ func findPythonInterpreter(ctx context.Context) (string, error) {
 	}
 
 	// On Windows, also scan well-known install directories so we find
-	// Python even when the agent process inherited a stale PATH (e.g. the
-	// agent was started before the user installed Python and updated PATH).
+	// Python even when the agent process inherited a stale PATH.
 	if runtime.GOOS == "windows" {
-		roots := []string{
-			os.Getenv("LOCALAPPDATA"),
-			os.Getenv("APPDATA"),
-			`C:\`,
-			`C:\Program Files`,
-			`C:\Program Files (x86)`,
-		}
-		for _, root := range roots {
-			if root == "" {
-				continue
+		for _, root := range windowsPythonRoots() {
+			// Match e.g. Python311, Python312, Python3, Python39 ...
+			if m, _ := filepath.Glob(filepath.Join(root, "Programs", "Python", "Python3*", "python.exe")); len(m) > 0 {
+				absCandidates = append(absCandidates, m...)
 			}
-			// Match e.g. Python311, Python312, Python3 ...
-			matches, _ := filepath.Glob(filepath.Join(root, "Programs", "Python", "Python3*", "python.exe"))
-			matches2, _ := filepath.Glob(filepath.Join(root, "Python3*", "python.exe"))
-			absCandidates = append(absCandidates, matches...)
-			absCandidates = append(absCandidates, matches2...)
+			if m, _ := filepath.Glob(filepath.Join(root, "Python3*", "python.exe")); len(m) > 0 {
+				absCandidates = append(absCandidates, m...)
+			}
 		}
 	}
 
