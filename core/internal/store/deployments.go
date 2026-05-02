@@ -82,6 +82,14 @@ func (s *Store) UpdateDeploymentStatus(ctx context.Context, nodeID int64, potID,
 	return err
 }
 
+// UpdateDeploymentStatusByID updates status + message by deployment primary key.
+func (s *Store) UpdateDeploymentStatusByID(ctx context.Context, id int64, status, message string) error {
+	_, err := s.DB.ExecContext(ctx,
+		`UPDATE deployments SET status = ?, status_message = ? WHERE id = ?`,
+		status, message, id)
+	return err
+}
+
 // UpdateDeploymentConfig replaces the config JSON.
 func (s *Store) UpdateDeploymentConfig(ctx context.Context, orgID, id int64, configJSON string) error {
 	_, err := s.DB.ExecContext(ctx,

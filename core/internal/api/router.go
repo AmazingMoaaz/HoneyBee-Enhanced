@@ -100,6 +100,7 @@ func Build(
 
 		// Install script may use ?token=<raw_node_token> or JWT
 		r.Get("/nodes/{id}/install", nodesH.InstallScript)
+		r.Get("/nodes/{id}/uninstall", nodesH.UninstallScript)
 
 		// WebSocket (auth via ?token=<jwt> in middleware)
 		r.Get("/ws", func(w http.ResponseWriter, req *http.Request) {
@@ -129,6 +130,7 @@ func Build(
 				r.Use(middleware.RequireOperator)
 				r.Post("/nodes", nodesH.Create)
 				r.Delete("/nodes/{id}", nodesH.Delete)
+				r.Post("/nodes/{id}/uninstall", nodesH.Uninstall)
 				r.Post("/nodes/{id}/regenerate-token", nodesH.RegenerateToken)
 				r.Post("/nodes/{id}/command", cmdH.SendNodeCommand)
 				r.Post("/nodes/{id}/deployments", depsH.CreateForNode)

@@ -11,8 +11,11 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/honeybee-enhanced/node/internal/config"
@@ -188,8 +191,50 @@ func (a *Agent) sendHeartbeat() {
 	_ = a.send(protocol.MsgHeartbeat, hb)
 }
 
-func (a *Agent) reportInstalledLoop(ctx context.Context) {
-	t := time.NewTicker(5 * time.Minute)
+// selfUninstall writes a cleanup script and exits; the script removes all node files.
+func (a *Agent) selfUninstall() {
+	time.Sleep(500 * time.Millisecond)
+	binDir := a.cfg.Node.DataDir
+	if binDir == "" {
+		binDir = filepath.Join(os.Getenv("LOCALAPPDATA"), "HoneyBeeNode")
+	}
+	exe, _ := os.Executable()
+
+	if runtime.GOOS == "windows" {
+		script := `$taskName = "HoneyBeeNode"
+Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+Remove-Item -Recurse -Force "` + filepath.Dir(exe) + `" -ErrorAction SilentlyContinue
+`
+		tmp := filepath.Join(os.TempDir(), "hb-uninstall.ps1")
+		_ = os.WriteFile(tmp, []byte(script), 0o600)
+		cmd := exec.Command("powershell", "-NonInteractive", "-WindowStyle", "Hidden", "-File", tmp)
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x00000008} // DETACHED_PROCESS
+		_ = cmd.Start()
+	} else {
+		script := `#!/bin/sh
+sleep 2
+systemctl --user stop honeybee-node 2>/dev/null || true
+systemctl --user disable honeybee-node 2>/dev/null || true
+rm -f "$HOME/.config/systemd/user/honeybee-node.service"
+systemctl --user daemon-reload 2>/dev/null || true
+sudo systemctl stop honeybee-node 2>/dev/null || true
+sudo systemctl disable honeybee-node 2>/dev/null || true
+sudo rm -f /etc/systemd/system/honeybee-node.service
+sudo systemctl daemon-reload 2>/dev/null || true
+sudo rm -f /usr/local/bin/hb-node 2>/dev/null || true
+rm -rf "` + binDir + `"
+`
+		tmp := filepath.Join(os.TempDir(), "hb-uninstall.sh")
+		_ = os.WriteFile(tmp, []byte(script), 0o700)
+		cmd := exec.Command("/bin/sh", tmp)
+		_ = cmd.Start()
+	}
+	os.Exit(0)
+}
+
+func (a *Agent) reportInstalledLoop(ctx context.Context) {	t := time.NewTicker(5 * time.Minute)
 	defer t.Stop()
 	a.sendInstalledList(0)
 	for {
@@ -340,6 +385,12 @@ func (a *Agent) handleTask(ctx context.Context, ta protocol.TaskAssign) {
 			TaskID: ta.TaskID, NodeID: a.nodeID, Status: protocol.TaskStatusCompleted,
 		})
 		go func() { time.Sleep(time.Second); os.Exit(0) }()
+		return
+	case protocol.CmdUninstallNode:
+		_ = a.send(protocol.MsgTaskResult, protocol.TaskResult{
+			TaskID: ta.TaskID, NodeID: a.nodeID, Status: protocol.TaskStatusCompleted,
+		})
+		go a.selfUninstall()
 		return
 	default:
 		status, msg = protocol.TaskStatusFailed, "unknown command"

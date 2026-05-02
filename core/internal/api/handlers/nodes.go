@@ -226,10 +226,12 @@ Write-Host "[1/4] Downloading honeybee-node (windows/$Arch)..."
 Invoke-WebRequest "$HBServer/api/v1/download/node-agent?os=windows&arch=$Arch" -OutFile "$BinDir\hb-node.exe"
 
 Write-Host "[2/4] Writing config..."
+$DataDir = "$BinDir\data" -replace '\\', '/'
+$BinDirFwd = $BinDir -replace '\\', '/'
 @"
 node:
   name: "$NodeName"
-  data_dir: "$BinDir\data"
+  data_dir: "$DataDir"
 server:
   address: "$HBAddr"
   token: "$NodeToken"
@@ -400,4 +402,86 @@ func generateToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+// UninstallScript returns a platform-specific script that removes the node agent.
+func (h *NodesHandler) UninstallScript(w http.ResponseWriter, r *http.Request) {
+	platform := strings.ToLower(r.URL.Query().Get("platform"))
+
+	if platform == "windows" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprint(w, `# HoneyBee-Enhanced node uninstall — Windows
+$taskName = "HoneyBeeNode"
+$BinDir   = "$env:LOCALAPPDATA\HoneyBeeNode"
+
+Write-Host "[1/3] Stopping scheduled task..."
+Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+
+Write-Host "[2/3] Removing scheduled task..."
+Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+
+Write-Host "[3/3] Deleting files..."
+Start-Sleep -Seconds 1
+Remove-Item -Recurse -Force $BinDir -ErrorAction SilentlyContinue
+
+Write-Host "Done. HoneyBeeNode has been removed from this device."
+`)
+	} else {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprint(w, `#!/usr/bin/env bash
+# HoneyBee-Enhanced node uninstall — Linux / macOS
+set -euo pipefail
+
+SERVICE=honeybee-node
+BIN_DIR="$HOME/.honeybee"
+
+echo "[1/3] Stopping service..."
+if systemctl --user is-active --quiet "$SERVICE" 2>/dev/null; then
+  systemctl --user stop "$SERVICE"
+elif systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
+  sudo systemctl stop "$SERVICE"
+fi
+pkill -f "hb-node" 2>/dev/null || true
+
+echo "[2/3] Removing service unit..."
+systemctl --user disable "$SERVICE" 2>/dev/null || true
+rm -f "$HOME/.config/systemd/user/${SERVICE}.service"
+systemctl --user daemon-reload 2>/dev/null || true
+sudo systemctl disable "$SERVICE" 2>/dev/null || true
+sudo rm -f "/etc/systemd/system/${SERVICE}.service"
+sudo systemctl daemon-reload 2>/dev/null || true
+
+echo "[3/3] Deleting files..."
+rm -rf "$BIN_DIR"
+sudo rm -f /usr/local/bin/hb-node 2>/dev/null || true
+
+echo "Done. HoneyBeeNode has been removed from this device."
+`)
+	}
+}
+
+// Uninstall sends CmdUninstallNode to the node (if online), then deletes from DB.
+func (h *NodesHandler) Uninstall(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgID(r.Context())
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	n, err := h.Store.GetNode(r.Context(), orgID, id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "node")
+		return
+	}
+	// If the node is online, send the uninstall command so it self-destructs.
+	online := h.NodeServer.IsOnline(n.ID)
+	if online {
+		_ = h.NodeServer.SendCommand(n.ID, "uninstall_node", nil)
+	}
+	// Disconnect and remove from DB.
+	h.NodeServer.DisconnectNode(id)
+	if err := h.Store.SoftDeleteNode(r.Context(), orgID, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "delete")
+		return
+	}
+	uid := middleware.UserID(r.Context())
+	rid := strconv.FormatInt(id, 10)
+	_ = h.Store.LogAudit(r.Context(), orgID, &uid, "uninstall", "node", &rid, "")
+	writeJSON(w, http.StatusOK, map[string]any{"status": "uninstalled", "signal_sent": online})
 }

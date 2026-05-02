@@ -93,6 +93,13 @@ func (d *Dispatcher) handleTaskResult(ctx context.Context, sess *Session, env *p
 		return
 	}
 	_ = d.store.UpdateTaskResult(ctx, tr.TaskID, tr.Status, tr.Message)
+	// If the task failed, propagate the failure to the associated deployment.
+	if tr.Status == protocol.TaskStatusFailed {
+		task, err := d.store.GetTask(ctx, sess.orgID, tr.TaskID)
+		if err == nil && task.DeployID != nil {
+			_ = d.store.UpdateDeploymentStatusByID(ctx, *task.DeployID, "failed", tr.Message)
+		}
+	}
 	if d.broadcaster != nil {
 		d.broadcaster.Broadcast(sess.orgID, "tasks", "task_result", tr)
 	}

@@ -8,6 +8,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,22 +63,34 @@ func (c *Client) Start(ctx context.Context) {
 
 // Sync fetches the manifest now.
 func (c *Client) Sync(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.repoURL, nil)
-	if err != nil {
-		return err
+	var body []byte
+
+	if strings.HasPrefix(c.repoURL, "file://") {
+		path := strings.TrimPrefix(c.repoURL, "file://")
+		var err error
+		body, err = os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read local potstore %s: %w", path, err)
+		}
+	} else {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.repoURL, nil)
+		if err != nil {
+			return err
+		}
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			return fmt.Errorf("potstore http %d", resp.StatusCode)
+		}
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
 	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("potstore http %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
+
 	var entries []models.PotStoreEntry
 	if err := json.Unmarshal(body, &entries); err != nil {
 		// Tolerate {"pots":[...]} wrapper.

@@ -99,6 +99,11 @@ func (s *Server) SendToNode(nodeID int64, taskID int64, command string, payload 
 	return sess.Send(protocol.MsgTaskAssign, ta)
 }
 
+// SendCommand is a fire-and-forget helper (taskID=0, no task record).
+func (s *Server) SendCommand(nodeID int64, command string, payload any) error {
+	return s.SendToNode(nodeID, 0, command, payload)
+}
+
 // Start begins accepting connections; blocks until the listener fails or ctx is canceled.
 func (s *Server) Start(ctx context.Context) error {
 	var err error
