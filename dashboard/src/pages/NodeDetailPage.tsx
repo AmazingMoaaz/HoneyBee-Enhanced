@@ -34,14 +34,14 @@ export default function NodeDetailPage() {
     },
   });
 
-  // Live log query — polls every 2s while a deployment is active
+  // Live log query — polls every 2s while a deployment panel is open
   const activeDep = (data?.deployments ?? []).find((d: any) => d.id === activeDeployID);
   const depDone = activeDep && ["running", "failed", "stopped", "removed"].includes(activeDep.status);
   const { data: installLogs } = useQuery({
     queryKey: ["deploy-logs", activeDeployID],
-    queryFn: async () => (await api.get(`/deployments/${activeDeployID}/logs?limit=200`)).data as any[],
+    queryFn: async () => (await api.get(`/deployments/${activeDeployID}/logs?limit=500`)).data as any[],
     enabled: !!activeDeployID,
-    refetchInterval: depDone ? false : 2000,
+    refetchInterval: activeDeployID ? 2000 : false,
   });
 
   // Auto-scroll log panel to bottom on new entries
@@ -133,44 +133,72 @@ export default function NodeDetailPage() {
         </div>
       </div>
 
-      {/* Live install log panel */}
+      {/* Live log panel */}
       {activeDeployID && (
         <div className="bg-slate-950 border border-slate-700 rounded-lg overflow-hidden">
+          {/* Header */}
           <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-700">
-            <span className="text-xs font-mono text-slate-300">
-              Install logs — deployment #{activeDeployID}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xs font-mono text-slate-400 shrink-0">
+                deployment <span className="text-slate-200">#{activeDeployID}</span>
+              </span>
               {activeDep && (
-                <span className={`ml-2 px-1.5 py-0.5 rounded text-xs font-semibold ${
-                  activeDep.status === "running" ? "bg-emerald-900 text-emerald-300" :
-                  activeDep.status === "failed"  ? "bg-red-900 text-red-300" :
+                <span className={`shrink-0 px-1.5 py-0.5 rounded text-xs font-semibold ${
+                  activeDep.status === "running"  ? "bg-emerald-900 text-emerald-300" :
+                  activeDep.status === "failed"   ? "bg-red-900 text-red-300" :
+                  activeDep.status === "pending"  ? "bg-sky-900 text-sky-300" :
                   "bg-slate-800 text-slate-400"
                 }`}>{activeDep.status}</span>
               )}
-            </span>
-            <button className="text-slate-500 hover:text-slate-200 text-xs" onClick={() => setActiveDeployID(null)}>✕</button>
+              {!depDone && (
+                <span className="text-xs text-slate-500 animate-pulse shrink-0">● live</span>
+              )}
+            </div>
+            <button
+              className="text-slate-500 hover:text-slate-200 text-xs ml-4 shrink-0"
+              onClick={() => setActiveDeployID(null)}
+            >✕</button>
           </div>
-          <div className="h-64 overflow-y-auto p-3 font-mono text-xs space-y-0.5">
-            {(installLogs ?? []).length === 0 && (
-              <div className="text-slate-500 italic">waiting for logs…</div>
+          {/* Terminal body */}
+          <div className="h-96 overflow-y-auto p-3 font-mono text-xs">
+            {(installLogs ?? []).length === 0 ? (
+              <div className="text-slate-600 italic py-1">waiting for logs…</div>
+            ) : (
+              (installLogs ?? []).map((entry: any) => {
+                let line = entry.data;
+                try { line = JSON.parse(entry.data)?.line ?? entry.data; } catch { /* raw */ }
+                const ts = new Date(entry.logged_at).toLocaleTimeString();
+                const t = entry.log_type ?? "";
+                const isError    = t.includes("error");
+                const isWarning  = t.includes("warning");
+                const isComplete = t.includes("complete");
+                const isStart    = t.includes("start");
+                return (
+                  <div key={entry.id} className={`flex gap-2 items-baseline leading-5 py-px border-l-2 pl-2 ${
+                    isError   ? "border-red-700"     :
+                    isWarning ? "border-yellow-700"  :
+                    isComplete ? "border-emerald-700" :
+                    "border-transparent"
+                  }`}>
+                    <span className="text-slate-600 shrink-0 select-none tabular-nums">{ts}</span>
+                    <span className={`shrink-0 text-[10px] px-1 rounded leading-4 ${
+                      isError    ? "bg-red-900/60 text-red-400"       :
+                      isWarning  ? "bg-yellow-900/60 text-yellow-400" :
+                      isComplete ? "bg-emerald-900/60 text-emerald-400" :
+                      isStart    ? "bg-cyan-900/60 text-cyan-400"     :
+                      "bg-slate-800 text-slate-500"
+                    }`}>{t}</span>
+                    <span className={`break-all ${
+                      isError    ? "text-red-300"      :
+                      isWarning  ? "text-yellow-300"   :
+                      isComplete ? "text-emerald-300"  :
+                      isStart    ? "text-cyan-300"     :
+                      "text-slate-300"
+                    }`}>{line}</span>
+                  </div>
+                );
+              })
             )}
-            {[...(installLogs ?? [])].reverse().map((entry: any) => {
-              let line = entry.data;
-              try { line = JSON.parse(entry.data)?.line ?? entry.data; } catch { /* raw */ }
-              const ts = new Date(entry.logged_at).toLocaleTimeString();
-              const color =
-                entry.log_type?.includes("error")    ? "text-red-400"     :
-                entry.log_type?.includes("warning")  ? "text-yellow-400"  :
-                entry.log_type?.includes("complete")  ? "text-emerald-400" :
-                entry.log_type?.includes("start") && !entry.log_type?.includes("auto") ? "text-cyan-400" :
-                "text-slate-300";
-              return (
-                <div key={entry.id} className="flex gap-2 leading-5">
-                  <span className="text-slate-600 shrink-0">{ts}</span>
-                  <span className="text-slate-500 shrink-0 w-32 truncate">{entry.log_type}</span>
-                  <span className={color}>{line}</span>
-                </div>
-              );
-            })}
             <div ref={logEndRef} />
           </div>
         </div>

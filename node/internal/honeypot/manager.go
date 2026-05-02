@@ -2,7 +2,6 @@
 package honeypot
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -143,13 +142,9 @@ func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch str
 	doneScan := make(chan struct{})
 	go func() {
 		defer close(doneScan)
-		sc := bufio.NewScanner(pr)
-		for sc.Scan() {
-			line := strings.TrimRight(sc.Text(), "\r\t ")
-			if line != "" {
-				m.emitLog(potID, hpType, "install.progress", line)
-			}
-		}
+		streamOutput(pr, func(line string) {
+			m.emitLog(potID, hpType, "install.progress", line)
+		})
 	}()
 
 	if err := cmd.Start(); err != nil {
@@ -175,6 +170,7 @@ func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch str
 	case "cowrie":
 		if err := m.postInstallCowrie(ctx, potID, dir); err != nil {
 			_ = os.RemoveAll(dir)
+			m.emitLog(potID, hpType, "install.error", err.Error())
 			return nil, err
 		}
 	default:
@@ -395,10 +391,25 @@ func findEntrypoint(dir string) string {
 // creates a Python venv, upgrades pip, installs requirements.txt, and
 // creates the var/ directories that cowrie expects at runtime.
 func (m *Manager) postInstallCowrie(ctx context.Context, potID, dir string) error {
-	pythonCmd := "python3"
+	// Find Python: on Windows try py (launcher) → python → python3;
+	// on Unix try python3 → python.
+	var pythonCandidates []string
 	if runtime.GOOS == "windows" {
-		pythonCmd = "python"
+		pythonCandidates = []string{"py", "python", "python3"}
+	} else {
+		pythonCandidates = []string{"python3", "python"}
 	}
+	pythonCmd := ""
+	for _, c := range pythonCandidates {
+		if p, err := exec.LookPath(c); err == nil {
+			pythonCmd = p
+			break
+		}
+	}
+	if pythonCmd == "" {
+		return fmt.Errorf("Python not found in PATH (tried: %v) — install Python 3 and ensure it is on PATH", pythonCandidates)
+	}
+	m.emitLog(potID, "cowrie", "install.progress", "using Python: "+pythonCmd)
 
 	venvDir := filepath.Join(dir, "cowrie-env")
 	m.emitLog(potID, "cowrie", "install.progress", "creating Python virtual environment")
@@ -408,7 +419,7 @@ func (m *Manager) postInstallCowrie(ctx context.Context, potID, dir string) erro
 
 	var pipPath string
 	if runtime.GOOS == "windows" {
-		pipPath = filepath.Join(venvDir, "Scripts", "pip")
+		pipPath = filepath.Join(venvDir, "Scripts", "pip.exe")
 	} else {
 		pipPath = filepath.Join(venvDir, "bin", "pip")
 	}
@@ -453,13 +464,9 @@ func (m *Manager) runInstallCmd(ctx context.Context, potID, hpType, dir string, 
 	doneScan := make(chan struct{})
 	go func() {
 		defer close(doneScan)
-		sc := bufio.NewScanner(pr)
-		for sc.Scan() {
-			line := strings.TrimRight(sc.Text(), "\r\t ")
-			if line != "" {
-				m.emitLog(potID, hpType, "install.progress", line)
-			}
-		}
+		streamOutput(pr, func(line string) {
+			m.emitLog(potID, hpType, "install.progress", line)
+		})
 	}()
 	if err := cmd.Start(); err != nil {
 		_ = pw.Close()
@@ -548,4 +555,39 @@ func lookupExe(names ...string) string {
 		}
 	}
 	return ""
+}
+
+// streamOutput reads from r and calls emitFn for each clean line.
+// It handles \r as a "carriage return to start of line" (like a terminal), so
+// git's progress output — which uses \r to overwrite the same terminal line —
+// produces one final clean log entry per stage instead of hundreds of intermediates.
+func streamOutput(r io.Reader, emitFn func(string)) {
+	const bufSize = 32 * 1024
+	buf := make([]byte, bufSize)
+	var cur strings.Builder
+	for {
+		n, readErr := r.Read(buf)
+		for _, b := range buf[:n] {
+			switch b {
+			case '\r':
+				// Carriage return: next write overwrites from column 0.
+				// Discard what we have so far — we only want the final state.
+				cur.Reset()
+			case '\n':
+				if line := strings.TrimRight(cur.String(), " \t"); line != "" {
+					emitFn(line)
+				}
+				cur.Reset()
+			default:
+				cur.WriteByte(b)
+			}
+		}
+		if readErr != nil {
+			break
+		}
+	}
+	// Flush any unterminated final line (no trailing \n).
+	if line := strings.TrimRight(cur.String(), " \t"); line != "" {
+		emitFn(line)
+	}
 }
