@@ -1,8 +1,8 @@
 {
-  "version": "2.0",
-  "protocol_version": 2,
+  "version": "3.0",
+  "protocol_version": 3,
   "repository": "https://github.com/H0neyBe/honeybee_potstore",
-  "last_updated": "2024-12-24",
+  "last_updated": "2026-05-02",
   "pots": [
     {
       "id": "cowrie",
@@ -10,26 +10,16 @@
       "version": "2.9.0",
       "type": "cowrie",
       "git_url": "https://github.com/cowrie/cowrie",
-      "git_branch": "main",
+      "git_branch": "master",
+      "subdir": "",
       "entry_point": "",
       "install_cmd": [],
       "run_cmd": [],
-      "description": "Medium to high interaction SSH and Telnet honeypot",
+      "language": "python",
+      "description": "Medium to high interaction SSH and Telnet honeypot. Auto-configured to forward events to the local HoneyBee node on TCP 9100.",
       "protocols": ["ssh", "telnet"],
-      "default_ports": {
-        "ssh": 2222,
-        "telnet": 2223
-      },
-      "requirements": {
-        "python": ">=3.7",
-        "os": ["linux", "windows", "macos"]
-      },
-      "directory": "cowrie",
-      "setup": {
-        "install": "pip install -r requirements.txt",
-        "config": "etc/cowrie.cfg.dist",
-        "output_plugin": "src/cowrie/output/honeybee.py"
-      },
+      "default_ports": {"ssh": 2222, "telnet": 2223},
+      "requirements": {"python": ">=3.9", "os": ["linux", "windows", "macos"]},
       "status": "stable",
       "features": [
         "SSH honeypot",
@@ -37,7 +27,7 @@
         "Command logging",
         "File download tracking",
         "Session recording",
-        "Custom output plugins"
+        "HoneyBee output plugin (auto-installed)"
       ],
       "honeybee_integration": {
         "event_port": 9100,
@@ -53,36 +43,22 @@
       "type": "honnypotter",
       "git_url": "https://github.com/H0neyBe/honeybee_potstore",
       "git_branch": "main",
-      "entry_point": "HonnyPotter/standalone.php",
+      "subdir": "HonnyPotter",
+      "entry_point": "standalone.php",
       "install_cmd": [],
       "run_cmd": [],
-      "description": "WordPress login honeypot - captures brute-force attacks and credential stuffing",
-      "protocols": ["http", "https"],
-      "default_ports": {
-        "http": 80,
-        "https": 443
-      },
-      "requirements": {
-        "php": ">=7.4",
-        "php_extensions": ["json", "sockets"],
-        "os": ["linux", "windows", "macos"]
-      },
-      "directory": "HonnyPotter",
-      "setup": {
-        "install": "./install.sh",
-        "config": null,
-        "forwarder": "honeybee-forwarder.php",
-        "entry_point": "standalone.php"
-      },
+      "language": "php",
+      "description": "WordPress login honeypot - captures brute-force attacks and credential stuffing. Forwards events via honeybee-forwarder.php to TCP 9100.",
+      "protocols": ["http"],
+      "default_ports": {"http": 8080},
+      "requirements": {"php": ">=7.4", "php_extensions": ["json", "sockets"], "os": ["linux", "windows", "macos"]},
       "status": "stable",
       "features": [
         "WordPress login emulation",
-        "Brute-force detection",
-        "Credential logging",
+        "Brute-force / credential stuffing capture",
         "XML-RPC attack detection",
-        "Low resource usage",
-        "No database required",
-        "Standalone or WordPress plugin mode"
+        "Auto-configured HoneyBee forwarder",
+        "Standalone PHP built-in webserver"
       ],
       "honeybee_integration": {
         "event_port": 9100,
@@ -90,54 +66,55 @@
         "forwarder": "honeybee-forwarder.php",
         "auto_configure": true
       }
+    },
+    {
+      "id": "webtrap",
+      "name": "WebTrap",
+      "version": "1.0.0",
+      "type": "webtrap",
+      "git_url": "https://github.com/H0neyBe/honeybee_potstore",
+      "git_branch": "main",
+      "subdir": "WebTrap",
+      "entry_point": "standalone.py",
+      "install_cmd": [],
+      "run_cmd": [],
+      "language": "python",
+      "description": "Vulnerable web application honeypot - fake admin panels, REST/GraphQL APIs, file uploads, misconfigured services. Forwards full request capture to TCP 9100.",
+      "protocols": ["http"],
+      "default_ports": {"http": 8088},
+      "requirements": {"python": ">=3.8", "python_packages": ["Flask>=2.3", "PyYAML>=6.0"], "os": ["linux", "windows", "macos"]},
+      "status": "stable",
+      "features": [
+        "Fake admin panels (WordPress, Joomla, phpMyAdmin, generic /admin)",
+        "REST and GraphQL API traps",
+        "File upload + webshell detection",
+        "Misconfigured-service traps (.env, .git, phpinfo, /actuator)",
+        "Heuristic payload tagging (sqli/xss/rce/lfi/ssrf/log4shell/ssti)",
+        "Per-IP session tracking",
+        "Optional canary credentials"
+      ],
+      "honeybee_integration": {
+        "event_port": 9100,
+        "event_format": "json",
+        "forwarder": "webtrap/forwarder.py",
+        "auto_configure": true
+      }
     }
   ],
   "coming_soon": [
-    {
-      "id": "dionaea",
-      "name": "Dionaea",
-      "type": "dionaea",
-      "description": "Low interaction honeypot for multiple protocols",
-      "protocols": ["ftp", "http", "smb", "mysql"],
-      "status": "planned"
-    },
-    {
-      "id": "kippo",
-      "name": "Kippo",
-      "type": "kippo",
-      "description": "SSH honeypot",
-      "protocols": ["ssh"],
-      "status": "planned"
-    },
-    {
-      "id": "glastopf",
-      "name": "Glastopf",
-      "type": "glastopf",
-      "description": "Web application honeypot",
-      "protocols": ["http", "https"],
-      "status": "planned"
-    }
+    {"id": "dionaea", "name": "Dionaea", "type": "dionaea", "description": "Low-interaction multi-protocol honeypot", "status": "planned"},
+    {"id": "kippo",    "name": "Kippo",    "type": "kippo",    "description": "Classic SSH honeypot",                    "status": "planned"},
+    {"id": "glastopf", "name": "Glastopf", "type": "glastopf", "description": "Web application honeypot",               "status": "planned"}
   ],
-  "installation": {
-    "method": "git_clone",
-    "default_branch": "main",
-    "depth": 1
-  },
+  "installation": {"method": "git_clone", "default_branch": "main", "depth": 1},
   "configuration": {
     "supported_config_keys": [
-      "ssh_port",
-      "telnet_port",
-      "http_port",
-      "https_port",
-      "hostname",
-      "log_path",
-      "data_path",
-      "pot_id"
+      "ssh_port", "telnet_port", "http_port", "https_port",
+      "hostname", "log_path", "data_path",
+      "pot_id", "bind_host", "bind_port",
+      "tls_cert", "tls_key",
+      "canary_username", "canary_password"
     ]
   },
-  "node_compatibility": {
-    "min_version": "1.0.0",
-    "protocol": 2
-  }
+  "node_compatibility": {"min_version": "1.0.0", "protocol": 3}
 }
-

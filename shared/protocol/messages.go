@@ -210,6 +210,10 @@ type InstallPotPayload struct {
 	// RunCmd is the full command argv to launch the pot process.
 	// If set it overrides Entrypoint and auto-detection.
 	RunCmd      []string `json:"run_cmd,omitempty"`
+	// Subdir, if set, is the path within the cloned repo that contains the
+	// pot files. After clone the node flattens this subdirectory into the
+	// install dir root. Used for the honeybee_potstore monorepo.
+	Subdir       string         `json:"subdir,omitempty"`
 	Config       map[string]any `json:"config,omitempty"`
 	AutoStart    bool           `json:"auto_start"`
 }

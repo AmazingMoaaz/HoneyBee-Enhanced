@@ -247,6 +247,7 @@ func (a *Agent) handleTask(ctx context.Context, ta protocol.TaskAssign) {
 			Entrypoint:  p.Entrypoint,
 			InstallCmds: p.InstallCmds,
 			RunCmd:      p.RunCmd,
+			Subdir:      p.Subdir,
 		}
 		_, err := a.hp.Install(ctx, p.PotID, p.HoneypotType, p.GitURL, p.GitBranch, p.Config, opts)
 		if err != nil {

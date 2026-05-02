@@ -77,6 +77,7 @@ func (h *DeploymentsHandler) CreateForNode(w http.ResponseWriter, r *http.Reques
 		Entrypoint:   entry.EntryPoint,
 		InstallCmds:  entry.InstallCmd,
 		RunCmd:       entry.RunCmd,
+		Subdir:       entry.Subdir,
 		Config:       req.Config,
 		AutoStart:    req.AutoStart,
 	}

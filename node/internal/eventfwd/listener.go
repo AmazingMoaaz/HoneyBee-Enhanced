@@ -70,14 +70,27 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn) {
 		if potID == "" {
 			continue
 		}
-		if logType, ok := raw["log_type"].(string); ok {
+
+		// Pot logs are explicitly tagged with log_type and are routed to the
+		// pot_logs table (used for install/start/process.output progress).
+		if logType, ok := raw["log_type"].(string); ok && logType != "" {
 			level, _ := raw["level"].(string)
 			msg, _ := raw["message"].(string)
 			l.sink.OnPotLog(potID, logType, level, msg, raw)
 			continue
 		}
+
+		// Otherwise it's an attacker-interaction event. Accept the canonical
+		// schema (event_type, source_ip) AND the community schema used by
+		// cowrie / HonnyPotter / WebTrap (eventid, src_ip).
 		eventType, _ := raw["event_type"].(string)
+		if eventType == "" {
+			eventType, _ = raw["eventid"].(string)
+		}
 		srcIP, _ := raw["source_ip"].(string)
+		if srcIP == "" {
+			srcIP, _ = raw["src_ip"].(string)
+		}
 		l.sink.OnPotEvent(potID, eventType, srcIP, raw)
 	}
 }
