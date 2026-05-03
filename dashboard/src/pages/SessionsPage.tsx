@@ -8,29 +8,45 @@ export default function SessionsPage() {
     queryFn: async () => (await api.get("/sessions?limit=200")).data,
     refetchInterval: 5000,
   });
+  const list: any[] = data ?? [];
+
   return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold">Sessions</h2>
-      <table className="w-full text-sm">
-        <thead className="text-left text-slate-400 border-b border-slate-800">
-          <tr><th className="py-2">ID</th><th>Pot</th><th>Source</th><th>Started</th><th></th></tr>
-        </thead>
-        <tbody>
-          {(data ?? []).map((s: any) => (
-            <tr key={s.id} className="border-b border-slate-900">
-              <td className="py-2 font-mono">{s.id}</td>
-              <td>{s.pot_id}</td>
-              <td className="font-mono">{s.src_ip}:{s.src_port}</td>
-              <td>{s.started_at}</td>
-              <td>
-                <Link className="text-honey-400 hover:underline" to={`/sessions/${s.id}/replay`}>
-                  replay
-                </Link>
-              </td>
+    <div className="space-y-6 animate-fade-up">
+      <div>
+        <p className="page-label">Attacker sessions</p>
+        <h1 className="page-title">Sessions</h1>
+        <p className="text-xs mt-1" style={{ color: "rgba(54,33,12,0.45)" }}>{list.length} sessions captured</p>
+      </div>
+
+      <div className="card overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className="th">ID</th>
+              <th className="th">Pot</th>
+              <th className="th">Source</th>
+              <th className="th">Started</th>
+              <th className="th-r"></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {list.length === 0 && (
+              <tr className="tr"><td className="td" colSpan={5} style={{ textAlign: "center", color: "rgba(54,33,12,0.35)" }}>No sessions captured yet</td></tr>
+            )}
+            {list.map((s: any) => (
+              <tr key={s.id} className="tr">
+                <td className="td font-mono" style={{ fontSize: 12 }}>#{s.id}</td>
+                <td className="td font-mono" style={{ fontSize: 12 }}>{s.pot_id}</td>
+                <td className="td font-mono" style={{ fontSize: 12, color: "#A06B04" }}>{s.src_ip}:{s.src_port}</td>
+                <td className="td" style={{ color: "rgba(54,33,12,0.5)", fontSize: 12 }}>{s.started_at}</td>
+                <td className="td" style={{ textAlign: "right" }}>
+                  <Link to={`/sessions/${s.id}/replay`} className="btn btn-secondary btn-xs">▶ Replay</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

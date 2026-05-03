@@ -25,7 +25,7 @@ const I = {
 };
 
 /* ── Helpers ────────────────────────────────────── */
-type CreatedNode = { id: number; name: string; token: string };
+type CreatedNode = { node_id: number; name: string; token: string };
 type Node        = { id: number; name: string; online: boolean; last_seen: string | null };
 
 function relTime(iso: string | null): string {
@@ -45,8 +45,8 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
   const [copied,   setCopied]   = useState<string | null>(null);
   const base = window.location.origin;
   const cmd  = platform === "linux"
-    ? `curl -fsSL "${base}/api/v1/nodes/${created.id}/install?token=${created.token}" | bash`
-    : `irm "${base}/api/v1/nodes/${created.id}/install?platform=windows&token=${created.token}" | iex`;
+    ? `curl -fsSL "${base}/api/v1/nodes/${created.node_id}/install?token=${created.token}" | bash`
+    : `irm "${base}/api/v1/nodes/${created.node_id}/install?platform=windows&token=${created.token}" | iex`;
 
   const copy = (text: string, key: string) =>
     navigator.clipboard.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 2200); });

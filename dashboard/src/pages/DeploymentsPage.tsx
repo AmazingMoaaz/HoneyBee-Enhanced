@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../api/client";
 
-const STALE_STATUSES = ["failed", "pending", "stopped"];
-const STATUS_COLOR: Record<string, string> = {
-  running: "text-green-400",
-  failed:  "text-red-400",
-  pending: "text-yellow-400",
-  stopped: "text-slate-400",
-  removed: "text-slate-500",
+const STALE = ["failed", "pending", "stopped"];
+
+const DEP_STATUS: Record<string, string> = {
+  running: "badge-running",
+  failed:  "badge-failed",
+  pending: "badge-pending",
+  stopped: "badge-stopped",
+  removed: "badge-removed",
 };
 
 export default function DeploymentsPage() {
@@ -22,71 +23,71 @@ export default function DeploymentsPage() {
     mutationFn: (id: number) => api.delete(`/deployments/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["deployments"] }),
   });
-
   const cleanupMut = useMutation({
     mutationFn: () => api.post("/deployments/cleanup"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["deployments"] }),
   });
 
-  const staleCount = (data ?? []).filter((d: any) =>
-    STALE_STATUSES.includes(d.status)
-  ).length;
+  const list: any[]  = data ?? [];
+  const staleCount   = list.filter((d) => STALE.includes(d.status)).length;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Deployments</h2>
+    <div className="space-y-6 animate-fade-up">
+
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="page-label">Honeypot fleet</p>
+          <h1 className="page-title">Deployments</h1>
+          <p className="text-xs mt-1" style={{ color: "rgba(54,33,12,0.45)" }}>{list.length} total · {staleCount} stale</p>
+        </div>
         {staleCount > 0 && (
-          <button
-            onClick={() => {
-              if (confirm(`Delete all ${staleCount} failed / pending / stopped records from the database?`))
-                cleanupMut.mutate();
-            }}
-            disabled={cleanupMut.isPending}
-            className="px-3 py-1.5 text-sm bg-red-700 hover:bg-red-600 rounded disabled:opacity-50"
-          >
+          <button className="btn btn-danger" disabled={cleanupMut.isPending}
+                  onClick={() => { if (confirm(`Delete all ${staleCount} failed / pending / stopped records?`)) cleanupMut.mutate(); }}>
             {cleanupMut.isPending ? "Cleaning…" : `Clean up ${staleCount} stale`}
           </button>
         )}
       </div>
-      <table className="w-full text-sm">
-        <thead className="text-left text-slate-400 border-b border-slate-800">
-          <tr>
-            <th className="py-2 pr-3">ID</th>
-            <th className="pr-3">Node</th>
-            <th className="pr-3">Pot</th>
-            <th className="pr-3">Type</th>
-            <th className="pr-3">Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {(data ?? []).map((d: any) => (
-            <tr key={d.id} className="border-b border-slate-900 hover:bg-slate-900/40">
-              <td className="py-2 pr-3 font-mono">{d.id}</td>
-              <td className="pr-3">{d.node_id}</td>
-              <td className="pr-3 font-mono text-xs break-all">{d.pot_id}</td>
-              <td className="pr-3">{d.honeypot_type}</td>
-              <td className={`pr-3 font-semibold ${STATUS_COLOR[d.status] ?? ""}`}>{d.status}</td>
-              <td className="text-right">
-                {STALE_STATUSES.includes(d.status) && (
-                  <button
-                    onClick={() => {
-                      if (confirm(`Delete deployment #${d.id} from the database?`))
-                        deleteMut.mutate(d.id);
-                    }}
-                    disabled={deleteMut.isPending}
-                    className="px-2 py-0.5 text-xs bg-slate-700 hover:bg-red-700 rounded disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
-                )}
-              </td>
+
+      {/* Table */}
+      <div className="card overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className="th">ID</th>
+              <th className="th">Node</th>
+              <th className="th">Pot ID</th>
+              <th className="th">Type</th>
+              <th className="th">Status</th>
+              <th className="th-r"></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {list.length === 0 && (
+              <tr className="tr">
+                <td className="td" colSpan={6} style={{ textAlign: "center", color: "rgba(54,33,12,0.35)" }}>No deployments yet</td>
+              </tr>
+            )}
+            {list.map((d: any) => (
+              <tr key={d.id} className="tr">
+                <td className="td font-mono" style={{ fontSize: 12 }}>#{d.id}</td>
+                <td className="td">{d.node_id}</td>
+                <td className="td font-mono" style={{ fontSize: 12 }}>{d.pot_id}</td>
+                <td className="td">{d.honeypot_type}</td>
+                <td className="td"><span className={`badge ${DEP_STATUS[d.status] ?? "badge-stopped"}`}>{d.status}</span></td>
+                <td className="td" style={{ textAlign: "right" }}>
+                  {STALE.includes(d.status) && (
+                    <button className="btn btn-danger btn-xs" disabled={deleteMut.isPending}
+                            onClick={() => { if (confirm(`Delete deployment #${d.id}?`)) deleteMut.mutate(d.id); }}>
+                      Delete
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
-
