@@ -23,22 +23,18 @@ const I = {
 };
 
 const NAV = [
-  { to: "/",            label: "Dashboard",   icon: I.dashboard, end: true },
-  { to: "/nodes",       label: "Nodes",       icon: I.nodes },
-  { to: "/deployments", label: "Deployments", icon: I.deploy },
-  { to: "/events",      label: "Events",      icon: I.events },
-  { to: "/sessions",    label: "Sessions",    icon: I.sessions },
-  { to: "/potstore",    label: "HoneyBee Store", icon: I.potstore },
+  { to: "/",         label: "Dashboard",      icon: I.dashboard, end: true },
+  { to: "/nodes",    label: "Nodes",          icon: I.nodes },
+  { to: "/events",   label: "Events",         icon: I.events },
+  { to: "/potstore", label: "HoneyBee Store", icon: I.potstore },
 ];
 
 function getPageTitle(pathname: string): string {
-  if (pathname === "/")                       return "Dashboard";
-  if (pathname.startsWith("/nodes"))          return "Node Manager";
-  if (pathname.startsWith("/deployments"))    return "Deployments";
-  if (pathname.startsWith("/events"))         return "Event Stream";
-  if (pathname.startsWith("/sessions"))       return "Sessions";
-  if (pathname.startsWith("/potstore"))       return "HoneyBee Store";
-  if (pathname.startsWith("/users"))          return "User Management";
+  if (pathname === "/")                 return "Dashboard";
+  if (pathname.startsWith("/nodes"))    return "Node Manager";
+  if (pathname.startsWith("/events"))   return "Event Stream";
+  if (pathname.startsWith("/potstore")) return "HoneyBee Store";
+  if (pathname.startsWith("/users"))    return "User Management";
   return "HoneyBee";
 }
 

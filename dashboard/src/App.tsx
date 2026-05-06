@@ -5,10 +5,7 @@ import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 import NodesPage from "./pages/NodesPage";
 import NodeDetailPage from "./pages/NodeDetailPage";
-import DeploymentsPage from "./pages/DeploymentsPage";
 import EventsPage from "./pages/EventsPage";
-import SessionsPage from "./pages/SessionsPage";
-import ReplayPage from "./pages/ReplayPage";
 import PotStorePage from "./pages/PotStorePage";
 import UsersPage from "./pages/UsersPage";
 import Layout from "./components/Layout";
@@ -27,10 +24,7 @@ export default function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/nodes" element={<NodesPage />} />
         <Route path="/nodes/:id" element={<NodeDetailPage />} />
-        <Route path="/deployments" element={<DeploymentsPage />} />
         <Route path="/events" element={<EventsPage />} />
-        <Route path="/sessions" element={<SessionsPage />} />
-        <Route path="/sessions/:id/replay" element={<ReplayPage />} />
         <Route path="/potstore" element={<PotStorePage />} />
         <Route path="/users" element={<UsersPage />} />
       </Route>

@@ -39,7 +39,7 @@ func (h *DeploymentsHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 type deployReq struct {
-	PotID        string         `json:"pot_id"`
+	PotID        string         `json:"pot_id"` // optional — auto-generated per node when blank
 	HoneypotType string         `json:"honeypot_type"`
 	Config       map[string]any `json:"config"`
 	AutoStart    bool           `json:"auto_start"`
@@ -54,7 +54,7 @@ func (h *DeploymentsHandler) CreateForNode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var req deployReq
-	if err := readJSON(r, &req); err != nil || req.PotID == "" || req.HoneypotType == "" {
+	if err := readJSON(r, &req); err != nil || req.HoneypotType == "" {
 		writeError(w, http.StatusBadRequest, "missing fields")
 		return
 	}
@@ -62,6 +62,15 @@ func (h *DeploymentsHandler) CreateForNode(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unknown honeypot type")
 		return
+	}
+	// Auto-generate per-node sequential pot_id when client doesn't supply one.
+	if req.PotID == "" {
+		next, err := h.Store.NextPotIDForNode(r.Context(), nodeID, req.HoneypotType)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "alloc pot id")
+			return
+		}
+		req.PotID = next
 	}
 	cfgBytes, _ := json.Marshal(req.Config)
 	depID, err := h.Store.CreateDeployment(r.Context(), orgID, nodeID, req.PotID, req.HoneypotType, string(cfgBytes))
@@ -85,7 +94,7 @@ func (h *DeploymentsHandler) CreateForNode(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "queue task")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"deployment_id": depID})
+	writeJSON(w, http.StatusCreated, map[string]any{"deployment_id": depID, "pot_id": req.PotID})
 }
 
 // Action covers start/stop/restart/remove on a deployment.

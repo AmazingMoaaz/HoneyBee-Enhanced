@@ -1,0 +1,28 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Editors
+.vscode/
+.idea/
+
+# Go
+bin/
+*.exe
+*.test
+*.out
+
+# Env
+.env
+.env.local
+
+# Node / Vite
+node_modules/
+dashboard/dist/
+dashboard/node_modules/
+dashboard/.vite/
+dashboard/tsconfig.tsbuildinfo

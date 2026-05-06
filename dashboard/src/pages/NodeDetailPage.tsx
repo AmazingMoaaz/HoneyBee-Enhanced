@@ -66,23 +66,39 @@ function relTime(iso: string | null): string {
 
 /* ── Deploy Modal ──────────────────────────────── */
 function DeployModal({
-  nodeId, catalog, onClose, onSuccess,
+  nodeId, catalog, deployments, onClose, onSuccess,
 }: {
-  nodeId: string; catalog: any; onClose: () => void; onSuccess: (depId: number) => void;
+  nodeId: string; catalog: any; deployments: any[];
+  onClose: () => void; onSuccess: (depId: number) => void;
 }) {
   const qc = useQueryClient();
-  const [potID,  setPotID]  = useState("cowrie-1");
   const [hpType, setHpType] = useState(() => catalog?.pots?.[0]?.id ?? "cowrie");
+
+  // Predict next per-node sequential ID for the chosen type.
+  const predictedID = (() => {
+    const prefix = `${hpType}-`;
+    let max = 0;
+    for (const d of deployments ?? []) {
+      if (typeof d?.pot_id === "string" && d.pot_id.startsWith(prefix)) {
+        const n = parseInt(d.pot_id.slice(prefix.length), 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+    }
+    return `${prefix}${max + 1}`;
+  })();
 
   const deploy = useMutation({
     mutationFn: async () =>
-      (await api.post(`/nodes/${nodeId}/deployments`, { pot_id: potID, honeypot_type: hpType, auto_start: true, config: {} })).data,
+      // Server auto-assigns pot_id when omitted (per-node sequential).
+      (await api.post(`/nodes/${nodeId}/deployments`, { honeypot_type: hpType, auto_start: true, config: {} })).data,
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["node", nodeId] });
       if (res?.deployment_id) { onSuccess(res.deployment_id); onClose(); }
       else onClose();
     },
   });
+
+  const selected = (catalog?.pots ?? []).find((p: any) => p.id === hpType);
 
   return createPortal(
     <div
@@ -108,7 +124,7 @@ function DeployModal({
             <span style={{ fontSize: 22 }}>🍯</span>
             <div>
               <p style={{ fontWeight: 800, fontSize: 15, color: "#0F172A" }}>Deploy a Honeypot</p>
-              <p style={{ fontSize: 12, color: "#B45309", fontWeight: 600 }}>Choose a type and assign an instance ID</p>
+              <p style={{ fontSize: 12, color: "#B45309", fontWeight: 600 }}>Pick a type — instance ID is assigned automatically</p>
             </div>
           </div>
           <button onClick={onClose} style={{
@@ -135,21 +151,31 @@ function DeployModal({
                   <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
                 ))}
               </select>
-              <p style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>Select from the available catalogue.</p>
+              {selected?.description && (
+                <p style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 6, lineHeight: 1.5 }}>
+                  {selected.description}
+                </p>
+              )}
             </div>
 
-            <div>
-              <label style={{ fontSize: 11.5, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Instance ID
-              </label>
-              <input
-                className="input"
-                value={potID}
-                onChange={e => setPotID(e.target.value)}
-                placeholder="e.g. ssh-prod-01"
-                style={{ width: "100%", boxSizing: "border-box" }}
-              />
-              <p style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>Unique label — run multiple instances of the same type on one node.</p>
+            {/* Auto-assigned instance ID preview */}
+            <div style={{
+              padding: "12px 14px", borderRadius: 11,
+              background: "linear-gradient(135deg, rgba(252,211,77,0.12), rgba(245,158,11,0.06))",
+              border: "1px solid rgba(245,158,11,0.28)",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <div>
+                <p style={{ fontSize: 10.5, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                  Instance ID (auto)
+                </p>
+                <code style={{ fontSize: 14, fontWeight: 800, color: "#0F172A", fontFamily: "ui-monospace, monospace" }}>
+                  {predictedID}
+                </code>
+              </div>
+              <span style={{ fontSize: 11, color: "#B45309", fontWeight: 600, maxWidth: 170, textAlign: "right", lineHeight: 1.4 }}>
+                Sequential per node · per type
+              </span>
             </div>
           </div>
 
@@ -165,7 +191,7 @@ function DeployModal({
           <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
             <button
               onClick={() => deploy.mutate()}
-              disabled={!potID.trim() || deploy.isPending}
+              disabled={deploy.isPending}
               className="btn btn-primary"
               style={{ flex: 1 }}
             >
@@ -252,6 +278,7 @@ export default function NodeDetailPage() {
         <DeployModal
           nodeId={id!}
           catalog={catalog}
+          deployments={data?.deployments ?? []}
           onClose={() => setShowDeployModal(false)}
           onSuccess={(depId) => { setActiveDeployID(depId); setTab("deployments"); }}
         />

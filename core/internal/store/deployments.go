@@ -34,6 +34,38 @@ func (s *Store) GetDeployment(ctx context.Context, orgID, id int64) (*models.Dep
 	return &d, err
 }
 
+// NextPotIDForNode returns the next sequential pot_id for the given node + honeypot type,
+// formatted as "{type}-{n}" where n is one greater than the highest existing numeric suffix
+// for that (node, type) pair. Returns "{type}-1" when no prior deployments exist.
+func (s *Store) NextPotIDForNode(ctx context.Context, nodeID int64, hpType string) (string, error) {
+	prefix := hpType + "-"
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT pot_id FROM deployments WHERE node_id = ? AND honeypot_type = ?`,
+		nodeID, hpType)
+	if err != nil {
+		return "", fmt.Errorf("query existing pot_ids: %w", err)
+	}
+	defer rows.Close()
+	max := 0
+	for rows.Next() {
+		var pid string
+		if err := rows.Scan(&pid); err != nil {
+			return "", err
+		}
+		if !strings.HasPrefix(pid, prefix) {
+			continue
+		}
+		var n int
+		if _, err := fmt.Sscanf(pid[len(prefix):], "%d", &n); err == nil && n > max {
+			max = n
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s%d", prefix, max+1), nil
+}
+
 // GetDeploymentByPotID fetches by (node_id, pot_id).
 func (s *Store) GetDeploymentByPotID(ctx context.Context, nodeID int64, potID string) (*models.Deployment, error) {
 	var d models.Deployment

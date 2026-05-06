@@ -181,8 +181,7 @@ const LANG_COLOR: Record<string, { bg: string; color: string }> = {
 function DeployModal({ pot, onClose }: { pot: any; onClose: () => void }) {
   const meta = POT_STATIC[pot.id] ?? META_DEFAULT;
   const [nodeId, setNodeId]   = useState("");
-  const [instId, setInstId]   = useState(`${pot.id}-01`);
-  const [success, setSuccess] = useState<{ nodeName: string } | null>(null);
+  const [success, setSuccess] = useState<{ nodeName: string; potID?: string } | null>(null);
 
   const { data: nodesData, isLoading: nodesLoading } = useQuery({
     queryKey: ["nodes"],
@@ -193,12 +192,13 @@ function DeployModal({ pot, onClose }: { pot: any; onClose: () => void }) {
 
   const deploy = useMutation({
     mutationFn: async () =>
+      // Server auto-assigns pot_id (per-node sequential).
       (await api.post(`/nodes/${nodeId}/deployments`, {
-        pot_id: instId, honeypot_type: pot.id, auto_start: true, config: {},
+        honeypot_type: pot.id, auto_start: true, config: {},
       })).data,
-    onSuccess: () => {
+    onSuccess: (res) => {
       const node = nodes.find(n => String(n.id) === String(nodeId));
-      setSuccess({ nodeName: node?.name ?? "node" });
+      setSuccess({ nodeName: node?.name ?? "node", potID: res?.pot_id });
     },
   });
 
@@ -255,7 +255,9 @@ function DeployModal({ pot, onClose }: { pot: any; onClose: () => void }) {
               }}>✓</div>
               <p style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", marginBottom: 6 }}>Deployment queued!</p>
               <p style={{ fontSize: 13, color: "#64748B", marginBottom: 20 }}>
-                <strong>{meta.emoji} {pot.name}</strong> is being installed on <strong>{success.nodeName}</strong>.
+                <strong>{meta.emoji} {pot.name}</strong>
+                {success.potID ? <> (<code style={{ fontFamily: "monospace", color: "#B45309" }}>{success.potID}</code>)</> : null}
+                {" "}is being installed on <strong>{success.nodeName}</strong>.
                 Track live logs in Node Manager.
               </p>
               <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
@@ -329,22 +331,24 @@ function DeployModal({ pot, onClose }: { pot: any; onClose: () => void }) {
                 </p>
               </div>
 
-              {/* Instance ID */}
+              {/* Instance ID — auto */}
               <div style={{ marginBottom: 20 }}>
                 <label style={{ fontSize: 12, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 6 }}>
-                  Instance ID <span style={{ color: "#EF4444" }}>*</span>
+                  Instance ID
                 </label>
-                <input
-                  value={instId} onChange={e => setInstId(e.target.value)}
-                  placeholder="e.g. cowrie-prod-01"
-                  style={{
-                    width: "100%", padding: "10px 14px", borderRadius: 10, fontSize: 14,
-                    border: "1.5px solid rgba(15,23,42,0.12)", background: "#F8FAFC", color: "#0F172A",
-                    outline: "none", boxSizing: "border-box",
-                  }}
-                />
+                <div style={{
+                  padding: "10px 14px", borderRadius: 10,
+                  background: "linear-gradient(135deg, rgba(252,211,77,0.12), rgba(245,158,11,0.04))",
+                  border: "1px solid rgba(245,158,11,0.28)",
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                }}>
+                  <code style={{ fontSize: 13.5, fontWeight: 800, color: "#0F172A", fontFamily: "ui-monospace, monospace" }}>
+                    {pot.id}-{`{n}`}
+                  </code>
+                  <span style={{ fontSize: 11, color: "#B45309", fontWeight: 600 }}>auto · per node</span>
+                </div>
                 <p style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>
-                  Unique label. Multiple instances of the same honeypot can run on one node.
+                  Sequential ID assigned automatically — no two pots collide on the same node.
                 </p>
               </div>
 
@@ -360,14 +364,14 @@ function DeployModal({ pot, onClose }: { pot: any; onClose: () => void }) {
               <div style={{ display: "flex", gap: 10 }}>
                 <button
                   onClick={() => deploy.mutate()}
-                  disabled={!nodeId || !instId.trim() || deploy.isPending}
+                  disabled={!nodeId || deploy.isPending}
                   style={{
                     flex: 1, padding: "11px 0", borderRadius: 10, fontSize: 14, fontWeight: 700, border: "none",
-                    background: !nodeId || !instId.trim()
+                    background: !nodeId
                       ? "#F1F5F9"
                       : "linear-gradient(135deg,#FCD34D 0%,#F59E0B 50%,#D97706 100%)",
-                    cursor: !nodeId || !instId.trim() ? "not-allowed" : "pointer",
-                    color: !nodeId || !instId.trim() ? "#94A3B8" : "#1C0A00",
+                    cursor: !nodeId ? "not-allowed" : "pointer",
+                    color: !nodeId ? "#94A3B8" : "#1C0A00",
                     boxShadow: !nodeId ? "none" : "0 4px 14px rgba(245,158,11,0.35)",
                   }}
                 >
