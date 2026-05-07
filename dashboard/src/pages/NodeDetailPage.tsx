@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api/client";
+import { copyToClipboard } from "../hooks/useCopy";
 
 /* ── Icons ─────────────────────────────────────── */
 const Ico = ({ d, size = 16, color = "currentColor", sw = 2 }: { d: string; size?: number; color?: string; sw?: number }) => (
@@ -260,7 +261,7 @@ export default function NodeDetailPage() {
   });
 
   const copyText = (text: string, key: string) =>
-    navigator.clipboard.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 2200); });
+    copyToClipboard(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 2200); });
 
   if (isLoading) return (
     <div style={{ textAlign: "center", padding: "80px 0" }}>
@@ -405,7 +406,7 @@ export default function NodeDetailPage() {
                 <Ico d={I.logs} size={13} color="#FCD34D" />
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>
-                Deployment #{activeDeployID} — Live Log
+                {activeDep?.pot_id ?? `Deployment #${activeDeployID}`} — Live Log
               </span>
               {activeDep && <StatusBadge status={activeDep.status} />}
               {!depDone && (

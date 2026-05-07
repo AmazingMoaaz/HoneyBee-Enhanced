@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
 import { Icon, Icons } from "../components/Icons";
+import { copyToClipboard } from "../hooks/useCopy";
 
 /* ─────────────────────────────────────────────────────────────────────
    Node Manager — modern, interactive rebuild
@@ -42,7 +43,7 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
     : `irm "${base}/api/v1/nodes/${created.id}/install?platform=windows&token=${created.token}" | iex`;
 
   const copy = (text: string, key: string) =>
-    navigator.clipboard.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 2200); });
+    copyToClipboard(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 2200); });
 
   return (
     <div className="animate-fade-up shine" style={{

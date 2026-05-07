@@ -156,6 +156,14 @@ func (s *Store) DeleteDeployment(ctx context.Context, orgID, id int64) error {
 	return err
 }
 
+// DeleteDeploymentByNodePot removes a deployment by (node_id, pot_id). Used when
+// the node confirms a remove command so the row vanishes from the UI.
+func (s *Store) DeleteDeploymentByNodePot(ctx context.Context, nodeID int64, potID string) error {
+	_, err := s.DB.ExecContext(ctx,
+		`DELETE FROM deployments WHERE node_id = ? AND pot_id = ?`, nodeID, potID)
+	return err
+}
+
 // DeleteDeploymentsByStatus bulk-deletes all deployments whose status matches
 // one of the given values (org-scoped). Used for cleanup of failed/pending rows.
 func (s *Store) DeleteDeploymentsByStatus(ctx context.Context, orgID int64, statuses []string) (int64, error) {

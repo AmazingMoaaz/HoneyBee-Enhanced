@@ -591,6 +591,71 @@ func findPythonInterpreter(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("found Python executables but none worked [%s] — reinstall Python 3 from python.org", strings.Join(tried, "; "))
 }
 
+// createPythonVenv creates a Python virtual environment at venvDir using the
+// most reliable available strategy. Tries in order:
+//  1. `python -m venv <venvDir>` (the standard library way)
+//  2. `python -m venv --without-pip <venvDir>` then bootstrap pip via get-pip.py
+//  3. `virtualenv <venvDir>` if `virtualenv` is on PATH
+//  4. `python -m virtualenv <venvDir>` if the module is importable
+//
+// On Debian/Ubuntu, step 1 fails when the matching `python3.X-venv` apt
+// package is not installed (ensurepip missing). The fallbacks make the
+// install succeed without forcing the operator to apt-install anything.
+func (m *Manager) createPythonVenv(ctx context.Context, potID, potType, workDir, pythonCmd, venvDir string) error {
+	m.emitLog(potID, potType, "install.progress", "creating Python virtual environment")
+
+	// 1) Standard venv
+	if err := m.runInstallCmd(ctx, potID, potType, workDir, []string{pythonCmd, "-m", "venv", venvDir}); err == nil {
+		return nil
+	} else {
+		m.emitLog(potID, potType, "install.warning", "python -m venv failed: "+err.Error()+" — trying fallbacks")
+	}
+
+	// Clean up any half-created venv before retrying.
+	_ = os.RemoveAll(venvDir)
+
+	// 2) venv without pip + bootstrap pip via get-pip.py
+	if err := m.runInstallCmd(ctx, potID, potType, workDir, []string{pythonCmd, "-m", "venv", "--without-pip", venvDir}); err == nil {
+		venvPython := filepath.Join(venvDir, "bin", "python")
+		if runtime.GOOS == "windows" {
+			venvPython = filepath.Join(venvDir, "Scripts", "python.exe")
+		}
+		getPipPath := filepath.Join(workDir, "get-pip.py")
+		m.emitLog(potID, potType, "install.progress", "downloading get-pip.py to bootstrap pip")
+		if dlErr := m.runInstallCmd(ctx, potID, potType, workDir,
+			[]string{"curl", "-fsSL", "https://bootstrap.pypa.io/get-pip.py", "-o", getPipPath}); dlErr == nil {
+			if pipErr := m.runInstallCmd(ctx, potID, potType, workDir,
+				[]string{venvPython, getPipPath}); pipErr == nil {
+				_ = os.Remove(getPipPath)
+				return nil
+			}
+		}
+		m.emitLog(potID, potType, "install.warning", "get-pip bootstrap failed — trying virtualenv")
+		_ = os.RemoveAll(venvDir)
+	}
+
+	// 3) `virtualenv` on PATH
+	if vePath, err := exec.LookPath("virtualenv"); err == nil {
+		if err := m.runInstallCmd(ctx, potID, potType, workDir, []string{vePath, "-p", pythonCmd, venvDir}); err == nil {
+			return nil
+		}
+	}
+
+	// 4) `python -m virtualenv`
+	if err := m.runInstallCmd(ctx, potID, potType, workDir, []string{pythonCmd, "-m", "virtualenv", venvDir}); err == nil {
+		return nil
+	}
+
+	// All strategies failed — emit an actionable hint based on the OS.
+	hint := ""
+	if runtime.GOOS == "linux" {
+		hint = " — install the matching venv package (e.g. `sudo apt install python3-venv` or `python3.14-venv`), or `pip install --user virtualenv`, then retry"
+	} else {
+		hint = " — install `virtualenv` (pip install virtualenv) and retry"
+	}
+	return fmt.Errorf("create venv failed via all strategies%s", hint)
+}
+
 // postInstallCowrie handles cowrie-specific setup after git clone:
 // creates a Python venv, upgrades pip, installs requirements.txt, and
 // creates the var/ directories that cowrie expects at runtime.
@@ -602,9 +667,8 @@ func (m *Manager) postInstallCowrie(ctx context.Context, potID, dir string, cfg 
 	m.emitLog(potID, "cowrie", "install.progress", "using Python: "+pythonCmd)
 
 	venvDir := filepath.Join(dir, "cowrie-env")
-	m.emitLog(potID, "cowrie", "install.progress", "creating Python virtual environment")
-	if err := m.runInstallCmd(ctx, potID, "cowrie", dir, []string{pythonCmd, "-m", "venv", venvDir}); err != nil {
-		return fmt.Errorf("create venv: %w", err)
+	if err := m.createPythonVenv(ctx, potID, "cowrie", dir, pythonCmd, venvDir); err != nil {
+		return err
 	}
 
 	var pipPath string
@@ -720,8 +784,8 @@ func (m *Manager) postInstallWebtrap(ctx context.Context, potID, dir string, cfg
 	m.emitLog(potID, "webtrap", "install.progress", "using Python: "+pythonCmd)
 
 	venvDir := filepath.Join(dir, "webtrap-env")
-	if err := m.runInstallCmd(ctx, potID, "webtrap", dir, []string{pythonCmd, "-m", "venv", venvDir}); err != nil {
-		return fmt.Errorf("create venv: %w", err)
+	if err := m.createPythonVenv(ctx, potID, "webtrap", dir, pythonCmd, venvDir); err != nil {
+		return err
 	}
 	pipPath := filepath.Join(venvDir, "bin", "pip")
 	if runtime.GOOS == "windows" {

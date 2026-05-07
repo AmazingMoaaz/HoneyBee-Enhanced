@@ -110,7 +110,12 @@ func (d *Dispatcher) handlePotStatus(ctx context.Context, sess *Session, env *pr
 	if err := protocol.DecodePayload(env, &ps); err != nil {
 		return
 	}
-	if err := d.store.UpdateDeploymentStatus(ctx, sess.nodeID, ps.PotID, ps.Status, ps.Message); err != nil {
+	// When the node confirms removal, hard-delete the deployment row so it disappears from the UI.
+	if ps.Status == "removed" {
+		if err := d.store.DeleteDeploymentByNodePot(ctx, sess.nodeID, ps.PotID); err != nil {
+			d.logger.Warn("delete removed deployment", slog.Any("err", err))
+		}
+	} else if err := d.store.UpdateDeploymentStatus(ctx, sess.nodeID, ps.PotID, ps.Status, ps.Message); err != nil {
 		d.logger.Warn("update deployment status", slog.Any("err", err))
 	}
 	if d.broadcaster != nil {

@@ -4,7 +4,10 @@ package ws
 import (
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +38,7 @@ type Message struct {
 
 // clientCmd is the JSON shape received from clients.
 type clientCmd struct {
-	Type  string `json:"type"`  // subscribe | unsubscribe
+	Type  string `json:"type"` // subscribe | unsubscribe
 	Topic string `json:"topic"`
 }
 
@@ -74,21 +77,61 @@ func NewHub(logger *slog.Logger, allowedOrigins []string) *Hub {
 }
 
 func buildOriginCheck(allowed []string) func(r *http.Request) bool {
-	if len(allowed) == 0 {
-		return func(r *http.Request) bool { return true }
-	}
-	allowMap := make(map[string]struct{}, len(allowed))
-	for _, o := range allowed {
-		allowMap[o] = struct{}{}
-	}
+	check := BuildOriginAllow(allowed)
 	return func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
 		if origin == "" {
+			return true // non-browser client (e.g. node agent or curl)
+		}
+		return check(r, origin)
+	}
+}
+
+// BuildOriginAllow returns a predicate that accepts an Origin string when:
+//   - explicit allow list contains it (exact match), OR
+//   - allow list is empty AND the origin host is loopback / RFC1918 / link-local
+//     (so any developer on the LAN can use the dashboard out of the box), OR
+//   - allow list contains "*" (wildcard, allow everything).
+func BuildOriginAllow(allowed []string) func(r *http.Request, origin string) bool {
+	allowMap := make(map[string]struct{}, len(allowed))
+	wildcard := false
+	for _, o := range allowed {
+		if o == "*" {
+			wildcard = true
+		}
+		allowMap[o] = struct{}{}
+	}
+	return func(_ *http.Request, origin string) bool {
+		if wildcard {
 			return true
 		}
-		_, ok := allowMap[origin]
-		return ok
+		if _, ok := allowMap[origin]; ok {
+			return true
+		}
+		if len(allowed) > 0 {
+			return false
+		}
+		return isLocalOrLANOrigin(origin)
 	}
+}
+
+func isLocalOrLANOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := u.Hostname()
+	if host == "localhost" || strings.HasSuffix(host, ".local") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+		return true
+	}
+	return false
 }
 
 // HandleHTTP upgrades an HTTP request to a WebSocket and registers the client.

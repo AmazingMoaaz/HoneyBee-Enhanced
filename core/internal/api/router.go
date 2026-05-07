@@ -38,7 +38,7 @@ func Build(
 	r.Use(chimid.Recoverer)
 	r.Use(chimid.Timeout(60 * time.Second))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   cfg.Server.AllowedOrigins,
+		AllowOriginFunc:  buildOriginAllow(cfg.Server.AllowedOrigins),
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
@@ -212,4 +212,10 @@ func Build(
 
 	logger.Info("router built")
 	return r
+}
+
+// buildOriginAllow returns a chi/cors AllowOriginFunc that delegates to the
+// shared LAN-friendly predicate in the ws package.
+func buildOriginAllow(allowed []string) func(r *http.Request, origin string) bool {
+	return ws.BuildOriginAllow(allowed)
 }

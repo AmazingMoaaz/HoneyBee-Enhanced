@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -194,10 +195,12 @@ func (h *NodesHandler) InstallScript(w http.ResponseWriter, r *http.Request) {
 		scheme = "https"
 	}
 	// Use explicit public address from config (production), else derive from
-	// the Host header — nginx passes $http_host which preserves the port.
+	// the request — preferring forwarded headers / Origin so going through the
+	// Vite dev proxy (which rewrites Host to localhost:5100) still produces a
+	// script that targets the real LAN address the operator opened.
 	httpBase := h.Cfg.Server.PublicHTTPAddr
 	if httpBase == "" {
-		httpBase = scheme + "://" + r.Host
+		httpBase = scheme + "://" + resolvePublicHost(r)
 	}
 	nodeAddr := h.nodePublicAddr(r)
 
@@ -384,13 +387,14 @@ echo "Done. Node '$NODE_NAME' (ID $NODE_ID) → $HB_ADDR"
 }
 
 // nodePublicAddr resolves the TCP address that node agents should dial.
-// Prefers cfg.Server.NodePublicAddr; falls back to r.Host hostname + node port.
+// Prefers cfg.Server.NodePublicAddr; falls back to the resolved public host + node port.
 func (h *NodesHandler) nodePublicAddr(r *http.Request) string {
 	if h.Cfg.Server.NodePublicAddr != "" {
 		return h.Cfg.Server.NodePublicAddr
 	}
-	hostname := r.Host
-	if host, _, err := net.SplitHostPort(r.Host); err == nil {
+	hostport := resolvePublicHost(r)
+	hostname := hostport
+	if host, _, err := net.SplitHostPort(hostport); err == nil {
 		hostname = host
 	}
 	_, port, _ := net.SplitHostPort(h.Cfg.Server.NodeAddr)
@@ -398,6 +402,73 @@ func (h *NodesHandler) nodePublicAddr(r *http.Request) string {
 		port = "9001"
 	}
 	return net.JoinHostPort(hostname, port)
+}
+
+// resolvePublicHost returns the host:port to use in generated scripts.
+// Priority:
+//  1. X-Forwarded-Host header (set by our Vite proxy)
+//  2. Origin / Referer headers (browser-set)
+//  3. r.Host — but if that resolves to loopback/unspecified, swap the host
+//     part for the machine's preferred outbound LAN IP so that install scripts
+//     work even when the operator has the dashboard open at localhost.
+func resolvePublicHost(r *http.Request) string {
+	if fh := r.Header.Get("X-Forwarded-Host"); fh != "" {
+		h := strings.TrimSpace(strings.Split(fh, ",")[0])
+		if !isLoopbackHost(h) {
+			return h
+		}
+	}
+	for _, hdr := range []string{"Origin", "Referer"} {
+		if v := r.Header.Get(hdr); v != "" {
+			if u, err := url.Parse(v); err == nil && u.Host != "" && !isLoopbackHost(u.Host) {
+				return u.Host
+			}
+		}
+	}
+	// Fall back to r.Host, but replace loopback/unspecified host with LAN IP.
+	host := r.Host
+	hostname, port, err := net.SplitHostPort(host)
+	if err != nil {
+		hostname = host
+		port = ""
+	}
+	if isLoopbackHostname(hostname) {
+		if lanIP := preferredLANIP(); lanIP != "" {
+			hostname = lanIP
+		}
+	}
+	if port != "" {
+		return net.JoinHostPort(hostname, port)
+	}
+	return hostname
+}
+
+// isLoopbackHost reports whether a host:port (or bare host) is loopback/unspecified.
+func isLoopbackHost(hostport string) bool {
+	hostname := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		hostname = h
+	}
+	return isLoopbackHostname(hostname)
+}
+
+func isLoopbackHostname(hostname string) bool {
+	if hostname == "localhost" || hostname == "" {
+		return true
+	}
+	ip := net.ParseIP(hostname)
+	return ip != nil && (ip.IsLoopback() || ip.IsUnspecified())
+}
+
+// preferredLANIP returns the machine's preferred outbound LAN IP by dialling
+// an unreachable address (no actual packet is sent — UDP dial just routes).
+func preferredLANIP() string {
+	conn, err := net.Dial("udp4", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	return conn.LocalAddr().(*net.UDPAddr).IP.String()
 }
 
 func (h *NodesHandler) parseJWTQuery(r *http.Request) (*middleware.Claims, error) {

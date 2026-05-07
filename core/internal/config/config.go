@@ -124,7 +124,7 @@ func defaultConfig() *Config {
 		Server: ServerConfig{
 			HTTPAddr:       "0.0.0.0:5100",
 			NodeAddr:       "0.0.0.0:9001",
-			AllowedOrigins: []string{"http://localhost:5173"},
+			AllowedOrigins: nil, // nil = auto-allow loopback + RFC1918 LAN origins
 		},
 		Database: DatabaseConfig{
 			DSN:     "root:password@tcp(127.0.0.1:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4",

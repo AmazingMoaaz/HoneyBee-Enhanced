@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -211,7 +213,12 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	for {
 		msgEnv, err := protocol.ReadMessage(conn)
 		if err != nil {
-			s.logger.Info("node read err", slog.Int64("node_id", node.ID), slog.Any("err", err))
+			// EOF / closed connection are normal disconnects — log at debug only.
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || strings.Contains(err.Error(), "use of closed network connection") {
+				s.logger.Debug("node disconnected", slog.Int64("node_id", node.ID))
+			} else {
+				s.logger.Info("node read err", slog.Int64("node_id", node.ID), slog.Any("err", err))
+			}
 			break
 		}
 		s.dispatcher.Dispatch(ctx, sess, msgEnv)
