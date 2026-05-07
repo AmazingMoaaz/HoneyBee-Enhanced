@@ -22,8 +22,13 @@ type Store struct {
 	DB *sqlx.DB
 }
 
-// Open dials MySQL, configures the pool, and returns a Store.
+// Open dials MySQL, auto-creates the database if it does not exist,
+// configures the pool, and returns a Store.
 func Open(ctx context.Context, dsn string, maxOpen, maxIdle int) (*Store, error) {
+	if err := ensureDatabase(ctx, dsn); err != nil {
+		return nil, err
+	}
+
 	db, err := sqlx.ConnectContext(ctx, "mysql", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("connect mysql: %w", err)
@@ -32,6 +37,39 @@ func Open(ctx context.Context, dsn string, maxOpen, maxIdle int) (*Store, error)
 	db.SetMaxIdleConns(maxIdle)
 	db.SetConnMaxLifetime(time.Hour)
 	return &Store{DB: db}, nil
+}
+
+// ensureDatabase connects to MySQL without selecting a database and issues
+// CREATE DATABASE IF NOT EXISTS so the caller can later connect with the
+// database name in the DSN without failing.
+func ensureDatabase(ctx context.Context, dsn string) error {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return fmt.Errorf("parse dsn: %w", err)
+	}
+	dbName := cfg.DBName
+	if dbName == "" {
+		return nil // no database in DSN, nothing to do
+	}
+
+	// Connect without a specific database selected.
+	cfg.DBName = ""
+	rootDSN := cfg.FormatDSN()
+
+	db, err := sqlx.ConnectContext(ctx, "mysql", rootDSN)
+	if err != nil {
+		return fmt.Errorf("connect mysql (no db): %w", err)
+	}
+	defer db.Close()
+
+	q := fmt.Sprintf(
+		"CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+		strings.ReplaceAll(dbName, "`", ""),
+	)
+	if _, err := db.ExecContext(ctx, q); err != nil {
+		return fmt.Errorf("create database %q: %w", dbName, err)
+	}
+	return nil
 }
 
 // Close releases the underlying pool.

@@ -1,5 +1,8 @@
 # HoneyBee Enhanced
 
+cd C:\Users\noorb\Desktop\Graduation_project\HoneyBee\core\cmd
+go run main.go -config ..\..\config.json
+
 A multi-tenant honeypot orchestration platform — combines the proven
 honeypot-portfolio approach (cowrie + custom pots) of [HoneyBee] with the
 durable task queue / WebSocket / multi-org architecture of [HoneyPots].

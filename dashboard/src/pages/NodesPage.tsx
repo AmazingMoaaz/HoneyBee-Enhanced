@@ -79,57 +79,57 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           {/* Token */}
-          <div style={{ padding: "14px 16px", borderRadius: 12, background: "#0F172A", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{ padding: "14px 16px", borderRadius: 12, background: "#E2E8F0", border: "1px solid rgba(15,23,42,0.08)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <p style={{ fontSize: 10.5, fontWeight: 700, color: "#64748B", display: "flex", alignItems: "center", gap: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 <Icon d={Icons.key} size={11} color="#F59E0B" /> Token
               </p>
               <button onClick={() => copy(created.token, "token")} style={{
                 padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: copied === "token" ? "#F59E0B" : "rgba(255,255,255,0.08)",
-                border: `1px solid ${copied === "token" ? "#D97706" : "rgba(255,255,255,0.12)"}`,
-                color: copied === "token" ? "#1C0A00" : "#94A3B8",
+                background: copied === "token" ? "#F59E0B" : "rgba(15,23,42,0.06)",
+                border: `1px solid ${copied === "token" ? "#D97706" : "rgba(15,23,42,0.12)"}`,
+                color: copied === "token" ? "#1C0A00" : "#64748B",
                 display: "flex", alignItems: "center", gap: 4,
               }}>
-                {copied === "token" ? <Icon d={Icons.check} size={11} color="#1C0A00" /> : <Icon d={Icons.copy} size={11} color="#94A3B8" />}
+                {copied === "token" ? <Icon d={Icons.check} size={11} color="#1C0A00" /> : <Icon d={Icons.copy} size={11} color="#64748B" />}
                 {copied === "token" ? "Copied" : "Copy"}
               </button>
             </div>
-            <code style={{ fontSize: 11, color: "#FCD34D", fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
+            <code style={{ fontSize: 11, color: "#92400E", fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
               {created.token}
             </code>
-            <p style={{ fontSize: 10.5, color: "#EF4444", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
-              <Icon d={Icons.warn} size={10} color="#EF4444" /> Shown once — save it now.
+            <p style={{ fontSize: 10.5, color: "#DC2626", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
+              <Icon d={Icons.warn} size={10} color="#DC2626" /> Shown once — save it now.
             </p>
           </div>
 
           {/* Command */}
-          <div style={{ padding: "14px 16px", borderRadius: 12, background: "#0F172A", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{ padding: "14px 16px", borderRadius: 12, background: "#E2E8F0", border: "1px solid rgba(15,23,42,0.08)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <div style={{ display: "flex", gap: 6 }}>
                 {(["linux", "windows"] as const).map(p => (
                   <button key={p} onClick={() => setPlatform(p)} style={{
                     padding: "3px 11px", borderRadius: 99, fontSize: 10.5, fontWeight: 700, cursor: "pointer",
-                    background: platform === p ? "#F59E0B" : "rgba(255,255,255,0.08)",
-                    border: `1px solid ${platform === p ? "#D97706" : "rgba(255,255,255,0.12)"}`,
-                    color: platform === p ? "#1C0A00" : "#94A3B8",
+                    background: platform === p ? "#F59E0B" : "rgba(15,23,42,0.06)",
+                    border: `1px solid ${platform === p ? "#D97706" : "rgba(15,23,42,0.12)"}`,
+                    color: platform === p ? "#1C0A00" : "#64748B",
                     display: "inline-flex", alignItems: "center", gap: 4, textTransform: "capitalize",
                   }}>{p}</button>
                 ))}
               </div>
               <button onClick={() => copy(cmd, "cmd")} style={{
                 padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: copied === "cmd" ? "#F59E0B" : "rgba(255,255,255,0.08)",
-                border: `1px solid ${copied === "cmd" ? "#D97706" : "rgba(255,255,255,0.12)"}`,
-                color: copied === "cmd" ? "#1C0A00" : "#94A3B8",
+                background: copied === "cmd" ? "#F59E0B" : "rgba(15,23,42,0.06)",
+                border: `1px solid ${copied === "cmd" ? "#D97706" : "rgba(15,23,42,0.12)"}`,
+                color: copied === "cmd" ? "#1C0A00" : "#64748B",
                 display: "flex", alignItems: "center", gap: 4,
               }}>
-                {copied === "cmd" ? <Icon d={Icons.check} size={11} color="#1C0A00" /> : <Icon d={Icons.copy} size={11} color="#94A3B8" />}
+                {copied === "cmd" ? <Icon d={Icons.check} size={11} color="#1C0A00" /> : <Icon d={Icons.copy} size={11} color="#64748B" />}
                 {copied === "cmd" ? "Copied" : "Copy"}
               </button>
             </div>
-            <code style={{ fontSize: 11, color: "#94A3B8", fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
-              <span style={{ color: "#FCD34D" }}>{cmd.split(" ")[0]}</span>{" " + cmd.slice(cmd.indexOf(" ") + 1)}
+            <code style={{ fontSize: 11, color: "#475569", fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
+              <span style={{ color: "#B45309" }}>{cmd.split(" ")[0]}</span>{" " + cmd.slice(cmd.indexOf(" ") + 1)}
             </code>
           </div>
         </div>
@@ -284,7 +284,7 @@ function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => vo
             }}>Delete</button>
             <button onClick={() => setConfirmDelete(false)} style={{
               padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-              background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.12)", color: "#64748B",
+              background: "#EEF2F6", border: "1px solid rgba(15,23,42,0.12)", color: "#64748B",
             }}>Cancel</button>
           </div>
         ) : (
@@ -356,7 +356,12 @@ export default function NodesPage() {
     mutationFn: async (n: string) => (await api.post("/nodes", { name: n })).data as CreatedNode,
     onSuccess: (data) => {
       setCreated(data); setName(""); setAdding(false);
-      qc.invalidateQueries({ queryKey: ["nodes"] });
+      // Optimistically append the new node without disturbing existing entries.
+      // The running refetchInterval will sync authoritative data within 5 s.
+      qc.setQueryData<Node[]>(["nodes"], (old) => [
+        ...(old ?? []),
+        { id: data.id, name: data.name, online: false, last_heartbeat: null, display_order: (old?.length ?? 0) + 1 },
+      ]);
     },
   });
   const del = useMutation({
@@ -446,7 +451,7 @@ export default function NodesPage() {
         {/* Filter chips */}
         <div style={{
           display: "flex", borderRadius: 10, overflow: "hidden",
-          border: "1.5px solid rgba(15,23,42,0.1)", background: "#F8FAFC",
+          border: "1.5px solid rgba(15,23,42,0.1)", background: "#EEF2F6",
         }}>
           {([
             { key: "all",     label: "All",     count: allNodes.length },

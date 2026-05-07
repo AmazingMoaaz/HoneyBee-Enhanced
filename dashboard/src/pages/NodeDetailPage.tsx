@@ -226,6 +226,7 @@ export default function NodeDetailPage() {
   const [showDeployModal,  setShowDeployModal]  = useState(false);
   const [confirmUninstall, setConfirmUninstall] = useState(false);
   const [copied,           setCopied]           = useState<string | null>(null);
+  const [pendingAction,    setPendingAction]    = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery({
@@ -245,15 +246,17 @@ export default function NodeDetailPage() {
     queryKey: ["deploy-logs", activeDeployID],
     queryFn: async () => (await api.get(`/deployments/${activeDeployID}/logs?limit=500`)).data as any[],
     enabled: !!activeDeployID,
-    refetchInterval: activeDeployID && !depDone ? 2000 : false,
+    refetchInterval: activeDeployID ? 2000 : false,
   });
 
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [installLogs]);
 
   const action = useMutation({
-    mutationFn: async (p: { depID: number; act: string }) =>
-      (await api.post(`/deployments/${p.depID}/${p.act}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["node", id] }),
+    mutationFn: async (p: { depID: number; act: string }) => {
+      setPendingAction(`${p.depID}:${p.act}`);
+      return (await api.post(`/deployments/${p.depID}/${p.act}`)).data;
+    },
+    onSettled: () => { setPendingAction(null); qc.invalidateQueries({ queryKey: ["node", id] }); },
   });
   const uninstall = useMutation({
     mutationFn: async () => (await api.post(`/nodes/${id}/uninstall`)).data,
@@ -396,14 +399,14 @@ export default function NodeDetailPage() {
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             padding: "12px 18px", borderBottom: "1px solid rgba(15,23,42,0.07)",
-            background: "#F8FAFC",
+            background: "#EEF2F6",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{
                 width: 28, height: 28, borderRadius: 7, display: "grid", placeItems: "center",
-                background: "#0F172A",
+                background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)",
               }}>
-                <Ico d={I.logs} size={13} color="#FCD34D" />
+                <Ico d={I.logs} size={13} color="#D97706" />
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>
                 {activeDep?.pot_id ?? `Deployment #${activeDeployID}`} — Live Log
@@ -426,21 +429,22 @@ export default function NodeDetailPage() {
             </button>
           </div>
           <div style={{
-            height: 280, overflowY: "auto", padding: "14px 16px", background: "#0D1117",
+            height: 280, overflowY: "auto", padding: "14px 16px", background: "#EEF2F6",
+            border: "1px solid rgba(15,23,42,0.07)",
             fontFamily: "ui-monospace, 'Cascadia Code', 'SF Mono', monospace", fontSize: 12.5, lineHeight: 1.75,
           }}>
             {(installLogs ?? []).length === 0 ? (
-              <span style={{ color: "#475569" }}>⏳ Waiting for logs…</span>
+              <span style={{ color: "#94A3B8" }}>⏳ Waiting for logs…</span>
             ) : (installLogs ?? []).map((entry: any) => {
               let line = entry.data;
               try { line = JSON.parse(entry.data)?.line ?? entry.data; } catch { /* raw */ }
               const ts = new Date(entry.logged_at).toLocaleTimeString();
               const t  = entry.log_type ?? "";
-              const color = t.includes("error")    ? "#F87171"
-                          : t.includes("warning")  ? "#FCD34D"
-                          : t.includes("complete") ? "#86EFAC"
-                          : t.includes("start")    ? "#93C5FD"
-                          : "#64748B";
+              const color = t.includes("error")    ? "#DC2626"
+                          : t.includes("warning")  ? "#D97706"
+                          : t.includes("complete") ? "#16A34A"
+                          : t.includes("start")    ? "#2563EB"
+                          : "#475569";
               return (
                 <div key={entry.id} style={{ display: "flex", gap: 16, alignItems: "baseline" }}>
                   <span style={{ color: "#334155", minWidth: 72, flexShrink: 0, fontSize: 11 }}>{ts}</span>
@@ -534,76 +538,100 @@ export default function NodeDetailPage() {
                 <div style={{ height: 1, background: "rgba(15,23,42,0.06)", margin: "0 18px" }} />
 
                 {/* Actions */}
-                <div style={{ padding: "10px 18px", display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                  {/* Logs */}
-                  <button
-                    onClick={() => setActiveDeployID(isActive ? null : d.id)}
-                    style={{
-                      padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      background: isActive ? "rgba(245,158,11,0.15)" : "#F8FAFC",
-                      border: `1.5px solid ${isActive ? "rgba(245,158,11,0.4)" : "rgba(15,23,42,0.12)"}`,
-                      color: isActive ? "#B45309" : "#64748B",
-                      display: "flex", alignItems: "center", gap: 5,
-                    }}
-                  >
-                    <Ico d={I.logs} size={12} color="currentColor" /> {isActive ? "Hide Logs" : "Logs"}
-                  </button>
+                {(() => {
+                  const busy = pendingAction?.startsWith(`${d.id}:`);
+                  const act  = pendingAction?.split(":")[1];
+                  const label = act === "start" ? "Starting" : act === "stop" ? "Stopping" : act === "restart" ? "Restarting" : act === "remove" ? "Removing" : "Working";
+                  return (
+                    <div style={{
+                      padding: "10px 18px", display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center",
+                      opacity: busy ? 0.6 : 1, pointerEvents: busy ? "none" : "auto",
+                      transition: "opacity 0.15s",
+                    }}>
+                      {busy && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 700, color: "#64748B" }}>
+                          <span style={{
+                            width: 13, height: 13, borderRadius: "50%",
+                            border: "2px solid #94A3B8", borderTopColor: "#475569",
+                            animation: "spin 0.7s linear infinite", display: "inline-block", flexShrink: 0,
+                          }} />
+                          {label}…
+                        </div>
+                      )}
 
-                  {/* Spacer */}
-                  <div style={{ flex: 1 }} />
+                      {!busy && (
+                        <>
+                          {/* Logs */}
+                          <button
+                            onClick={() => setActiveDeployID(isActive ? null : d.id)}
+                            style={{
+                              padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                              background: isActive ? "rgba(245,158,11,0.15)" : "#EEF2F6",
+                              border: `1.5px solid ${isActive ? "rgba(245,158,11,0.4)" : "rgba(15,23,42,0.12)"}`,
+                              color: isActive ? "#B45309" : "#64748B",
+                              display: "flex", alignItems: "center", gap: 5,
+                            }}
+                          >
+                            <Ico d={I.logs} size={12} color="currentColor" /> {isActive ? "Hide Logs" : "Logs"}
+                          </button>
 
-                  {/* Status-contextual actions */}
-                  {d.status !== "running" && d.status !== "removed" && (
-                    <button
-                      onClick={() => action.mutate({ depID: d.id, act: "start" })}
-                      style={{
-                        padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                        background: "rgba(34,197,94,0.08)", border: "1.5px solid rgba(34,197,94,0.25)", color: "#16A34A",
-                        display: "flex", alignItems: "center", gap: 5,
-                      }}
-                    >
-                      <Ico d={I.play} size={11} color="#16A34A" /> Start
-                    </button>
-                  )}
-                  {d.status === "running" && (
-                    <>
-                      <button
-                        onClick={() => action.mutate({ depID: d.id, act: "stop" })}
-                        style={{
-                          padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                          background: "rgba(100,116,139,0.08)", border: "1.5px solid rgba(100,116,139,0.2)", color: "#64748B",
-                          display: "flex", alignItems: "center", gap: 5,
-                        }}
-                      >
-                        <Ico d={I.stop} size={11} color="#64748B" /> Stop
-                      </button>
-                      <button
-                        onClick={() => action.mutate({ depID: d.id, act: "restart" })}
-                        style={{
-                          padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                          background: "rgba(245,158,11,0.08)", border: "1.5px solid rgba(245,158,11,0.25)", color: "#B45309",
-                          display: "flex", alignItems: "center", gap: 5,
-                        }}
-                      >
-                        <Ico d={I.restart} size={11} color="#B45309" /> Restart
-                      </button>
-                    </>
-                  )}
-                  {d.status !== "removed" && (
-                    <button
-                      onClick={() => action.mutate({ depID: d.id, act: "remove" })}
-                      style={{
-                        padding: "5px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                        background: "rgba(254,242,242,0.8)", border: "1.5px solid rgba(239,68,68,0.2)", color: "#EF4444",
-                        display: "flex", alignItems: "center", gap: 5,
-                      }}
-                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.12)"}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "rgba(254,242,242,0.8)"}
-                    >
-                      <Ico d={I.trash} size={11} color="#EF4444" /> Remove
-                    </button>
-                  )}
-                </div>
+                          <div style={{ flex: 1 }} />
+
+                          {d.status !== "running" && d.status !== "removed" && (
+                            <button
+                              onClick={() => action.mutate({ depID: d.id, act: "start" })}
+                              style={{
+                                padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                                background: "rgba(34,197,94,0.08)", border: "1.5px solid rgba(34,197,94,0.25)", color: "#16A34A",
+                                display: "flex", alignItems: "center", gap: 5,
+                              }}
+                            >
+                              <Ico d={I.play} size={11} color="#16A34A" /> Start
+                            </button>
+                          )}
+                          {d.status === "running" && (
+                            <>
+                              <button
+                                onClick={() => action.mutate({ depID: d.id, act: "stop" })}
+                                style={{
+                                  padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                                  background: "rgba(100,116,139,0.08)", border: "1.5px solid rgba(100,116,139,0.2)", color: "#64748B",
+                                  display: "flex", alignItems: "center", gap: 5,
+                                }}
+                              >
+                                <Ico d={I.stop} size={11} color="#64748B" /> Stop
+                              </button>
+                              <button
+                                onClick={() => action.mutate({ depID: d.id, act: "restart" })}
+                                style={{
+                                  padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                                  background: "rgba(245,158,11,0.08)", border: "1.5px solid rgba(245,158,11,0.25)", color: "#B45309",
+                                  display: "flex", alignItems: "center", gap: 5,
+                                }}
+                              >
+                                <Ico d={I.restart} size={11} color="#B45309" /> Restart
+                              </button>
+                            </>
+                          )}
+                          {d.status !== "removed" && (
+                            <button
+                              onClick={() => action.mutate({ depID: d.id, act: "remove" })}
+                              style={{
+                                padding: "5px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                                background: "rgba(254,242,242,0.8)", border: "1.5px solid rgba(239,68,68,0.2)", color: "#EF4444",
+                                display: "flex", alignItems: "center", gap: 5,
+                              }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.12)"}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "rgba(254,242,242,0.8)"}
+                            >
+                              <Ico d={I.trash} size={11} color="#EF4444" /> Remove
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
@@ -637,16 +665,17 @@ export default function NodeDetailPage() {
                 <div style={{ display: "flex", gap: 8 }}>
                   <code style={{
                     flex: 1, padding: "11px 14px", borderRadius: 9, fontSize: 12, fontFamily: "monospace",
-                    background: "#0D1117", color: "#94A3B8", wordBreak: "break-all", lineHeight: 1.65,
+                    background: "#E2E8F0", color: "#475569", wordBreak: "break-all", lineHeight: 1.65,
+                    border: "1px solid rgba(15,23,42,0.08)",
                   }}>
-                    <span style={{ color: "#FCD34D" }}>{cmd.split(" ")[0]}</span>
+                    <span style={{ color: "#B45309" }}>{cmd.split(" ")[0]}</span>
                     {" " + cmd.slice(cmd.indexOf(" ") + 1)}
                   </code>
                   <button
                     onClick={() => copyText(cmd, key)}
                     style={{
                       padding: "11px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      background: copied === key ? "#F59E0B" : "#F8FAFC",
+                      background: copied === key ? "#F59E0B" : "#EEF2F6",
                       border: "1.5px solid rgba(15,23,42,0.12)",
                       color: copied === key ? "#1C0A00" : "#64748B",
                       display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
@@ -698,16 +727,17 @@ export default function NodeDetailPage() {
                 <div style={{ display: "flex", gap: 8 }}>
                   <code style={{
                     flex: 1, padding: "11px 14px", borderRadius: 9, fontSize: 12, fontFamily: "monospace",
-                    background: "#0D1117", color: "#94A3B8", wordBreak: "break-all", lineHeight: 1.65,
+                    background: "#E2E8F0", color: "#475569", wordBreak: "break-all", lineHeight: 1.65,
+                    border: "1px solid rgba(15,23,42,0.08)",
                   }}>
-                    <span style={{ color: "#FCD34D" }}>{cmd.split(" ")[0]}</span>
+                    <span style={{ color: "#B45309" }}>{cmd.split(" ")[0]}</span>
                     {" " + cmd.slice(cmd.indexOf(" ") + 1)}
                   </code>
                   <button
                     onClick={() => copyText(cmd, key)}
                     style={{
                       padding: "11px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      background: copied === key ? "#F59E0B" : "#F8FAFC",
+                      background: copied === key ? "#F59E0B" : "#EEF2F6",
                       border: "1.5px solid rgba(15,23,42,0.12)",
                       color: copied === key ? "#1C0A00" : "#64748B",
                       display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
