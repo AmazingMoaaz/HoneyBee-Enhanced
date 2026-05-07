@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS nodes (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id              BIGINT PRIMARY KEY,
     org_id          BIGINT NOT NULL,
     name            VARCHAR(255) NOT NULL,
     token_hash      VARCHAR(255) NOT NULL,

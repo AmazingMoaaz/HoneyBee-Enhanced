@@ -171,11 +171,11 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) signPair(userID, orgID int64, role models.Role) (string, string, error) {
-	access, err := h.JWT.SignAccess(userID, orgID, role, h.Cfg.JWT.AccessTTL)
+	access, err := h.JWT.SignAccess(userID, orgID, role, h.Cfg.JWT.AccessTTL.Duration)
 	if err != nil {
 		return "", "", err
 	}
-	refresh, err := h.JWT.SignRefresh(userID, orgID, role, h.Cfg.JWT.RefreshTTL)
+	refresh, err := h.JWT.SignRefresh(userID, orgID, role, h.Cfg.JWT.RefreshTTL.Duration)
 	if err != nil {
 		return "", "", err
 	}

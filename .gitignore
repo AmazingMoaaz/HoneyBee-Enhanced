@@ -20,6 +20,8 @@ bin/
 .env
 .env.local
 
+# Local config (use config.example.json as template)
+config.json
 
 # Node / Vite
 node_modules/

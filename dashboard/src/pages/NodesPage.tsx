@@ -1,50 +1,38 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
+import { Icon, Icons } from "../components/Icons";
 
-/* ── Icons ─────────────────────────────────────── */
-const Ico = ({ d, size = 16, color = "currentColor", sw = 2 }: { d: string; size?: number; color?: string; sw?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
-    <path d={d} />
-  </svg>
-);
-const I = {
-  plus:   "M12 5v14M5 12h14",
-  trash:  "M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6",
-  search: "M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z",
-  arrow:  "M5 12h14M12 5l7 7-7 7",
-  copy:   "M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414A1 1 0 0120 8.414V15a2 2 0 01-2 2h-2",
-  clock:  "M12 8v4l3 3M12 22a10 10 0 110-20 10 10 0 010 20z",
-  key:    "M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4",
-  warn:   "M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
-  close:  "M18 6L6 18M6 6l12 12",
-  server: "M20 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2zM8 21h8M12 17v4",
-  signal: "M1 6l7 7 4-4 9 9M1 1l4 4",
-  check:  "M20 6L9 17l-5-5",
-  spark:  "M5 3v4M3 5h4M6 17v4M4 19h4M13 3l3 7-7 3 7 3-3 7 3-7 7-3-7-3-3-7z",
-  bee:    "M12 2a4 4 0 014 4v1h-8V6a4 4 0 014-4zM4 11h16M4 15h16M8 7v14a4 4 0 008 0V7",
-  linux:  "M12 2a5 5 0 00-5 5v3a4 4 0 01-1.5 3.1l-1.2 1A2 2 0 003 16v.5A1.5 1.5 0 004.5 18h15a1.5 1.5 0 001.5-1.5V16a2 2 0 00-1.3-1.9l-1.2-1A4 4 0 0117 10V7a5 5 0 00-5-5z",
-  windows:"M3 5l8-1v8H3V5zM13 4l8-1v9h-8V4zM3 13h8v8l-8-1v-7zM13 13h8v9l-8-1v-8z",
-  pc:     "M2 4h20v12H2zM7 20h10M9 16v4M15 16v4",
-};
+/* ─────────────────────────────────────────────────────────────────────
+   Node Manager — modern, interactive rebuild
+   - Premium "tilt+sheen" cards with mouse-tracked highlight
+   - Animated conic-ring border on online nodes
+   - Inline action menu (Manage / Copy ID / Delete) with confirm
+   - Live filter chips, search, and sort modes (recent / online / name)
+   - Rich, animated empty + loading states
+───────────────────────────────────────────────────────────────────── */
 
-/* ── Helpers ────────────────────────────────────── */
 type CreatedNode = { id: number; name: string; token: string };
 type Node        = { id: number; name: string; online: boolean; last_heartbeat: string | null; display_order: number };
 
 function relTime(iso: string | null): string {
-  if (!iso) return "Never";
+  if (!iso) return "Never seen";
   const d = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(d / 60000);
-  if (m < 1)  return "just now";
-  if (m < 60) return `${m}m ago`;
+  if (d < 30_000)       return "Just now";
+  const m = Math.floor(d / 60_000);
+  if (m < 60)           return `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24)           return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  if (days < 7)         return `${days}d ago`;
   return new Date(iso).toLocaleDateString();
 }
 
-/* ── Install Banner ─────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────────
+   Install banner — shown after a new node is created
+   (keeps the proven dual-pane token + command card)
+────────────────────────────────────────────────────────────────── */
 function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: () => void }) {
   const [platform, setPlatform] = useState<"linux" | "windows">("linux");
   const [copied,   setCopied]   = useState<string | null>(null);
@@ -57,53 +45,43 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
     navigator.clipboard.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 2200); });
 
   return (
-    <div className="animate-fade-up" style={{
-      borderRadius: 18, overflow: "hidden",
-      border: "1.5px solid rgba(245,158,11,0.35)",
-      background: "linear-gradient(135deg, rgba(252,211,77,0.08) 0%, #FFFFFF 60%)",
-      boxShadow: "0 4px 24px rgba(245,158,11,0.14)",
+    <div className="animate-fade-up shine" style={{
+      borderRadius: 18, overflow: "hidden", position: "relative",
+      border: "1.5px solid rgba(245,158,11,0.4)",
+      background: "linear-gradient(135deg, rgba(252,211,77,0.10) 0%, #FFFFFF 60%)",
+      boxShadow: "0 4px 24px rgba(245,158,11,0.16)",
     }}>
-      <div style={{ height: 4, background: "linear-gradient(90deg, #FCD34D, #F59E0B, #D97706)" }} />
+      <div style={{ height: 4, background: "linear-gradient(90deg, #FCD34D, #F59E0B, #D97706, #F59E0B, #FCD34D)",
+                   backgroundSize: "200% 100%", animation: "shimmer 4s linear infinite" }} />
       <div style={{ padding: "20px 24px" }}>
-
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{
-              width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center",
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div className="glow-amber" style={{
+              width: 44, height: 44, borderRadius: 13, display: "grid", placeItems: "center",
               background: "linear-gradient(135deg,#FCD34D,#D97706)",
-              boxShadow: "0 4px 12px rgba(245,158,11,0.3)",
             }}>
-              <Ico d={I.spark} size={20} color="#1C0A00" sw={2.2} />
+              <Icon d={Icons.spark} size={20} color="#1C0A00" sw={2.2} />
             </div>
             <div>
-              <p style={{ fontWeight: 800, fontSize: 15, color: "#0F172A" }}>
-                Node <span style={{ color: "#B45309" }}>{created.name}</span> registered!
+              <p style={{ fontWeight: 800, fontSize: 15.5, color: "#0F172A" }}>
+                Node <span style={{ color: "#B45309" }}>{created.name}</span> registered
               </p>
               <p style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>
                 Run the install command on your target server to bring it online.
               </p>
             </div>
           </div>
-          <button onClick={onClose} style={{
-            background: "rgba(15,23,42,0.05)", border: "none", cursor: "pointer",
-            width: 28, height: 28, borderRadius: 7, display: "grid", placeItems: "center",
-          }}>
-            <Ico d={I.close} size={14} color="#94A3B8" />
+          <button className="icon-btn" onClick={onClose} aria-label="Close">
+            <Icon d={Icons.close} size={14} />
           </button>
         </div>
 
-        {/* Two columns: token + command */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-
           {/* Token */}
-          <div style={{
-            padding: "14px 16px", borderRadius: 12,
-            background: "#0F172A", border: "1px solid rgba(255,255,255,0.07)",
-          }}>
+          <div style={{ padding: "14px 16px", borderRadius: 12, background: "#0F172A", border: "1px solid rgba(255,255,255,0.07)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <p style={{ fontSize: 10.5, fontWeight: 700, color: "#64748B", display: "flex", alignItems: "center", gap: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                <Ico d={I.key} size={11} color="#F59E0B" /> Token
+                <Icon d={Icons.key} size={11} color="#F59E0B" /> Token
               </p>
               <button onClick={() => copy(created.token, "token")} style={{
                 padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
@@ -112,7 +90,7 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
                 color: copied === "token" ? "#1C0A00" : "#94A3B8",
                 display: "flex", alignItems: "center", gap: 4,
               }}>
-                {copied === "token" ? <Ico d={I.check} size={11} color="#1C0A00" /> : <Ico d={I.copy} size={11} color="#94A3B8" />}
+                {copied === "token" ? <Icon d={Icons.check} size={11} color="#1C0A00" /> : <Icon d={Icons.copy} size={11} color="#94A3B8" />}
                 {copied === "token" ? "Copied" : "Copy"}
               </button>
             </div>
@@ -120,24 +98,22 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
               {created.token}
             </code>
             <p style={{ fontSize: 10.5, color: "#EF4444", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
-              <Ico d={I.warn} size={10} color="#EF4444" /> Shown once — save it now.
+              <Icon d={Icons.warn} size={10} color="#EF4444" /> Shown once — save it now.
             </p>
           </div>
 
           {/* Command */}
-          <div style={{
-            padding: "14px 16px", borderRadius: 12,
-            background: "#0F172A", border: "1px solid rgba(255,255,255,0.07)",
-          }}>
+          <div style={{ padding: "14px 16px", borderRadius: 12, background: "#0F172A", border: "1px solid rgba(255,255,255,0.07)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <div style={{ display: "flex", gap: 6 }}>
                 {(["linux", "windows"] as const).map(p => (
                   <button key={p} onClick={() => setPlatform(p)} style={{
-                    padding: "2px 10px", borderRadius: 99, fontSize: 10.5, fontWeight: 700, cursor: "pointer",
+                    padding: "3px 11px", borderRadius: 99, fontSize: 10.5, fontWeight: 700, cursor: "pointer",
                     background: platform === p ? "#F59E0B" : "rgba(255,255,255,0.08)",
                     border: `1px solid ${platform === p ? "#D97706" : "rgba(255,255,255,0.12)"}`,
-                    color: platform === p ? "#1C0A00" : "#64748B",
-                  }}><Ico d={p === "linux" ? I.linux : I.windows} size={11} color={platform === p ? "#1C0A00" : "#94A3B8"} /> {p === "linux" ? "Linux" : "Windows"}</button>
+                    color: platform === p ? "#1C0A00" : "#94A3B8",
+                    display: "inline-flex", alignItems: "center", gap: 4, textTransform: "capitalize",
+                  }}>{p}</button>
                 ))}
               </div>
               <button onClick={() => copy(cmd, "cmd")} style={{
@@ -147,13 +123,12 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
                 color: copied === "cmd" ? "#1C0A00" : "#94A3B8",
                 display: "flex", alignItems: "center", gap: 4,
               }}>
-                {copied === "cmd" ? <Ico d={I.check} size={11} color="#1C0A00" /> : <Ico d={I.copy} size={11} color="#94A3B8" />}
+                {copied === "cmd" ? <Icon d={Icons.check} size={11} color="#1C0A00" /> : <Icon d={Icons.copy} size={11} color="#94A3B8" />}
                 {copied === "cmd" ? "Copied" : "Copy"}
               </button>
             </div>
             <code style={{ fontSize: 11, color: "#94A3B8", fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
-              <span style={{ color: "#FCD34D" }}>{cmd.split(" ")[0]}</span>
-              {" " + cmd.slice(cmd.indexOf(" ") + 1)}
+              <span style={{ color: "#FCD34D" }}>{cmd.split(" ")[0]}</span>{" " + cmd.slice(cmd.indexOf(" ") + 1)}
             </code>
           </div>
         </div>
@@ -162,76 +137,136 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
   );
 }
 
-/* ── Node Card ─────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────────
+   Modern Node Card — interactive, with mouse-tracked sheen
+────────────────────────────────────────────────────────────────── */
 function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => void }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [menuOpen,      setMenuOpen]      = useState(false);
+  const [copiedId,      setCopiedId]      = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
   const online  = node.online;
   const initial = (node.name ?? "?").charAt(0).toUpperCase();
 
+  /* Mouse-tracked CSS variables for the radial sheen highlight */
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = cardRef.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", `${e.clientX - r.left}px`);
+    el.style.setProperty("--my", `${e.clientY - r.top}px`);
+  };
+
+  const copyId = () => {
+    navigator.clipboard.writeText(String(node.id))
+      .then(() => { setCopiedId(true); setTimeout(() => setCopiedId(false), 1600); });
+  };
+
+  /* Close menu on outside click */
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Element)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [menuOpen]);
+
   return (
-    <div className="card card-hover" style={{
-      padding: 0, overflow: "hidden", display: "flex", flexDirection: "column",
-      borderLeft: `3px solid ${online ? "#22C55E" : "#CBD5E1"}`,
-    }}>
-
-      <div style={{ padding: "18px 20px 14px", flex: 1 }}>
+    <div
+      ref={cardRef}
+      onMouseMove={handleMove}
+      className={`card-interactive ${online ? "ring-online" : ""}`}
+      style={{
+        padding: 0, overflow: "hidden", display: "flex", flexDirection: "column",
+        borderLeft: `3px solid ${online ? "#22C55E" : "#CBD5E1"}`,
+      }}
+    >
+      {/* ── Top: avatar + name + status ── */}
+      <div style={{ padding: "18px 20px 12px", flex: 1, position: "relative" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-
-          {/* Avatar */}
-          <div style={{
-            width: 50, height: 50, borderRadius: 14, flexShrink: 0,
+          {/* Avatar with halo */}
+          <div className={online ? "glow-amber" : ""} style={{
+            width: 52, height: 52, borderRadius: 14, flexShrink: 0,
             display: "grid", placeItems: "center",
-            fontWeight: 900, fontSize: 20, letterSpacing: "-0.02em",
+            fontWeight: 900, fontSize: 21, letterSpacing: "-0.02em",
             background: online
               ? "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)"
               : "linear-gradient(135deg, #E2E8F0 0%, #CBD5E1 100%)",
             color: online ? "#1C0A00" : "#64748B",
-            boxShadow: online ? "0 4px 14px rgba(245,158,11,0.28)" : "none",
           }}>
             {initial}
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{
-              fontWeight: 800, fontSize: 15.5, color: "#0F172A", marginBottom: 6,
+              fontWeight: 800, fontSize: 15.5, color: "#0F172A", marginBottom: 7,
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {node.name}
             </p>
-
-            {/* Status + meta row */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{
-                display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 99,
-                background: online ? "rgba(34,197,94,0.1)" : "rgba(100,116,139,0.1)",
-                border: `1px solid ${online ? "rgba(34,197,94,0.3)" : "rgba(100,116,139,0.2)"}`,
-              }}>
-                <span style={{
-                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                  background: online ? "#22C55E" : "#94A3B8",
-                  animation: online ? "pulse-green 2s infinite" : "none",
-                }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: online ? "#16A34A" : "#64748B" }}>
-                  {online ? "Online" : "Offline"}
-                </span>
-              </div>
-
-              <span style={{
-                fontSize: 11, fontFamily: "monospace", color: "#CBD5E1",
-                background: "rgba(15,23,42,0.04)", padding: "2px 7px", borderRadius: 6,
-                border: "1px solid rgba(15,23,42,0.07)",
-              }}>#{node.display_order}</span>
-
-              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "#94A3B8" }}>
-                <Ico d={I.clock} size={11} color="#CBD5E1" />
-                {relTime(node.last_heartbeat)}
+              <span className={online ? "chip chip-green" : "chip chip-slate"} style={{ paddingLeft: 8 }}>
+                <span className={`status-dot ${online ? "status-dot-green" : "status-dot-slate"}`} />
+                {online ? "Online" : "Offline"}
+              </span>
+              <span className="chip" style={{ fontFamily: "ui-monospace, monospace", fontWeight: 700 }}>
+                #{node.display_order}
               </span>
             </div>
           </div>
+
+          {/* Kebab menu */}
+          <button
+            className="icon-btn"
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
+            aria-label="Actions"
+            style={{ marginLeft: -4 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+            </svg>
+          </button>
+
+          {menuOpen && (
+            <div
+              className="animate-fade-up"
+              style={{
+                position: "absolute", top: 50, right: 14, zIndex: 20,
+                background: "#FFFFFF", borderRadius: 12, minWidth: 170,
+                border: "1px solid rgba(15,23,42,0.08)",
+                boxShadow: "0 10px 30px rgba(15,23,42,0.14), 0 1px 2px rgba(15,23,42,0.05)",
+                padding: 5,
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <Link to={`/nodes/${node.id}`} style={menuItemStyle()}>
+                <Icon d={Icons.arrow} size={14} color="#64748B" /> Manage
+              </Link>
+              <button onClick={copyId} style={menuItemStyle()}>
+                <Icon d={copiedId ? Icons.check : Icons.copy} size={14} color={copiedId ? "#16A34A" : "#64748B"} />
+                {copiedId ? "Copied!" : "Copy node ID"}
+              </button>
+              <div style={{ height: 1, background: "rgba(15,23,42,0.06)", margin: "4px 6px" }} />
+              <button onClick={() => { setConfirmDelete(true); setMenuOpen(false); }}
+                      style={menuItemStyle("#DC2626")}>
+                <Icon d={Icons.trash} size={14} color="#DC2626" /> Delete node
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Bottom meta row — last heartbeat ── */}
+        <div style={{
+          marginTop: 14, paddingTop: 10, borderTop: "1px dashed rgba(15,23,42,0.08)",
+          display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#94A3B8",
+        }}>
+          <Icon d={Icons.heart} size={12} color={online ? "#22C55E" : "#CBD5E1"} sw={2.2} />
+          <span>Last seen <strong style={{ color: "#475569", fontWeight: 700 }}>{relTime(node.last_heartbeat)}</strong></span>
         </div>
       </div>
 
-      {/* Footer */}
+      {/* ── Footer: primary action / delete confirm ── */}
       <div style={{
         borderTop: "1px solid rgba(15,23,42,0.06)", padding: "10px 20px",
         display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -255,30 +290,34 @@ function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => vo
           <>
             <Link
               to={`/nodes/${node.id}`}
+              className="shine"
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
-                padding: "6px 16px", borderRadius: 9,
-                background: "linear-gradient(135deg,rgba(245,158,11,0.12),rgba(245,158,11,0.06))",
-                border: "1.5px solid rgba(245,158,11,0.3)",
+                padding: "7px 16px", borderRadius: 9,
+                background: "linear-gradient(135deg,rgba(245,158,11,0.14),rgba(245,158,11,0.06))",
+                border: "1.5px solid rgba(245,158,11,0.32)",
                 color: "#B45309", textDecoration: "none",
-                transition: "background 0.15s",
+                transition: "background 0.15s, transform 0.15s, box-shadow 0.15s",
               }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(245,158,11,0.2)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg,rgba(245,158,11,0.12),rgba(245,158,11,0.06))"; }}
+              onMouseEnter={e => {
+                const t = e.currentTarget as HTMLElement;
+                t.style.background = "linear-gradient(135deg,rgba(245,158,11,0.22),rgba(245,158,11,0.10))";
+                t.style.boxShadow = "0 6px 14px rgba(245,158,11,0.18)";
+                t.style.transform = "translateY(-1px)";
+              }}
+              onMouseLeave={e => {
+                const t = e.currentTarget as HTMLElement;
+                t.style.background = "linear-gradient(135deg,rgba(245,158,11,0.14),rgba(245,158,11,0.06))";
+                t.style.boxShadow = "none";
+                t.style.transform = "translateY(0)";
+              }}
             >
-              Manage <Ico d={I.arrow} size={13} color="#B45309" />
+              Manage <Icon d={Icons.arrow} size={13} color="#B45309" />
             </Link>
-            <button
-              onClick={() => setConfirmDelete(true)}
-              style={{
-                background: "none", border: "none", cursor: "pointer", padding: "6px 8px",
-                borderRadius: 7, color: "#CBD5E1", display: "flex", alignItems: "center",
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#EF4444"; (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.07)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "#CBD5E1"; (e.currentTarget as HTMLElement).style.background = "none"; }}
-            >
-              <Ico d={I.trash} size={15} />
-            </button>
+
+            <span style={{ fontSize: 11, color: "#CBD5E1", fontFamily: "monospace" }}>
+              ID {node.id}
+            </span>
           </>
         )}
       </div>
@@ -286,12 +325,24 @@ function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => vo
   );
 }
 
-/* ── Page ─────────────────────────────────────────── */
+const menuItemStyle = (color = "#0F172A"): React.CSSProperties => ({
+  display: "flex", alignItems: "center", gap: 9, padding: "8px 11px", borderRadius: 8,
+  width: "100%", border: "none", background: "transparent",
+  fontSize: 13, fontWeight: 600, color, cursor: "pointer", textDecoration: "none",
+});
+
+/* ──────────────────────────────────────────────────────────────────
+   Page
+────────────────────────────────────────────────────────────────── */
+type Filter = "all" | "online" | "offline";
+type Sort   = "recent" | "name" | "status";
+
 export default function NodesPage() {
   const qc = useQueryClient();
   const [name,    setName]    = useState("");
   const [created, setCreated] = useState<CreatedNode | null>(null);
-  const [filter,  setFilter]  = useState<"all" | "online" | "offline">("all");
+  const [filter,  setFilter]  = useState<Filter>("all");
+  const [sort,    setSort]    = useState<Sort>("recent");
   const [query,   setQuery]   = useState("");
   const [adding,  setAdding]  = useState(false);
 
@@ -317,40 +368,49 @@ export default function NodesPage() {
   const offline  = allNodes.filter(n => !n.online);
 
   const visible = useMemo(() => {
-    const list = filter === "online" ? online : filter === "offline" ? offline : allNodes;
-    if (!query.trim()) return list;
-    return list.filter(n => n.name.toLowerCase().includes(query.toLowerCase()));
-  }, [allNodes, filter, query, online, offline]);
+    let list = filter === "online" ? online : filter === "offline" ? offline : allNodes;
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter(n => n.name.toLowerCase().includes(q));
+    }
+    const sorted = [...list];
+    if (sort === "name")        sorted.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort === "status") sorted.sort((a, b) => Number(b.online) - Number(a.online));
+    else                        sorted.sort((a, b) => {
+      const ta = a.last_heartbeat ? new Date(a.last_heartbeat).getTime() : 0;
+      const tb = b.last_heartbeat ? new Date(b.last_heartbeat).getTime() : 0;
+      return tb - ta;
+    });
+    return sorted;
+  }, [allNodes, filter, query, online, offline, sort]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }} className="animate-fade-up">
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }} className="animate-fade-up">
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 16 }}>
         <div>
           <p className="page-label">Fleet</p>
-          <h1 className="page-title">Node Manager</h1>
-          <p style={{ fontSize: 13.5, color: "#64748B", marginTop: 5, lineHeight: 1.65 }}>
-            Register servers and deploy honeypots. Each node runs the HoneyBee agent.
+          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            Node Manager
+            <span style={{
+              fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99,
+              background: "linear-gradient(135deg, rgba(245,158,11,0.14), rgba(217,119,6,0.10))",
+              color: "#B45309", border: "1px solid rgba(245,158,11,0.30)",
+              letterSpacing: "0.05em", textTransform: "uppercase",
+            }}>{allNodes.length} {allNodes.length === 1 ? "node" : "nodes"}</span>
+          </h1>
+          <p style={{ fontSize: 13.5, color: "#64748B", marginTop: 6, lineHeight: 1.6, maxWidth: 540 }}>
+            Register servers and deploy honeypots. Each node runs the HoneyBee agent and reports
+            heartbeats every 30 seconds.
           </p>
         </div>
 
-        {/* Stat pills */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          {[
-            { label: "Total",   value: allNodes.length, bg: "rgba(245,158,11,0.1)",  color: "#B45309", border: "rgba(245,158,11,0.25)" },
-            { label: "Online",  value: online.length,   bg: "rgba(34,197,94,0.1)",   color: "#16A34A", border: "rgba(34,197,94,0.25)"  },
-            { label: "Offline", value: offline.length,  bg: "rgba(100,116,139,0.1)", color: "#64748B", border: "rgba(100,116,139,0.2)" },
-          ].map(s => (
-            <div key={s.label} style={{
-              padding: "7px 14px", borderRadius: 99, fontWeight: 700,
-              background: s.bg, border: `1.5px solid ${s.border}`, color: s.color,
-              display: "flex", alignItems: "center", gap: 8, fontSize: 13,
-            }}>
-              <span style={{ fontSize: 17, fontWeight: 900 }}>{s.value}</span>
-              <span style={{ opacity: 0.8 }}>{s.label}</span>
-            </div>
-          ))}
+        {/* Compact stat tiles */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <StatTile color="#F59E0B" label="Total"    value={allNodes.length} icon={Icons.server} />
+          <StatTile color="#22C55E" label="Online"   value={online.length}   icon={Icons.online}  pulse />
+          <StatTile color="#94A3B8" label="Offline"  value={offline.length}  icon={Icons.offline} />
         </div>
       </div>
 
@@ -358,37 +418,49 @@ export default function NodesPage() {
       {created && <InstallBanner created={created} onClose={() => setCreated(null)} />}
 
       {/* ── Toolbar ── */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-
+      <div className="card" style={{ padding: 12, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
         {/* Search */}
-        <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}>
-          <div style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-            <Ico d={I.search} size={14} color="#94A3B8" />
+        <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
+          <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+            <Icon d={Icons.search} size={14} color="#94A3B8" />
           </div>
           <input
             className="input"
-            placeholder="Search nodes…"
+            placeholder="Search nodes by name…"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            style={{ paddingLeft: 34, width: "100%", boxSizing: "border-box" }}
+            style={{ paddingLeft: 36, width: "100%", boxSizing: "border-box" }}
           />
+          {query && (
+            <button onClick={() => setQuery("")}
+                    aria-label="Clear search"
+                    style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                             background: "rgba(15,23,42,0.06)", border: "none", cursor: "pointer",
+                             width: 22, height: 22, borderRadius: 6, display: "grid", placeItems: "center" }}>
+              <Icon d={Icons.close} size={11} color="#64748B" />
+            </button>
+          )}
         </div>
 
-        {/* Filter tabs */}
+        {/* Filter chips */}
         <div style={{
           display: "flex", borderRadius: 10, overflow: "hidden",
           border: "1.5px solid rgba(15,23,42,0.1)", background: "#F8FAFC",
         }}>
-          {([ { key: "all", label: "All", count: allNodes.length }, { key: "online", label: "Online", count: online.length }, { key: "offline", label: "Offline", count: offline.length } ] as const).map(f => (
+          {([
+            { key: "all",     label: "All",     count: allNodes.length },
+            { key: "online",  label: "Online",  count: online.length },
+            { key: "offline", label: "Offline", count: offline.length },
+          ] as const).map(f => (
             <button key={f.key} onClick={() => setFilter(f.key)} style={{
-              padding: "7px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", border: "none",
+              padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", border: "none",
               background: filter === f.key ? "rgba(245,158,11,0.15)" : "transparent",
               color: filter === f.key ? "#B45309" : "#94A3B8",
-              display: "flex", alignItems: "center", gap: 5,
+              display: "flex", alignItems: "center", gap: 6,
             }}>
               {f.label}
               <span style={{
-                padding: "1px 6px", borderRadius: 99, fontSize: 10.5, fontWeight: 800,
+                padding: "1px 7px", borderRadius: 99, fontSize: 10.5, fontWeight: 800,
                 background: filter === f.key ? "rgba(245,158,11,0.25)" : "rgba(15,23,42,0.06)",
                 color: filter === f.key ? "#92400E" : "#94A3B8",
               }}>{f.count}</span>
@@ -396,31 +468,36 @@ export default function NodesPage() {
           ))}
         </div>
 
+        {/* Sort */}
+        <select className="input" value={sort} onChange={e => setSort(e.target.value as Sort)}
+                style={{ width: 170, paddingRight: 32 }}>
+          <option value="recent">Sort: Recent activity</option>
+          <option value="name">Sort: Name (A–Z)</option>
+          <option value="status">Sort: Status (online first)</option>
+        </select>
+
         {/* Add Node */}
-        <button
-          onClick={() => setAdding(v => !v)}
-          className="btn btn-primary"
-          style={{ marginLeft: "auto", gap: 6 }}
-        >
-          <Ico d={adding ? I.close : I.plus} size={14} color="#1C0A00" />
+        <button onClick={() => setAdding(v => !v)} className="btn btn-primary shine"
+                style={{ marginLeft: "auto", gap: 6 }}>
+          <Icon d={adding ? Icons.close : Icons.plus} size={14} color="#1C0A00" />
           {adding ? "Cancel" : "Add Node"}
         </button>
       </div>
 
       {/* ── Add Node form ── */}
       {adding && (
-        <div className="card animate-fade-up" style={{ padding: "20px 22px", borderColor: "rgba(245,158,11,0.3)" }}>
+        <div className="card-elevated animate-fade-up" style={{ padding: "20px 22px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0,
+            <div className="glow-amber" style={{
+              width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", flexShrink: 0,
               background: "linear-gradient(135deg,#FCD34D,#D97706)",
             }}>
-              <Ico d={I.pc} size={20} color="#1C0A00" sw={2} />
+              <Icon d={Icons.server} size={20} color="#1C0A00" sw={2} />
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 800, fontSize: 14.5, color: "#0F172A", marginBottom: 3 }}>Register New Node</p>
-              <p style={{ fontSize: 12.5, color: "#64748B", marginBottom: 14, lineHeight: 1.55 }}>
-                Give the server a name. You'll get a one-time install command to run on it.
+              <p style={{ fontSize: 12.5, color: "#78350F", marginBottom: 14, lineHeight: 1.55 }}>
+                Give the server a memorable name. You'll get a one-time install command to run on it.
               </p>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <input
@@ -432,43 +509,60 @@ export default function NodesPage() {
                   style={{ flex: "1 1 240px" }}
                   autoFocus
                 />
-                <button
-                  className="btn btn-primary"
-                  disabled={!name.trim() || create.isPending}
-                  onClick={() => create.mutate(name.trim())}
-                >
-                  {create.isPending ? "Creating…" : "Create →"}
+                <button className="btn btn-primary"
+                        disabled={!name.trim() || create.isPending}
+                        onClick={() => create.mutate(name.trim())}>
+                  {create.isPending ? "Creating…" : <>Create <Icon d={Icons.arrow} size={13} color="#1C0A00" /></>}
                 </button>
               </div>
+              {create.isError && (
+                <p style={{ fontSize: 12, color: "#DC2626", marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                  <Icon d={Icons.warn} size={12} color="#DC2626" /> {(create.error as any)?.response?.data?.error ?? "Failed to create node."}
+                </p>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Grid / Empty ── */}
+      {/* ── Grid / Empty / Loading ── */}
       {isLoading ? (
-        <div style={{ textAlign: "center", padding: "60px 0" }}>
-          <div style={{ marginBottom: 12, opacity: 0.4, display: "flex", justifyContent: "center" }}>
-            <Ico d={I.bee} size={32} color="#94A3B8" />
-          </div>
-          <p style={{ color: "#94A3B8", fontWeight: 600 }}>Loading nodes…</p>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+          gap: 14,
+        }}>
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="card" style={{ padding: 18, display: "flex", gap: 14 }}>
+              <div className="skeleton" style={{ width: 52, height: 52, borderRadius: 14 }} />
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div className="skeleton" style={{ height: 14, width: "60%" }} />
+                <div className="skeleton" style={{ height: 10, width: "40%" }} />
+                <div className="skeleton" style={{ height: 10, width: "30%", marginTop: 6 }} />
+              </div>
+            </div>
+          ))}
         </div>
       ) : visible.length === 0 ? (
-        <div className="card" style={{ padding: "64px 24px", textAlign: "center" }}>
-          <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
-            <Ico d={query ? I.search : I.bee} size={40} color="#94A3B8" sw={1.6} />
+        <div className="card" style={{ padding: "72px 24px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", inset: 0, opacity: 0.05, pointerEvents: "none" }}>
+            <Icon d={Icons.honeycomb} size={300} color="#F59E0B" style={{ position: "absolute", top: -40, right: -60 }} />
           </div>
-          <p style={{ fontWeight: 800, fontSize: 16, color: "#0F172A", marginBottom: 6 }}>
-            {query ? `No nodes match "${query}"` : "No nodes yet"}
+          <div style={{ marginBottom: 14, display: "flex", justifyContent: "center", animation: "float-slow 4s ease-in-out infinite" }}>
+            <Icon d={query ? Icons.search : Icons.server} size={44} color="#F59E0B" sw={1.6} />
+          </div>
+          <p style={{ fontWeight: 800, fontSize: 17, color: "#0F172A", marginBottom: 6 }}>
+            {query ? `No nodes match "${query}"` : filter === "online" ? "No nodes are online" :
+                     filter === "offline" ? "All nodes are online" : "No nodes registered yet"}
           </p>
-          <p style={{ fontSize: 13, color: "#64748B", marginBottom: 22, maxWidth: 320, margin: "0 auto 22px" }}>
-            {query
-              ? "Try clearing the search or switching the filter."
-              : "Register your first server to start deploying honeypots."}
+          <p style={{ fontSize: 13, color: "#64748B", marginBottom: 22, maxWidth: 380, margin: "0 auto 22px" }}>
+            {query ? "Try clearing the search or switching the filter."
+                   : filter === "all" ? "Register your first server to start deploying honeypots."
+                   : "Switch the filter to view all nodes."}
           </p>
-          {!query && (
-            <button onClick={() => setAdding(true)} className="btn btn-primary" style={{ display: "inline-flex" }}>
-              <Ico d={I.plus} size={14} color="#1C0A00" /> Add First Node
+          {!query && filter === "all" && (
+            <button onClick={() => setAdding(true)} className="btn btn-primary shine" style={{ display: "inline-flex" }}>
+              <Icon d={Icons.plus} size={14} color="#1C0A00" /> Add First Node
             </button>
           )}
         </div>
@@ -476,13 +570,43 @@ export default function NodesPage() {
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-          gap: 14,
+          gap: 16,
         }}>
           {visible.map(n => (
             <NodeCard key={n.id} node={n} onDelete={id => del.mutate(id)} />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Inline subcomponents
+────────────────────────────────────────────────────────────────── */
+function StatTile({ color, label, value, icon, pulse }: {
+  color: string; label: string; value: number; icon: string; pulse?: boolean;
+}) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      padding: "10px 14px 10px 12px", borderRadius: 12,
+      background: "#FFFFFF", border: "1px solid rgba(15,23,42,0.07)",
+      boxShadow: "0 1px 2px rgba(15,23,42,0.04)", minWidth: 124,
+    }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
+        background: `${color}1A`, color,
+        animation: pulse && value > 0 ? "pulse-glow 2.4s ease-out infinite" : undefined,
+      }}>
+        <Icon d={icon} size={16} color={color} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+        <span style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", letterSpacing: "-0.03em" }}>{value}</span>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 2 }}>
+          {label}
+        </span>
+      </div>
     </div>
   );
 }

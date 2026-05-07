@@ -1,34 +1,25 @@
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAuthStore } from "../stores/auth";
 import logoUrl from "../assets/logo.png";
 import ParticleCanvas from "./ParticleCanvas";
+import { Icon, Icons } from "./Icons";
 
-/* ── Inline SVG icons (no extra deps) ───────────── */
-const Icon = ({ d, className = "" }: { d: string; className?: string }) => (
-  <svg viewBox="0 0 24 24" className={`w-[18px] h-[18px] ${className}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d={d} />
-  </svg>
-);
-const I = {
-  dashboard:   "M3 12L12 3l9 9M5 10v10h14V10",
-  nodes:       "M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18",
-  deploy:      "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
-  events:      "M13 2L3 14h7l-1 8 10-12h-7l1-8z",
-  sessions:    "M21 12a9 9 0 11-18 0 9 9 0 0118 0zM8 12h.01M12 12h.01M16 12h.01",
-  potstore:    "M3 7l9-4 9 4-9 4-9-4zM3 12l9 4 9-4M3 17l9 4 9-4",
-  users:       "M16 11a4 4 0 10-8 0 4 4 0 008 0zM4 21a8 8 0 0116 0",
-  refresh:     "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
-  logout:      "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
-  system:      "M9 12l2 2 4-4M12 22a10 10 0 110-20 10 10 0 010 20z",
-};
+/* ─────────────────────────────────────────────────────────────────
+   App shell — floating sidebar + glass topbar + animated background
+   Enhancements:
+     • Sliding morph indicator behind active nav item
+     • Floating right-side label tooltip with arrow
+     • Mouse-tracked subtle particle field on entire app
+     • Topbar shows live time + connection breadcrumb
+─────────────────────────────────────────────────────────────────── */
 
 const NAV = [
-  { to: "/",         label: "Dashboard",      icon: I.dashboard, end: true },
-  { to: "/nodes",    label: "Nodes",          icon: I.nodes },
-  { to: "/events",   label: "Events",         icon: I.events },
-  { to: "/potstore", label: "HoneyBee Store", icon: I.potstore },
-  { to: "/system",   label: "System Check",   icon: I.system },
+  { to: "/",         label: "Dashboard",      icon: Icons.hex,          end: true },
+  { to: "/nodes",    label: "Nodes",          icon: Icons.server },
+  { to: "/events",   label: "Events",         icon: Icons.activity },
+  { to: "/potstore", label: "HoneyBee Store", icon: Icons.honeypot },
+  { to: "/system",   label: "System Check",   icon: Icons.shield },
 ];
 
 function getPageTitle(pathname: string): string {
@@ -41,6 +32,17 @@ function getPageTitle(pathname: string): string {
   return "HoneyBee";
 }
 
+function getPageBreadcrumb(pathname: string): string[] {
+  if (pathname === "/")                  return ["Home"];
+  if (pathname.startsWith("/nodes/"))    return ["Fleet", "Node detail"];
+  if (pathname.startsWith("/nodes"))     return ["Fleet"];
+  if (pathname.startsWith("/events"))    return ["Telemetry"];
+  if (pathname.startsWith("/potstore"))  return ["Catalog"];
+  if (pathname.startsWith("/system"))    return ["Diagnostics"];
+  if (pathname.startsWith("/users"))     return ["Admin"];
+  return [];
+}
+
 export default function Layout() {
   const { email, role, logout } = useAuthStore();
   const nav = useNavigate();
@@ -48,7 +50,57 @@ export default function Layout() {
   const [hovered, setHovered] = useState<string | null>(null);
   const onLogout = () => { logout(); nav("/login"); };
 
-  const navItems = [...NAV, ...(role === "admin" ? [{ to: "/users", label: "Users", icon: I.users }] : [])];
+  const navItems = [...NAV, ...(role === "admin" ? [{ to: "/users", label: "Users", icon: Icons.users }] : [])];
+
+  /* ── Live clock for topbar ── */
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  /* ── Sliding active indicator (per-item refs for reliability) ── */
+  const railRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [pill, setPill] = useState<{ top: number; height: number; opacity: number }>({
+    top: 0, height: 44, opacity: 0,
+  });
+  const [hoverPill, setHoverPill] = useState<{ top: number; height: number; opacity: number }>({
+    top: 0, height: 44, opacity: 0,
+  });
+
+  const activeKey = (() => {
+    const found = navItems.find(i =>
+      i.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(i.to)
+    );
+    return found?.to ?? null;
+  })();
+
+  const measure = (key: string | null, set: typeof setPill) => {
+    const rail = railRef.current;
+    if (!rail || !key) { set(s => ({ ...s, opacity: 0 })); return; }
+    const node = itemRefs.current[key];
+    if (!node) { set(s => ({ ...s, opacity: 0 })); return; }
+    const r = rail.getBoundingClientRect();
+    const n = node.getBoundingClientRect();
+    set({ top: n.top - r.top, height: n.height, opacity: 1 });
+  };
+
+  useLayoutEffect(() => {
+    const id = requestAnimationFrame(() => measure(activeKey, setPill));
+    return () => cancelAnimationFrame(id);
+  }, [activeKey, role]);
+
+  useEffect(() => {
+    const onResize = () => measure(activeKey, setPill);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [activeKey]);
+
+  useEffect(() => {
+    if (hovered && hovered !== activeKey) measure(hovered, setHoverPill);
+    else setHoverPill(s => ({ ...s, opacity: 0 }));
+  }, [hovered, activeKey]);
 
   return (
     <div className="min-h-screen" style={{ background: "#F8FAFC" }}>
@@ -62,44 +114,115 @@ export default function Layout() {
       {/* ════════ Subtle mouse-reactive particles ════════ */}
       <ParticleCanvas subtle />
 
-      {/* ════════ Floating Pill Sidebar (left center) ════════ */}
+      {/* ════════ Floating Pill Sidebar ════════ */}
       <aside className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
-        <div className="flex flex-col items-center gap-2 p-2.5 rounded-2xl"
-             style={{
-               background: "rgba(255,255,255,0.92)",
-               backdropFilter: "blur(16px)",
-               border: "1px solid rgba(15,23,42,0.07)",
-               boxShadow: "0 10px 40px rgba(15,23,42,0.1), 0 1px 2px rgba(15,23,42,0.05)",
-             }}>
+        <div
+          ref={railRef}
+          className="relative flex flex-col items-center gap-1.5 p-2 rounded-[20px]"
+          style={{
+            background: "rgba(255,255,255,0.94)",
+            backdropFilter: "blur(18px)",
+            WebkitBackdropFilter: "blur(18px)",
+            border: "1px solid rgba(15,23,42,0.07)",
+            boxShadow:
+              "0 12px 44px rgba(15,23,42,0.12), 0 1px 2px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.6)",
+          }}
+          onMouseLeave={() => setHovered(null)}
+        >
+          {/* Hover ghost pill (slate, faint) */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute", left: 8, right: 8,
+              top: hoverPill.top, height: hoverPill.height,
+              background: "rgba(15,23,42,0.05)",
+              borderRadius: 14,
+              opacity: hoverPill.opacity,
+              transition:
+                "top .28s cubic-bezier(.5,1.4,.4,1), height .28s cubic-bezier(.5,1.4,.4,1), opacity .18s",
+              zIndex: 0,
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* Active amber pill */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute", left: 8, right: 8,
+              top: pill.top, height: pill.height,
+              background:
+                "linear-gradient(135deg, #FCD34D 0%, #F59E0B 55%, #D97706 100%)",
+              borderRadius: 14,
+              boxShadow:
+                "0 8px 22px rgba(245,158,11,0.45), 0 2px 6px rgba(217,119,6,0.35), inset 0 1px 0 rgba(255,255,255,0.32)",
+              opacity: pill.opacity,
+              transition:
+                "top .38s cubic-bezier(.5,1.4,.4,1), height .38s cubic-bezier(.5,1.4,.4,1), opacity .25s",
+              zIndex: 0,
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* Left edge accent bar (outside rail) */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute", left: -6, width: 3,
+              top: pill.top + 8, height: Math.max(0, pill.height - 16),
+              background: "linear-gradient(180deg, #F59E0B, #B45309)",
+              borderRadius: 999,
+              opacity: pill.opacity,
+              boxShadow: "0 0 12px rgba(245,158,11,0.7)",
+              transition:
+                "top .38s cubic-bezier(.5,1.4,.4,1), height .38s cubic-bezier(.5,1.4,.4,1), opacity .25s",
+              pointerEvents: "none",
+            }}
+          />
+
           {navItems.map((item) => {
-            const active = item.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(item.to);
+            const active = item.to === activeKey;
             return (
-              <div key={item.to} className="relative"
-                   onMouseEnter={() => setHovered(item.to)}
-                   onMouseLeave={() => setHovered(null)}>
-                <NavLink to={item.to} end={(item as any).end}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl"
-                  style={active
-                    ? { background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 55%, #D97706 100%)",
-                        color: "#1C0A00",
-                        boxShadow: "0 4px 14px rgba(245,158,11,0.45), inset 0 1px 0 rgba(255,255,255,0.28)" }
-                    : { background: "transparent", color: "#64748B" }
-                  }
-                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "#F1F5F9"; }}
-                  onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
-                  <Icon d={item.icon} />
+              <div
+                key={item.to}
+                ref={el => { itemRefs.current[item.to] = el; }}
+                className="relative"
+                style={{ zIndex: 1 }}
+                onMouseEnter={() => setHovered(item.to)}
+              >
+                <NavLink
+                  to={item.to}
+                  end={(item as any).end}
+                  aria-label={item.label}
+                  className="flex h-11 w-11 items-center justify-center rounded-[14px] outline-none transition-all"
+                  style={{
+                    background: "transparent",
+                    color: active ? "#1C0A00" : "#64748B",
+                    transform: active ? "scale(1.04)" : "scale(1)",
+                  }}
+                  onFocus={e => (e.currentTarget as HTMLElement).style.boxShadow =
+                    "0 0 0 2px rgba(245,158,11,0.55)"}
+                  onBlur={e => (e.currentTarget as HTMLElement).style.boxShadow = "none"}
+                >
+                  <Icon d={item.icon} size={19} sw={2} />
                 </NavLink>
 
-                {/* Floating label tooltip */}
+                {/* Hover tooltip with arrow */}
                 {hovered === item.to && (
-                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 animate-float-up pointer-events-none">
-                    <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg whitespace-nowrap text-[12.5px] font-semibold"
+                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 z-50 pointer-events-none"
+                       style={{ animation: "fade-up .18s ease-out both" }}>
+                    <div className="flex items-center px-3 py-1.5 rounded-lg whitespace-nowrap text-[12px] font-semibold relative"
                          style={{
-                           background: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)",
-                           color: "#1C0A00",
-                           boxShadow: "0 8px 22px rgba(245,158,11,0.4)",
+                           background: "#0F172A",
+                           color: "#FFFFFF",
+                           boxShadow: "0 10px 26px rgba(15,23,42,0.30)",
                          }}>
                       {item.label}
+                      <div style={{
+                        position: "absolute", left: -4, top: "50%",
+                        transform: "translateY(-50%) rotate(45deg)",
+                        width: 8, height: 8, background: "#0F172A",
+                      }} />
                     </div>
                   </div>
                 )}
@@ -117,25 +240,43 @@ export default function Layout() {
                 borderBottom: "1px solid rgba(15,23,42,0.06)",
               }}>
 
-        {/* Logo + Title */}
-        <div className="flex items-center">
-          <Link to="/" className="flex items-center gap-2.5 mr-5 hover:opacity-85">
+        {/* Logo + Title + Breadcrumb */}
+        <div className="flex items-center min-w-0">
+          <Link to="/" className="flex items-center gap-2.5 mr-5 hover:opacity-90 transition-opacity">
             <img src={logoUrl} alt="HoneyBee" className="h-9 w-9 object-contain"
                  style={{ filter: "drop-shadow(0 2px 6px rgba(245,158,11,0.35))" }} />
             <span className="text-[18px] font-extrabold tracking-tight text-shimmer">HoneyBee</span>
           </Link>
           <div className="h-6 w-px mx-1" style={{ background: "rgba(15,23,42,0.1)" }} />
-          <h2 className="text-[15px] font-semibold ml-4 tracking-tight" style={{ color: "#0F172A" }}>
-            {getPageTitle(loc.pathname)}
-          </h2>
+          <div className="ml-4 flex items-center gap-2 min-w-0">
+            <h2 className="text-[15px] font-semibold tracking-tight whitespace-nowrap" style={{ color: "#0F172A" }}>
+              {getPageTitle(loc.pathname)}
+            </h2>
+            {getPageBreadcrumb(loc.pathname).map((b, i) => (
+              <span key={i} className="hidden md:inline-flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-[0.08em]"
+                    style={{ color: "#94A3B8" }}>
+                <span style={{ color: "#CBD5E1" }}>/</span>{b}
+              </span>
+            ))}
+          </div>
         </div>
 
-        {/* User pill + actions */}
+        {/* Right side: clock + user pill + actions */}
         <div className="flex items-center gap-3">
+          {/* Live clock */}
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full"
+               style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.18)" }}>
+            <Icon d={Icons.clock} size={12} color="#B45309" />
+            <span className="text-[11.5px] font-bold tabular-nums" style={{ color: "#B45309" }}>
+              {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+
+          {/* User pill */}
           <div className="flex items-center gap-2.5 pl-2 pr-3 py-1 rounded-full"
                style={{ background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.08)" }}>
-            <div className="h-7 w-7 rounded-full grid place-items-center text-[11px] font-bold"
-                 style={{ background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: "#1C0A00", boxShadow: "0 2px 6px rgba(245,158,11,0.35)" }}>
+            <div className="h-7 w-7 rounded-full grid place-items-center text-[11px] font-bold glow-amber"
+                 style={{ background: "linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)", color: "#1C0A00" }}>
               {(email ?? "?").charAt(0).toUpperCase()}
             </div>
             <div className="flex flex-col leading-none">
@@ -146,17 +287,11 @@ export default function Layout() {
 
           <div className="h-6 w-px" style={{ background: "rgba(15,23,42,0.08)" }} />
 
-          <button onClick={() => window.location.reload()} title="Refresh"
-                  className="h-9 w-9 grid place-items-center rounded-full hover:bg-slate-100"
-                  style={{ color: "#64748B" }}>
-            <Icon d={I.refresh} />
+          <button onClick={() => window.location.reload()} title="Refresh" className="icon-btn">
+            <Icon d={Icons.refresh} size={16} />
           </button>
-          <button onClick={onLogout} title="Sign out"
-                  className="h-9 w-9 grid place-items-center rounded-full"
-                  style={{ color: "#EF4444" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#FEF2F2"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
-            <Icon d={I.logout} />
+          <button onClick={onLogout} title="Sign out" className="icon-btn icon-btn-danger">
+            <Icon d={Icons.logout} size={16} />
           </button>
         </div>
       </header>

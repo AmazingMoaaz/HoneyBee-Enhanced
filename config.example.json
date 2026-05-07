@@ -1,0 +1,36 @@
+{
+  "server": {
+    "http_addr": "0.0.0.0:5100",
+    "node_addr": "0.0.0.0:9001",
+    "node_public_addr": "",
+    "public_http_addr": "",
+    "allowed_origins": ["http://localhost:5173"]
+  },
+  "database": {
+    "dsn": "DB_USER:DB_PASSWORD@tcp(localhost:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4",
+    "max_open": 25,
+    "max_idle": 5
+  },
+  "tls": {
+    "enabled": false,
+    "cert_file": "",
+    "key_file": ""
+  },
+  "jwt": {
+    "secret": "change-me-to-a-random-secret",
+    "access_ttl": "15m",
+    "refresh_ttl": "168h"
+  },
+  "potstore": {
+    "repo_url": "file://potstore.json",
+    "sync_interval": "1h"
+  },
+  "node": {
+    "github_repo": "AmazingMoaaz/HoneyBee-Enhanced",
+    "github_release_tag": "latest",
+    "github_token": ""
+  },
+  "log": {
+    "level": "info"
+  }
+}

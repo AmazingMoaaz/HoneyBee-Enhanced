@@ -28,7 +28,8 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /out/honeybee-core /usr/local/bin/honeybee-core
 COPY --from=node-builder /out /app/bin
-COPY core/configs /app/configs
 COPY core/migrations /app/migrations
+COPY config.json /app/config.json
+COPY potstore.json /app/potstore.json
 EXPOSE 5100 9001
-ENTRYPOINT ["honeybee-core", "--config", "/app/configs/core.yaml"]
+ENTRYPOINT ["honeybee-core", "--config", "/app/config.json"]

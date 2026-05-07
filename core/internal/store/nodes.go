@@ -5,20 +5,40 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/honeybee-enhanced/shared/models"
 )
 
-// CreateNode inserts a new node and returns its ID.
+// CreateNode inserts a new node with a random 6-digit ID and returns it.
+// Retries up to 10 times on the rare chance of a collision.
 func (s *Store) CreateNode(ctx context.Context, orgID int64, name, tokenHash string) (int64, error) {
-	res, err := s.DB.ExecContext(ctx,
-		`INSERT INTO nodes(org_id, name, token_hash) VALUES (?, ?, ?)`,
-		orgID, name, tokenHash)
-	if err != nil {
-		return 0, fmt.Errorf("insert node: %w", err)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	const maxTries = 10
+	for i := 0; i < maxTries; i++ {
+		id := int64(r.Intn(900000) + 100000) // 100000–999999
+		_, err := s.DB.ExecContext(ctx,
+			`INSERT INTO nodes(id, org_id, name, token_hash) VALUES (?, ?, ?, ?)`,
+			id, orgID, name, tokenHash)
+		if err == nil {
+			return id, nil
+		}
+		// If it's a duplicate-key error, try a new random ID; otherwise surface the error.
+		if !isDuplicateKeyError(err) {
+			return 0, fmt.Errorf("insert node: %w", err)
+		}
 	}
-	return res.LastInsertId()
+	return 0, fmt.Errorf("insert node: could not find a free 6-digit ID after %d attempts", maxTries)
+}
+
+// isDuplicateKeyError returns true for MySQL error 1062 (duplicate entry).
+func isDuplicateKeyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "1062")
 }
 
 // GetNode fetches by ID, scoped to org.

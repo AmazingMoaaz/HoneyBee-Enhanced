@@ -18,14 +18,11 @@ import (
 	"github.com/honeybee-enhanced/core/internal/nodeserver"
 	"github.com/honeybee-enhanced/core/internal/potstore"
 	"github.com/honeybee-enhanced/core/internal/store"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	cfgPath := flag.String("config", "configs/core.yaml", "path to YAML config")
+	cfgPath := flag.String("config", "config.json", "path to JSON/YAML config")
 	flag.Parse()
-
-	_ = godotenv.Load()
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
@@ -61,7 +58,7 @@ func main() {
 		logger.Warn("reset sent tasks", slog.Any("err", err))
 	}
 
-	psClient := potstore.NewClient(cfg.PotStore.RepoURL, cfg.PotStore.SyncInterval, logger)
+	psClient := potstore.NewClient(cfg.PotStore.RepoURL, cfg.PotStore.SyncInterval.Duration, logger)
 	psClient.Start(rootCtx)
 
 	var tlsCfg *tls.Config
