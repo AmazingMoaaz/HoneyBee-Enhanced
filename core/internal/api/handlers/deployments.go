@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -72,9 +73,17 @@ func (h *DeploymentsHandler) CreateForNode(w http.ResponseWriter, r *http.Reques
 		}
 		req.PotID = next
 	}
-	cfgBytes, _ := json.Marshal(req.Config)
+	cfgBytes, err := json.Marshal(req.Config)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid config json")
+		return
+	}
 	depID, err := h.Store.CreateDeployment(r.Context(), orgID, nodeID, req.PotID, req.HoneypotType, string(cfgBytes))
 	if err != nil {
+		if errors.Is(err, store.ErrDuplicatePotID) {
+			writeError(w, http.StatusConflict, "a deployment with pot_id '"+req.PotID+"' already exists on this node — pick a different ID or remove the existing one")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "create")
 		return
 	}
@@ -136,8 +145,15 @@ func (h *DeploymentsHandler) UpdateConfig(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "bad json")
 		return
 	}
-	cfgBytes, _ := json.Marshal(cfg)
-	_ = h.Store.UpdateDeploymentConfig(r.Context(), orgID, id, string(cfgBytes))
+	cfgBytes, err := json.Marshal(cfg)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid config")
+		return
+	}
+	if err := h.Store.UpdateDeploymentConfig(r.Context(), orgID, id, string(cfgBytes)); err != nil {
+		writeError(w, http.StatusInternalServerError, "update config")
+		return
+	}
 	payload := protocol.UpdateConfigPayload{PotID: dep.PotID, Config: cfg}
 	if err := h.queueAndSend(r, orgID, dep.NodeID, &dep.ID, protocol.CmdUpdateConfig, payload); err != nil {
 		writeError(w, http.StatusInternalServerError, "queue task")

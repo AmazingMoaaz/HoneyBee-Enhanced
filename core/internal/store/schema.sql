@@ -1,4 +1,7 @@
 -- HoneyBee-Enhanced core schema (MySQL 8+)
+-- All parent-to-child relationships use ON DELETE CASCADE so that deleting
+-- a node wipes all its deployments, tasks, events, sessions, and pot_logs.
+-- deploy_id foreign keys also cascade so orphan rows can never exist.
 
 CREATE TABLE IF NOT EXISTS organizations (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -18,7 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_users_org_email (org_id, email),
-    FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+    CONSTRAINT fk_users_org FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS nodes (
@@ -33,9 +36,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     last_heartbeat  TIMESTAMP NULL,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    deleted_at      TIMESTAMP NULL,
     INDEX idx_nodes_org (org_id),
-    FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+    CONSTRAINT fk_nodes_org FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS deployments (
@@ -51,8 +53,8 @@ CREATE TABLE IF NOT EXISTS deployments (
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_deploy_node_pot (node_id, pot_id),
     INDEX idx_deploy_org (org_id),
-    FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE,
-    FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+    CONSTRAINT fk_deploy_org  FOREIGN KEY (org_id)   REFERENCES organizations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_deploy_node FOREIGN KEY (node_id)  REFERENCES nodes(id)         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -68,9 +70,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_tasks_node_status (node_id, status),
     INDEX idx_tasks_org (org_id),
-    FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE,
-    FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE,
-    FOREIGN KEY (deploy_id) REFERENCES deployments(id) ON DELETE SET NULL
+    CONSTRAINT fk_tasks_org    FOREIGN KEY (org_id)    REFERENCES organizations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tasks_node   FOREIGN KEY (node_id)   REFERENCES nodes(id)         ON DELETE CASCADE,
+    CONSTRAINT fk_tasks_deploy FOREIGN KEY (deploy_id) REFERENCES deployments(id)   ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS events (
@@ -91,8 +93,9 @@ CREATE TABLE IF NOT EXISTS events (
     INDEX idx_events_type     (event_type),
     INDEX idx_events_ip       (source_ip),
     INDEX idx_events_pot      (pot_id),
-    FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE,
-    FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+    CONSTRAINT fk_events_org    FOREIGN KEY (org_id)    REFERENCES organizations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_events_node   FOREIGN KEY (node_id)   REFERENCES nodes(id)         ON DELETE CASCADE,
+    CONSTRAINT fk_events_deploy FOREIGN KEY (deploy_id) REFERENCES deployments(id)   ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS pot_logs (
@@ -108,8 +111,9 @@ CREATE TABLE IF NOT EXISTS pot_logs (
     INDEX idx_potlogs_pot_time (pot_id, logged_at),
     INDEX idx_potlogs_org_time (org_id, logged_at),
     INDEX idx_potlogs_dep      (deployment_id),
-    FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE,
-    FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+    CONSTRAINT fk_potlogs_org    FOREIGN KEY (org_id)        REFERENCES organizations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_potlogs_node   FOREIGN KEY (node_id)       REFERENCES nodes(id)         ON DELETE CASCADE,
+    CONSTRAINT fk_potlogs_deploy FOREIGN KEY (deployment_id) REFERENCES deployments(id)   ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -128,8 +132,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     UNIQUE KEY uq_sessions_sid (session_id),
     INDEX idx_sessions_org (org_id),
     INDEX idx_sessions_pot (pot_id),
-    FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE,
-    FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+    CONSTRAINT fk_sessions_org    FOREIGN KEY (org_id)    REFERENCES organizations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_sessions_node   FOREIGN KEY (node_id)   REFERENCES nodes(id)         ON DELETE CASCADE,
+    CONSTRAINT fk_sessions_deploy FOREIGN KEY (deploy_id) REFERENCES deployments(id)   ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS session_data (
@@ -139,7 +144,7 @@ CREATE TABLE IF NOT EXISTS session_data (
     raw_data    LONGBLOB NOT NULL,
     captured_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
     INDEX idx_sd_session_seq (session_id, sequence),
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    CONSTRAINT fk_session_data FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -152,9 +157,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
     details     TEXT NOT NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_audit_org_time (org_id, created_at),
-    FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+    CONSTRAINT fk_audit_org  FOREIGN KEY (org_id)  REFERENCES organizations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id)         ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- idempotent migrations (MySQL 8: duplicate column/key errors are suppressed in Go)
-ALTER TABLE pot_logs ADD COLUMN deployment_id BIGINT NULL AFTER node_id;
-ALTER TABLE pot_logs ADD INDEX idx_potlogs_dep (deployment_id);

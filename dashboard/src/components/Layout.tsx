@@ -20,6 +20,7 @@ const I = {
   users:       "M16 11a4 4 0 10-8 0 4 4 0 008 0zM4 21a8 8 0 0116 0",
   refresh:     "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
   logout:      "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+  system:      "M9 12l2 2 4-4M12 22a10 10 0 110-20 10 10 0 010 20z",
 };
 
 const NAV = [
@@ -27,6 +28,7 @@ const NAV = [
   { to: "/nodes",    label: "Nodes",          icon: I.nodes },
   { to: "/events",   label: "Events",         icon: I.events },
   { to: "/potstore", label: "HoneyBee Store", icon: I.potstore },
+  { to: "/system",   label: "System Check",   icon: I.system },
 ];
 
 function getPageTitle(pathname: string): string {
@@ -34,6 +36,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/nodes"))    return "Node Manager";
   if (pathname.startsWith("/events"))   return "Event Stream";
   if (pathname.startsWith("/potstore")) return "HoneyBee Store";
+  if (pathname.startsWith("/system"))   return "System Check";
   if (pathname.startsWith("/users"))    return "User Management";
   return "HoneyBee";
 }

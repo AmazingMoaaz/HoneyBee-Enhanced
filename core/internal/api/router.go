@@ -56,6 +56,7 @@ func Build(
 	psH := handlers.NewPotStoreHandler(ps)
 	usersH := handlers.NewUsersHandler(st)
 	cmdH := handlers.NewCommandsHandler(st, ns)
+	sysH := handlers.NewSystemHandler(st, ns, "1.0.0")
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -187,6 +188,9 @@ func Build(
 				r.Use(middleware.RequireAdmin)
 				r.Post("/potstore/sync", psH.Sync)
 			})
+
+			// System Check
+			r.Get("/system/check", sysH.Check)
 
 			// Broadcast
 			r.Group(func(r chi.Router) {

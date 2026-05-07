@@ -70,6 +70,7 @@ type Manager struct {
 	mu       sync.Mutex
 	manifest map[string]*Manifest // pot_id -> manifest
 	procs    map[string]*running  // pot_id -> running process
+	stopping map[string]bool      // pot_id -> true while a Stop() is in flight
 }
 
 // NewManager creates a Manager rooted at root/honeypots.
@@ -83,6 +84,7 @@ func NewManager(root string, logger *slog.Logger) (*Manager, error) {
 		logger:   logger,
 		manifest: make(map[string]*Manifest),
 		procs:    make(map[string]*running),
+		stopping: make(map[string]bool),
 	}
 	if err := m.loadAll(); err != nil {
 		logger.Warn("loadAll honeypots", slog.Any("err", err))
@@ -250,11 +252,18 @@ func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch str
 }
 
 // Start launches the honeypot process.
+// Idempotent: returns nil if the pot is already running.
 func (m *Manager) Start(ctx context.Context, potID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.procs[potID]; ok {
-		return errors.New("already running")
+		mf := m.manifest[potID]
+		hpType := ""
+		if mf != nil {
+			hpType = mf.HoneypotType
+		}
+		m.emitLog(potID, hpType, "start.info", "already running — no-op")
+		return nil
 	}
 	mf, ok := m.manifest[potID]
 	if !ok {
@@ -315,15 +324,26 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 		}
 		m.mu.Lock()
 		delete(m.procs, potID)
+		wasStopping := m.stopping[potID]
+		delete(m.stopping, potID)
 		m.mu.Unlock()
-		if waitErr != nil {
+		switch {
+		case wasStopping:
+			// Process exited because Stop() killed it — treat as a clean stop
+			// regardless of the OS-level exit code (SIGKILL/Windows kill yields
+			// a non-zero exit but is intentional and must NOT be reported as failed).
+			m.emitLog(potID, hpType, "process.exit", "process exited (stopped by request)")
+			if m.ExitFn != nil {
+				m.ExitFn(potID, hpType, "stopped", "stopped by request")
+			}
+		case waitErr != nil:
 			exitMsg := fmt.Sprintf("process exited with error: %v — check process.output lines above or %s",
 				waitErr, filepath.Join(mf.InstallDir, "cowrie-debug.log"))
 			m.emitLog(potID, hpType, "process.exit", exitMsg)
 			if m.ExitFn != nil {
 				m.ExitFn(potID, hpType, "failed", exitMsg)
 			}
-		} else {
+		default:
 			m.emitLog(potID, hpType, "process.exit", "process exited cleanly")
 			if m.ExitFn != nil {
 				m.ExitFn(potID, hpType, "stopped", "process exited cleanly")
@@ -335,15 +355,22 @@ func (m *Manager) Start(ctx context.Context, potID string) error {
 }
 
 // Stop sends SIGTERM, waits up to 10s, then SIGKILL.
+// Idempotent: if the pot is not currently running this is a no-op success.
 func (m *Manager) Stop(potID string) error {
 	m.mu.Lock()
 	r, ok := m.procs[potID]
 	mf := m.manifest[potID]
 	if !ok {
 		m.mu.Unlock()
-		return errors.New("not running")
+		hpType := ""
+		if mf != nil {
+			hpType = mf.HoneypotType
+		}
+		m.emitLog(potID, hpType, "stop.info", "already stopped — no-op")
+		return nil
 	}
 	delete(m.procs, potID)
+	m.stopping[potID] = true
 	m.mu.Unlock()
 	hpType := ""
 	if mf != nil {
@@ -366,31 +393,36 @@ func (m *Manager) Stop(potID string) error {
 	return nil
 }
 
-// Restart stops then starts.
+// Restart stops then starts. Safe even if the pot is currently stopped.
 func (m *Manager) Restart(ctx context.Context, potID string) error {
-	_ = m.Stop(potID)
+	_ = m.Stop(potID) // Stop is idempotent
 	time.Sleep(500 * time.Millisecond)
 	return m.Start(ctx, potID)
 }
 
 // Remove stops and deletes the install directory.
+// Idempotent: missing manifest entry is treated as already-removed.
 func (m *Manager) Remove(potID string) error {
-	_ = m.Stop(potID)
+	_ = m.Stop(potID) // Stop is idempotent
 	m.mu.Lock()
 	mf, ok := m.manifest[potID]
 	if !ok {
 		m.mu.Unlock()
-		return errors.New("not installed")
+		m.emitLog(potID, "", "remove.info", "already removed — no-op")
+		return nil
 	}
 	hpType := mf.HoneypotType
+	installDir := mf.InstallDir
 	delete(m.manifest, potID)
 	m.mu.Unlock()
 	m.emitLog(potID, hpType, "remove.info", "removing honeypot files")
-	err := os.RemoveAll(mf.InstallDir)
-	if err == nil {
-		m.emitLog(potID, hpType, "remove.complete", "honeypot removed")
+	if err := os.RemoveAll(installDir); err != nil {
+		// Even if disk removal fails, manifest is gone — log but report success
+		// so the deployment record reflects "removed" rather than "failed".
+		m.emitLog(potID, hpType, "remove.warn", "filesystem cleanup failed: "+err.Error())
 	}
-	return err
+	m.emitLog(potID, hpType, "remove.complete", "honeypot removed")
+	return nil
 }
 
 // IsRunning reports whether a pot has a tracked running process.
@@ -901,7 +933,6 @@ class Output(cowrie.core.output.Output):
                 time.sleep(min(backoff, 10.0))
                 backoff = min(backoff * 2.0, 10.0)
 `
-
 
 // runInstallCmd runs a single install command (argv slice) from dir, streaming output via LogFn.
 func (m *Manager) runInstallCmd(ctx context.Context, potID, hpType, dir string, args []string) error {

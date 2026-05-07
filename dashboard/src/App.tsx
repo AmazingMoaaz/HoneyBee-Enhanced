@@ -8,6 +8,7 @@ import NodeDetailPage from "./pages/NodeDetailPage";
 import EventsPage from "./pages/EventsPage";
 import PotStorePage from "./pages/PotStorePage";
 import UsersPage from "./pages/UsersPage";
+import SystemCheckPage from "./pages/SystemCheckPage";
 import Layout from "./components/Layout";
 
 function Protected({ children }: { children: JSX.Element }) {
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/nodes/:id" element={<NodeDetailPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/potstore" element={<PotStorePage />} />
+        <Route path="/system" element={<SystemCheckPage />} />
         <Route path="/users" element={<UsersPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

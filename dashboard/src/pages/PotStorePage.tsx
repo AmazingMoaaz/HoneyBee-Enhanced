@@ -3,6 +3,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import api from "../api/client";
 import { useAuthStore } from "../stores/auth";
+import { Icons, potIconPath } from "../components/Icons";
 
 /* ── SVG Icon helper ─────────────────────────────── */
 const Ico = ({ d, size = 20, color = "currentColor", sw = 2 }: { d: string; size?: number; color?: string; sw?: number }) => (
@@ -11,26 +12,28 @@ const Ico = ({ d, size = 20, color = "currentColor", sw = 2 }: { d: string; size
   </svg>
 );
 
-/* ── SVG paths ───────────────────────────────────── */
+/* ── SVG paths (page-local shortcuts) ────────────── */
 const P = {
-  sync:    "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
-  search:  "M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z",
-  deploy:  "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
-  check:   "M20 6L9 17l-5-5",
-  close:   "M18 6L6 18M6 6l12 12",
-  arrow:   "M5 12h14M12 5l7 7-7 7",
-  link:    "M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71",
-  clock:   "M12 8v4l3 3M12 22a10 10 0 110-20 10 10 0 010 20z",
-  warn:    "M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
-  shield:  "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
-  event:   "M13 2L3 14h7l-1 8 10-12h-7l1-8z",
+  sync:    Icons.refresh,
+  search:  Icons.search,
+  deploy:  Icons.deploy,
+  check:   Icons.check,
+  close:   Icons.close,
+  arrow:   Icons.arrow,
+  link:    Icons.link,
+  clock:   Icons.clock,
+  warn:    Icons.warn,
+  shield:  Icons.shield,
+  event:   Icons.bolt,
+  hash:    Icons.hash,
+  honey:   Icons.honeypot,
 };
 
 /* ── Static enrichment from README ──────────────────
    Fills in rich data the API catalogue doesn't include:
    emoji, default ports, use-cases, event types.       */
 type PotStatic = {
-  emoji: string;
+  icon: string;
   color: string;
   textColor: string;
   bg: string;
@@ -44,7 +47,7 @@ type PotStatic = {
 
 const POT_STATIC: Record<string, PotStatic> = {
   cowrie: {
-    emoji: "🐄",
+    icon: Icons.cow,
     color: "#F59E0B", textColor: "#92400E", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.35)",
     label: "SSH / Telnet — The Swiss Army Knife of SSH Honeypots",
     features: [
@@ -73,7 +76,7 @@ const POT_STATIC: Record<string, PotStatic> = {
     ],
   },
   honnypotter: {
-    emoji: "🪄",
+    icon: Icons.wand,
     color: "#7C3AED", textColor: "#5B21B6", bg: "rgba(124,58,237,0.1)", border: "rgba(124,58,237,0.28)",
     label: "WordPress Login — The Silent Guardian of Web Applications",
     features: [
@@ -100,7 +103,7 @@ const POT_STATIC: Record<string, PotStatic> = {
     ],
   },
   webtrap: {
-    emoji: "🕸️",
+    icon: Icons.spider,
     color: "#0EA5E9", textColor: "#075985", bg: "rgba(14,165,233,0.1)", border: "rgba(14,165,233,0.28)",
     label: "Web / HTTP Deception Traps",
     features: [
@@ -128,14 +131,14 @@ const POT_STATIC: Record<string, PotStatic> = {
   },
 };
 
-/* Coming-soon enrichment (emoji + colour + protocol summary) */
-const COMING_SOON_META: Record<string, { emoji: string; color: string; protocols: string }> = {
-  dionaea:    { emoji: "🦎", color: "#EF4444", protocols: "FTP · HTTP · SMB · MySQL" },
-  heralding:  { emoji: "📢", color: "#F97316", protocols: "SSH · FTP · HTTP · SMTP · Telnet · VNC" },
-  elasticpot: { emoji: "🔍", color: "#06B6D4", protocols: "HTTP (Elasticsearch)" },
-  mailoney:   { emoji: "📧", color: "#22C55E", protocols: "SMTP" },
-  glastopf:   { emoji: "🌐", color: "#8B5CF6", protocols: "HTTP · HTTPS" },
-  kippo:      { emoji: "🔐", color: "#64748B", protocols: "SSH (legacy)" },
+/* Coming-soon enrichment (icon + colour + protocol summary) */
+const COMING_SOON_META: Record<string, { icon: string; color: string; protocols: string }> = {
+  dionaea:    { icon: Icons.fire,      color: "#EF4444", protocols: "FTP · HTTP · SMB · MySQL" },
+  heralding:  { icon: Icons.megaphone, color: "#F97316", protocols: "SSH · FTP · HTTP · SMTP · Telnet · VNC" },
+  elasticpot: { icon: Icons.searchPot, color: "#06B6D4", protocols: "HTTP (Elasticsearch)" },
+  mailoney:   { icon: Icons.mail,      color: "#22C55E", protocols: "SMTP" },
+  glastopf:   { icon: Icons.web,       color: "#8B5CF6", protocols: "HTTP · HTTPS" },
+  kippo:      { icon: Icons.lock,      color: "#64748B", protocols: "SSH (legacy)" },
 };
 
 /* Static items present in the README roadmap but not yet in the API */
@@ -161,7 +164,7 @@ const EXTRA_COMING_SOON = [
 ];
 
 const META_DEFAULT: PotStatic = {
-  emoji: "🍯",
+  icon: Icons.honeypot,
   color: "#F59E0B", textColor: "#92400E", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.25)",
   label: "Honeypot",
   features: [],
@@ -190,9 +193,11 @@ function DeployModal({ pot, onClose }: { pot: any; onClose: () => void }) {
   const nodes: any[] = nodesData ?? [];
   const online       = nodes.filter(n => n.online);
 
+  // Predict next sequential ID for selected node (best-effort client-side).
+  const selectedNode = nodes.find(n => String(n.id) === String(nodeId));
+
   const deploy = useMutation({
     mutationFn: async () =>
-      // Server auto-assigns pot_id (per-node sequential).
       (await api.post(`/nodes/${nodeId}/deployments`, {
         honeypot_type: pot.id, auto_start: true, config: {},
       })).data,
@@ -202,161 +207,212 @@ function DeployModal({ pot, onClose }: { pot: any; onClose: () => void }) {
     },
   });
 
-  return (
+  return createPortal(
     <div
       style={{
-        position: "fixed", inset: 0, zIndex: 200,
+        position: "fixed", inset: 0, zIndex: 9999,
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: "rgba(15,23,42,0.6)", backdropFilter: "blur(6px)", padding: 16,
+        background: "rgba(15,23,42,0.62)", backdropFilter: "blur(8px)", padding: 16,
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
-        background: "#FFFFFF", borderRadius: 20, width: "100%", maxWidth: 520,
-        boxShadow: "0 32px 96px rgba(15,23,42,0.28)", border: "1px solid rgba(15,23,42,0.06)",
-        overflow: "hidden",
+        background: "#FFFFFF", borderRadius: 22, width: "100%", maxWidth: 500,
+        boxShadow: "0 40px 100px rgba(15,23,42,0.32), 0 0 0 1px rgba(15,23,42,0.06)",
+        overflow: "hidden", animation: "fade-up 0.28s cubic-bezier(.2,.8,.2,1) both",
       }}>
-        {/* Stripe */}
-        <div style={{ height: 4, background: `linear-gradient(90deg, ${meta.color}, ${meta.color}88)` }} />
+        {/* Accent stripe */}
+        <div style={{ height: 4, background: `linear-gradient(90deg, ${meta.color} 0%, ${meta.color}88 100%)` }} />
 
         {/* Header */}
         <div style={{
-          padding: "18px 22px", borderBottom: "1px solid rgba(15,23,42,0.07)",
+          padding: "18px 22px 16px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          background: meta.bg,
+          background: `linear-gradient(135deg, ${meta.bg} 0%, rgba(255,255,255,0) 80%)`,
+          borderBottom: "1px solid rgba(15,23,42,0.07)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
             <div style={{
-              width: 44, height: 44, borderRadius: 12, flexShrink: 0, fontSize: 24,
+              width: 48, height: 48, borderRadius: 14, flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
-              background: "#FFFFFF", border: `2px solid ${meta.border}`,
-            }}>{meta.emoji}</div>
+              background: "#FFFFFF",
+              boxShadow: `0 0 0 2px ${meta.border}, 0 6px 18px ${meta.bg}`,
+            }}>
+              <Ico d={meta.icon} size={26} color={meta.color} sw={1.8} />
+            </div>
             <div>
-              <p style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Deploy {pot.name}</p>
-              <p style={{ fontSize: 11.5, color: meta.textColor, fontWeight: 600, lineHeight: 1.4 }}>{meta.label}</p>
+              <p style={{ fontSize: 16, fontWeight: 900, color: "#0F172A", letterSpacing: "-0.02em" }}>Deploy {pot.name}</p>
+              <p style={{ fontSize: 11.5, color: meta.textColor, fontWeight: 600, marginTop: 1 }}>{meta.label}</p>
             </div>
           </div>
           <button onClick={onClose} style={{
-            background: "none", border: "none", cursor: "pointer",
-            width: 30, height: 30, borderRadius: 8, display: "grid", placeItems: "center",
-          }}>
-            <Ico d={P.close} size={16} color="#94A3B8" />
+            width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(15,23,42,0.08)",
+            background: "#F8FAFC", cursor: "pointer", display: "grid", placeItems: "center",
+            color: "#94A3B8",
+          }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#F1F5F9"; (e.currentTarget as HTMLElement).style.color = "#475569"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#F8FAFC"; (e.currentTarget as HTMLElement).style.color = "#94A3B8"; }}
+          >
+            <Ico d={P.close} size={15} color="currentColor" />
           </button>
         </div>
 
-        <div style={{ padding: "20px 22px" }}>
+        <div style={{ padding: "22px" }}>
           {success ? (
-            /* Success */
-            <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
+            /* ── Success state ── */
+            <div style={{ textAlign: "center", padding: "12px 0 8px" }}>
               <div style={{
-                width: 56, height: 56, borderRadius: "50%",
-                background: "rgba(34,197,94,0.12)", border: "2px solid rgba(34,197,94,0.35)",
-                display: "grid", placeItems: "center", margin: "0 auto 14px", fontSize: 26,
-              }}>✓</div>
-              <p style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", marginBottom: 6 }}>Deployment queued!</p>
-              <p style={{ fontSize: 13, color: "#64748B", marginBottom: 20 }}>
-                <strong>{meta.emoji} {pot.name}</strong>
-                {success.potID ? <> (<code style={{ fontFamily: "monospace", color: "#B45309" }}>{success.potID}</code>)</> : null}
-                {" "}is being installed on <strong>{success.nodeName}</strong>.
-                Track live logs in Node Manager.
+                width: 64, height: 64, borderRadius: "50%",
+                background: "linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.06))",
+                border: "2px solid rgba(34,197,94,0.35)",
+                display: "grid", placeItems: "center", margin: "0 auto 16px",
+              }}>
+                <Ico d={P.check} size={30} color="#15803D" sw={2.5} />
+              </div>
+              <p style={{ fontSize: 17, fontWeight: 900, color: "#0F172A", marginBottom: 8, letterSpacing: "-0.02em" }}>
+                Deployment queued!
+              </p>
+              <p style={{ fontSize: 13.5, color: "#64748B", marginBottom: 6, lineHeight: 1.65, display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+                <Ico d={meta.icon} size={16} color={meta.color} />
+                <strong>{pot.name}</strong> is being installed on{" "}
+                <strong>{success.nodeName}</strong>.
+              </p>
+              {success.potID && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 12px",
+                  borderRadius: 8, background: meta.bg, border: `1px solid ${meta.border}`,
+                  marginBottom: 20, fontSize: 13, fontWeight: 700, color: meta.textColor,
+                }}>
+                  <span style={{ fontSize: 11, opacity: 0.65, fontWeight: 600 }}>Instance</span>
+                  <code style={{ fontFamily: "ui-monospace, monospace", color: meta.color }}>{success.potID}</code>
+                </div>
+              )}
+              {!success.potID && <div style={{ marginBottom: 20 }} />}
+              <p style={{ fontSize: 12, color: "#94A3B8", marginBottom: 22 }}>
+                Track live logs in Node Manager →
               </p>
               <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
                 <a href={`/nodes/${nodeId}`} style={{
-                  padding: "9px 18px", borderRadius: 9, fontSize: 13, fontWeight: 700,
+                  padding: "10px 20px", borderRadius: 10, fontSize: 13.5, fontWeight: 700,
                   background: "linear-gradient(135deg,#FCD34D,#D97706)", color: "#1C0A00",
-                  textDecoration: "none", display: "flex", alignItems: "center", gap: 5,
+                  textDecoration: "none", display: "flex", alignItems: "center", gap: 6,
+                  boxShadow: "0 4px 14px rgba(245,158,11,0.35)",
                 }}>
                   View Node <Ico d={P.arrow} size={13} color="#1C0A00" />
                 </a>
                 <button onClick={onClose} style={{
-                  padding: "9px 18px", borderRadius: 9, fontSize: 13, fontWeight: 700,
-                  background: "#F8FAFC", border: "1.5px solid rgba(15,23,42,0.12)", color: "#64748B", cursor: "pointer",
+                  padding: "10px 20px", borderRadius: 10, fontSize: 13.5, fontWeight: 700,
+                  background: "#F8FAFC", border: "1.5px solid rgba(15,23,42,0.12)",
+                  color: "#64748B", cursor: "pointer",
                 }}>Close</button>
               </div>
             </div>
           ) : (
             <>
-              {/* Quick-facts preview */}
+              {/* Quick-facts: ports */}
               {Object.keys(meta.defaultPorts).length > 0 && (
                 <div style={{
-                  padding: "10px 14px", borderRadius: 10, marginBottom: 20,
+                  padding: "12px 16px", borderRadius: 12, marginBottom: 20,
                   background: meta.bg, border: `1px solid ${meta.border}`,
-                  display: "flex", flexWrap: "wrap", gap: 18, alignItems: "center",
+                  display: "flex", flexWrap: "wrap", gap: 20, alignItems: "center",
                 }}>
                   {Object.entries(meta.defaultPorts).map(([proto, port]) => (
-                    <div key={proto} style={{ textAlign: "center" }}>
-                      <p style={{ fontSize: 10, fontWeight: 700, color: meta.textColor, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 1 }}>
+                    <div key={proto} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: meta.textColor, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                         {proto}
-                      </p>
-                      <p style={{ fontSize: 16, fontWeight: 900, color: meta.color, fontFamily: "monospace" }}>{port}</p>
+                      </span>
+                      <span style={{ fontSize: 18, fontWeight: 900, color: meta.color, fontFamily: "monospace" }}>{port}</span>
                     </div>
                   ))}
-                  <div style={{ width: 1, height: 32, background: `${meta.border}` }} />
-                  <p style={{ fontSize: 11.5, color: meta.textColor, lineHeight: 1.5 }}>
-                    Default ports — override in config
-                  </p>
+                  <div style={{ width: 1, height: 24, background: meta.border, flexShrink: 0 }} />
+                  <p style={{ fontSize: 11.5, color: meta.textColor, opacity: 0.85 }}>Default ports — overridable</p>
                 </div>
               )}
 
               {/* Node select */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 6 }}>
+              <div style={{ marginBottom: 18 }}>
+                <label style={{
+                  fontSize: 11, fontWeight: 700, color: "#64748B", display: "block",
+                  marginBottom: 7, textTransform: "uppercase", letterSpacing: "0.09em",
+                }}>
                   Target Node <span style={{ color: "#EF4444" }}>*</span>
                 </label>
                 {nodesLoading ? (
-                  <p style={{ fontSize: 13, color: "#94A3B8" }}>Loading nodes…</p>
+                  <div style={{
+                    padding: "12px 14px", borderRadius: 10, background: "#F8FAFC",
+                    border: "1.5px solid rgba(15,23,42,0.08)", color: "#94A3B8", fontSize: 13,
+                  }}>
+                    Loading nodes…
+                  </div>
                 ) : online.length === 0 ? (
                   <div style={{
-                    padding: "12px 14px", borderRadius: 10, fontSize: 13,
-                    background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)",
-                    color: "#DC2626", display: "flex", gap: 8, alignItems: "center",
+                    padding: "14px 16px", borderRadius: 10, fontSize: 13,
+                    background: "rgba(239,68,68,0.06)", border: "1.5px solid rgba(239,68,68,0.2)",
+                    color: "#DC2626", display: "flex", gap: 9, alignItems: "center",
                   }}>
-                    <Ico d={P.warn} size={15} color="#DC2626" />
-                    No online nodes. Start a node first.
+                    <Ico d={P.warn} size={16} color="#DC2626" />
+                    <span>No online nodes — <strong>start a node first</strong> to deploy.</span>
                   </div>
                 ) : (
-                  <select value={nodeId} onChange={e => setNodeId(e.target.value)} style={{
-                    width: "100%", padding: "10px 14px", borderRadius: 10, fontSize: 14,
-                    border: "1.5px solid rgba(15,23,42,0.12)", background: "#F8FAFC", color: "#0F172A",
-                    outline: "none", cursor: "pointer",
-                  }}>
+                  <select value={nodeId} onChange={e => setNodeId(e.target.value)} className="input">
                     <option value="">— Select a node —</option>
                     {online.map((n: any) => (
                       <option key={n.id} value={n.id}>{n.name}</option>
                     ))}
                   </select>
                 )}
-                <p style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>
-                  Only online nodes shown. {nodes.length - online.length} offline.
-                </p>
+                {online.length > 0 && (
+                  <p style={{ fontSize: 11, color: "#94A3B8", marginTop: 5 }}>
+                    {online.length} online · {nodes.length - online.length} offline
+                    {selectedNode && <> · deploying to <strong style={{ color: "#475569" }}>{selectedNode.name}</strong></>}
+                  </p>
+                )}
               </div>
 
-              {/* Instance ID — auto */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 6 }}>
+              {/* Instance ID — auto-assigned */}
+              <div style={{ marginBottom: 22 }}>
+                <label style={{
+                  fontSize: 11, fontWeight: 700, color: "#64748B", display: "block",
+                  marginBottom: 7, textTransform: "uppercase", letterSpacing: "0.09em",
+                }}>
                   Instance ID
                 </label>
                 <div style={{
-                  padding: "10px 14px", borderRadius: 10,
-                  background: "linear-gradient(135deg, rgba(252,211,77,0.12), rgba(245,158,11,0.04))",
-                  border: "1px solid rgba(245,158,11,0.28)",
+                  padding: "13px 16px", borderRadius: 11,
+                  background: "linear-gradient(135deg, rgba(252,211,77,0.14), rgba(245,158,11,0.04))",
+                  border: "1.5px solid rgba(245,158,11,0.28)",
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                 }}>
-                  <code style={{ fontSize: 13.5, fontWeight: 800, color: "#0F172A", fontFamily: "ui-monospace, monospace" }}>
-                    {pot.id}-{`{n}`}
-                  </code>
-                  <span style={{ fontSize: 11, color: "#B45309", fontWeight: 600 }}>auto · per node</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Ico d={P.hash} size={18} color="#B45309" />
+                    <div>
+                      <p style={{ fontSize: 10, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>
+                        Auto-assigned
+                      </p>
+                      <p style={{ fontSize: 13, color: "#64748B", fontFamily: "ui-monospace, monospace" }}>
+                        <span style={{ color: "#B45309", fontWeight: 700 }}>{pot.id}</span>
+                        <span style={{ color: "#94A3B8" }}>-1, -{pot.id}-2, …</span>
+                      </p>
+                    </div>
+                  </div>
+                  <span style={{
+                    padding: "3px 10px", borderRadius: 99, fontSize: 10.5, fontWeight: 700,
+                    background: "rgba(245,158,11,0.15)", color: "#92400E",
+                    border: "1px solid rgba(245,158,11,0.3)",
+                  }}>per node</span>
                 </div>
-                <p style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>
-                  Sequential ID assigned automatically — no two pots collide on the same node.
+                <p style={{ fontSize: 11, color: "#94A3B8", marginTop: 5, lineHeight: 1.5 }}>
+                  Sequential — no two {pot.name} instances share an ID on the same node.
                 </p>
               </div>
 
               {deploy.isError && (
                 <div style={{
-                  padding: "10px 14px", borderRadius: 9, marginBottom: 16, fontSize: 13,
-                  background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#DC2626",
+                  padding: "11px 15px", borderRadius: 10, marginBottom: 18, fontSize: 13,
+                  background: "rgba(239,68,68,0.07)", border: "1.5px solid rgba(239,68,68,0.2)",
+                  color: "#DC2626", display: "flex", gap: 8, alignItems: "flex-start",
                 }}>
+                  <Ico d={P.warn} size={15} color="#DC2626" />
                   Deployment failed. Verify the node is reachable and online.
                 </div>
               )}
@@ -365,28 +421,22 @@ function DeployModal({ pot, onClose }: { pot: any; onClose: () => void }) {
                 <button
                   onClick={() => deploy.mutate()}
                   disabled={!nodeId || deploy.isPending}
-                  style={{
-                    flex: 1, padding: "11px 0", borderRadius: 10, fontSize: 14, fontWeight: 700, border: "none",
-                    background: !nodeId
-                      ? "#F1F5F9"
-                      : "linear-gradient(135deg,#FCD34D 0%,#F59E0B 50%,#D97706 100%)",
-                    cursor: !nodeId ? "not-allowed" : "pointer",
-                    color: !nodeId ? "#94A3B8" : "#1C0A00",
-                    boxShadow: !nodeId ? "none" : "0 4px 14px rgba(245,158,11,0.35)",
-                  }}
+                  className="btn btn-primary"
+                  style={{ flex: 1, opacity: !nodeId ? 0.45 : 1 }}
                 >
-                  {deploy.isPending ? "Deploying…" : `Deploy ${meta.emoji} ${pot.name}`}
+                  {deploy.isPending
+                    ? "Deploying…"
+                    : <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Ico d={meta.icon} size={15} color="currentColor" /> Deploy {pot.name}</span>
+                  }
                 </button>
-                <button onClick={onClose} style={{
-                  padding: "11px 18px", borderRadius: 10, fontSize: 14, fontWeight: 700,
-                  background: "#F8FAFC", border: "1.5px solid rgba(15,23,42,0.12)", color: "#64748B", cursor: "pointer",
-                }}>Cancel</button>
+                <button onClick={onClose} className="btn btn-secondary">Cancel</button>
               </div>
             </>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -407,15 +457,15 @@ function PotCard({ pot, onDeploy }: { pot: any; onDeploy: () => void }) {
 
       <div style={{ padding: "18px 18px 14px", flex: 1, display: "flex", flexDirection: "column" }}>
 
-        {/* Header: emoji + name + badges */}
+        {/* Header: icon + name + badges */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 12 }}>
           <div style={{
             width: 52, height: 52, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, fontSize: 26,
+            flexShrink: 0,
             background: meta.bg, border: `1.5px solid ${meta.border}`,
             boxShadow: `0 4px 16px ${meta.bg}`,
           }}>
-            {meta.emoji}
+            <Ico d={meta.icon} size={28} color={meta.color} sw={1.8} />
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -425,8 +475,9 @@ function PotCard({ pot, onDeploy }: { pot: any; onDeploy: () => void }) {
                 <span style={{
                   padding: "2px 8px", borderRadius: 99, fontSize: 10, fontWeight: 700,
                   background: "rgba(34,197,94,0.12)", color: "#15803D", border: "1px solid rgba(34,197,94,0.3)",
+                  display: "inline-flex", alignItems: "center", gap: 4,
                 }}>
-                  ✓ Stable {pot.version}
+                  <Ico d={P.check} size={10} color="#15803D" sw={3} /> Stable {pot.version}
                 </span>
               )}
             </div>
@@ -476,76 +527,183 @@ function PotCard({ pot, onDeploy }: { pot: any; onDeploy: () => void }) {
       {infoModal && createPortal(
         <div
           style={{
-            position: "fixed", inset: 0, zIndex: 200,
+            position: "fixed", inset: 0, zIndex: 9999,
             display: "flex", alignItems: "center", justifyContent: "center",
-            background: "rgba(15,23,42,0.55)", backdropFilter: "blur(6px)", padding: 16,
+            background: "rgba(15,23,42,0.65)", backdropFilter: "blur(8px)", padding: 16,
           }}
           onClick={e => { if (e.target === e.currentTarget) setInfoModal(false); }}
         >
           <div style={{
-            background: "#FFFFFF", borderRadius: 20, width: "100%", maxWidth: 480,
-            boxShadow: "0 32px 96px rgba(15,23,42,0.28)", border: "1px solid rgba(15,23,42,0.06)",
-            overflow: "hidden",
+            background: "#FFFFFF", borderRadius: 22, width: "100%", maxWidth: 520,
+            boxShadow: "0 40px 100px rgba(15,23,42,0.32), 0 0 0 1px rgba(15,23,42,0.06)",
+            overflow: "hidden", animation: "fade-up 0.26s cubic-bezier(.2,.8,.2,1) both",
+            display: "flex", flexDirection: "column", maxHeight: "85vh",
           }}>
-            <div style={{ height: 4, background: `linear-gradient(90deg, ${meta.color}, ${meta.color}88)` }} />
+            {/* Accent stripe */}
+            <div style={{ height: 4, background: `linear-gradient(90deg, ${meta.color} 0%, ${meta.color}66 100%)`, flexShrink: 0 }} />
+
             {/* Modal header */}
             <div style={{
-              padding: "16px 20px", borderBottom: "1px solid rgba(15,23,42,0.07)",
+              padding: "18px 22px 16px", borderBottom: "1px solid rgba(15,23,42,0.07)",
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              background: meta.bg,
+              background: `linear-gradient(135deg, ${meta.bg} 0%, rgba(255,255,255,0) 70%)`,
+              flexShrink: 0,
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 22 }}>{meta.emoji}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+                <div style={{
+                  width: 50, height: 50, borderRadius: 14, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "#FFFFFF",
+                  boxShadow: `0 0 0 2px ${meta.border}, 0 6px 18px ${meta.bg}`,
+                }}>
+                  <Ico d={meta.icon} size={26} color={meta.color} sw={1.8} />
+                </div>
                 <div>
-                  <p style={{ fontWeight: 800, fontSize: 15, color: "#0F172A" }}>{pot.name}</p>
-                  <p style={{ fontSize: 11.5, color: meta.textColor, fontWeight: 600 }}>{meta.label}</p>
+                  <p style={{ fontWeight: 900, fontSize: 16, color: "#0F172A", letterSpacing: "-0.02em" }}>{pot.name}</p>
+                  <p style={{ fontSize: 11.5, color: meta.textColor, fontWeight: 600, marginTop: 2, lineHeight: 1.4 }}>{meta.label}</p>
                 </div>
               </div>
               <button onClick={() => setInfoModal(false)} style={{
-                background: "none", border: "none", cursor: "pointer",
-                width: 30, height: 30, borderRadius: 8, display: "grid", placeItems: "center",
-              }}>
-                <Ico d={P.close} size={16} color="#94A3B8" />
+                width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(15,23,42,0.08)",
+                background: "#F8FAFC", cursor: "pointer", display: "grid", placeItems: "center",
+                color: "#94A3B8", flexShrink: 0,
+              }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#F1F5F9"; (e.currentTarget as HTMLElement).style.color = "#475569"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#F8FAFC"; (e.currentTarget as HTMLElement).style.color = "#94A3B8"; }}
+              >
+                <Ico d={P.close} size={15} color="currentColor" />
               </button>
             </div>
+
             {/* Tab bar */}
-            <div style={{ display: "flex", borderBottom: "1px solid rgba(15,23,42,0.07)", padding: "0 20px" }}>
+            <div style={{
+              display: "flex", borderBottom: "1px solid rgba(15,23,42,0.08)",
+              padding: "0 22px", flexShrink: 0, background: "#FAFAFA",
+            }}>
               {(["features","events","usecases"] as const).map(tab => {
-                const labels: Record<string,string> = { features: "Features", events: "Events", usecases: "Use Cases" };
+                const TAB_META: Record<string, { label: string; count: number; icon: string }> = {
+                  features: { label: "Features", count: features.length, icon: P.check },
+                  events:   { label: "Events",   count: meta.eventTypes.length, icon: P.event },
+                  usecases: { label: "Use Cases", count: meta.useCases.length,  icon: P.shield },
+                };
+                const { label, count, icon } = TAB_META[tab];
                 const active = infoTab === tab;
                 return (
                   <button key={tab} onClick={() => setInfoTab(tab)} style={{
-                    padding: "10px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                    padding: "11px 14px 10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
                     background: "none", border: "none",
-                    borderBottom: active ? `2px solid ${meta.color}` : "2px solid transparent",
+                    borderBottom: active ? `2.5px solid ${meta.color}` : "2.5px solid transparent",
                     color: active ? meta.color : "#94A3B8",
-                    marginBottom: -1,
+                    marginBottom: -1, display: "flex", alignItems: "center", gap: 6,
+                    transition: "color 0.15s",
                   }}>
-                    {labels[tab]}
+                    <Ico d={icon} size={12} color="currentColor" sw={2.5} />
+                    {label}
+                    <span style={{
+                      padding: "1px 6px", borderRadius: 99, fontSize: 10, fontWeight: 800,
+                      background: active ? `${meta.color}20` : "rgba(148,163,184,0.12)",
+                      color: active ? meta.color : "#94A3B8",
+                    }}>{count}</span>
                   </button>
                 );
               })}
             </div>
+
             {/* Modal body */}
-            <div style={{ padding: "20px", maxHeight: "40vh", overflowY: "auto" }}>
-              {infoTab === "features" && features.map((f: string) => (
-                <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
-                  <div style={{ marginTop: 1, flexShrink: 0 }}><Ico d={P.check} size={12} color={meta.color} /></div>
-                  <span style={{ fontSize: 13, color: "#475569", lineHeight: 1.5 }}>{f}</span>
+            <div style={{ padding: "20px 22px", overflowY: "auto", flex: 1 }}>
+              {infoTab === "features" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {features.map((f: string) => (
+                    <div key={f} style={{
+                      display: "flex", alignItems: "flex-start", gap: 10,
+                      padding: "9px 12px", borderRadius: 9,
+                      background: "rgba(248,250,252,0.9)", border: "1px solid rgba(15,23,42,0.06)",
+                    }}>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                        background: `${meta.color}18`, border: `1px solid ${meta.color}40`,
+                        display: "grid", placeItems: "center", marginTop: 0.5,
+                      }}>
+                        <Ico d={P.check} size={11} color={meta.color} sw={2.5} />
+                      </div>
+                      <span style={{ fontSize: 13, color: "#334155", lineHeight: 1.55 }}>{f}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {infoTab === "events" && meta.eventTypes.map(ev => (
-                <div key={ev.id} style={{ marginBottom: 12 }}>
-                  <code style={{ fontSize: 11.5, color: meta.color, fontFamily: "monospace", fontWeight: 700 }}>{ev.id}</code>
-                  <p style={{ fontSize: 12.5, color: "#64748B", marginTop: 3, lineHeight: 1.5 }}>{ev.desc}</p>
+              )}
+              {infoTab === "events" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {meta.eventTypes.map((ev, i) => (
+                    <div key={ev.id} style={{
+                      padding: "12px 14px", borderRadius: 11,
+                      background: "#FAFAFA", border: "1px solid rgba(15,23,42,0.07)",
+                      borderLeft: `3px solid ${meta.color}`,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                        <span style={{
+                          padding: "2px 7px", borderRadius: 6, fontSize: 10.5, fontWeight: 700,
+                          background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`,
+                          fontFamily: "ui-monospace, monospace",
+                        }}>{ev.id}</span>
+                        <span style={{
+                          padding: "1px 6px", borderRadius: 99, fontSize: 9.5, fontWeight: 700,
+                          background: "rgba(148,163,184,0.15)", color: "#64748B",
+                        }}>#{i + 1}</span>
+                      </div>
+                      <p style={{ fontSize: 12.5, color: "#64748B", lineHeight: 1.55 }}>{ev.desc}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {infoTab === "usecases" && meta.useCases.map(u => (
-                <div key={u} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
-                  <div style={{ marginTop: 1, flexShrink: 0 }}><Ico d={P.shield} size={12} color={meta.color} /></div>
-                  <span style={{ fontSize: 13, color: "#475569", lineHeight: 1.5 }}>{u}</span>
+              )}
+              {infoTab === "usecases" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {meta.useCases.map((u, i) => (
+                    <div key={u} style={{
+                      display: "flex", alignItems: "flex-start", gap: 10,
+                      padding: "9px 12px", borderRadius: 9,
+                      background: "rgba(248,250,252,0.9)", border: "1px solid rgba(15,23,42,0.06)",
+                    }}>
+                      <div style={{
+                        width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+                        background: `${meta.color}14`, border: `1px solid ${meta.color}35`,
+                        display: "grid", placeItems: "center", marginTop: 0.5,
+                        fontSize: 11, fontWeight: 900, color: meta.color,
+                      }}>
+                        {i + 1}
+                      </div>
+                      <span style={{ fontSize: 13, color: "#334155", lineHeight: 1.55 }}>{u}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div style={{
+              padding: "14px 22px", borderTop: "1px solid rgba(15,23,42,0.07)",
+              display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-end",
+              background: "#FAFAFA", flexShrink: 0,
+            }}>
+              <a href={pot.git_url} target="_blank" rel="noreferrer" style={{
+                padding: "8px 14px", borderRadius: 9, fontSize: 12.5, fontWeight: 700,
+                border: "1.5px solid rgba(15,23,42,0.1)", color: "#64748B", background: "#F8FAFC",
+                textDecoration: "none", display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <Ico d={P.link} size={13} color="#94A3B8" /> Source
+              </a>
+              <button
+                onClick={() => { setInfoModal(false); onDeploy(); }}
+                style={{
+                  padding: "9px 20px", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  border: `1.5px solid ${meta.border}`,
+                  background: `linear-gradient(135deg, ${meta.color}30, ${meta.color}15)`,
+                  color: meta.textColor,
+                  display: "flex", alignItems: "center", gap: 7,
+                }}
+              >
+                <Ico d={P.deploy} size={13} color={meta.textColor} />
+                Deploy <Ico d={meta.icon} size={13} color={meta.textColor} />
+              </button>
             </div>
           </div>
         </div>,
@@ -597,7 +755,7 @@ function PotCard({ pot, onDeploy }: { pot: any; onDeploy: () => void }) {
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `linear-gradient(135deg, ${meta.color}22 0%, ${meta.color}11 100%)`; }}
           >
             <Ico d={P.deploy} size={14} color={meta.textColor} />
-            Deploy {meta.emoji}
+            Deploy <Ico d={meta.icon} size={14} color={meta.textColor} />
           </button>
         </div>
       </div>
@@ -612,12 +770,12 @@ function ComingSoonCard({ pot }: { pot: any }) {
     <div className="card" style={{ padding: "16px 18px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 11, flexShrink: 0, fontSize: 20,
+          width: 40, height: 40, borderRadius: 11, flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
           background: cs ? `${cs.color}12` : "rgba(148,163,184,0.1)",
           border: cs ? `1.5px solid ${cs.color}44` : "1.5px solid rgba(148,163,184,0.2)",
         }}>
-          {cs?.emoji ?? "🍯"}
+          <Ico d={cs?.icon ?? Icons.honeypot} size={22} color={cs?.color ?? "#94A3B8"} sw={1.8} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

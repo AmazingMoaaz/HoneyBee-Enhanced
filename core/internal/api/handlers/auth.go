@@ -68,6 +68,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing fields")
 		return
 	}
+	if len(req.Password) < 8 {
+		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
 	if existing, _ := h.Store.GetUserByEmail(r.Context(), req.Email); existing != nil {
 		writeError(w, http.StatusConflict, "email exists")
 		return

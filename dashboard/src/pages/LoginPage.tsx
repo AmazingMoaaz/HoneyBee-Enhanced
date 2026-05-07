@@ -19,7 +19,7 @@ export default function LoginPage() {
       await login(email, pass);
       nav("/");
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? "Invalid credentials");
+      setErr(e?.response?.data?.error ?? e?.message ?? "Invalid credentials");
     } finally { setLoading(false); }
   }
 

@@ -5,8 +5,8 @@ import { useWebSocket } from "../hooks/useWebSocket";
 interface Stats {
   total_events: number;
   unique_ips: number;
-  by_type: { event_type: string; count: number }[];
-  by_ip:   { source_ip:  string; count: number }[];
+  by_type: { type: string; count: number }[];
+  by_ip:   { ip: string;  count: number }[];
 }
 
 /* ── Inline SVG icon helper ── */
@@ -103,10 +103,10 @@ export default function DashboardPage() {
               ? <p className="text-sm" style={{ color: "#94A3B8" }}>No events captured yet</p>
               : <ul className="space-y-3">
                   {(stats?.by_type ?? []).map((r) => (
-                    <li key={r.event_type} className="flex items-center justify-between gap-3">
+                    <li key={r.type} className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#F59E0B" }} />
-                        <span className="text-[13px] font-mono font-medium" style={{ color: "#0F172A" }}>{r.event_type}</span>
+                        <span className="text-[13px] font-mono font-medium" style={{ color: "#0F172A" }}>{r.type}</span>
                       </div>
                       <span className="badge badge-honey">{r.count.toLocaleString()}</span>
                     </li>
@@ -127,10 +127,10 @@ export default function DashboardPage() {
               ? <p className="text-sm" style={{ color: "#94A3B8" }}>No attackers yet</p>
               : <ul className="space-y-3">
                   {(stats?.by_ip ?? []).map((r) => (
-                    <li key={r.source_ip} className="flex items-center justify-between gap-3">
+                    <li key={r.ip} className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#DC2626" }} />
-                        <span className="text-[13px] font-mono font-medium" style={{ color: "#0F172A" }}>{r.source_ip}</span>
+                        <span className="text-[13px] font-mono font-medium" style={{ color: "#0F172A" }}>{r.ip}</span>
                       </div>
                       <span className="badge badge-honey">{r.count.toLocaleString()}</span>
                     </li>

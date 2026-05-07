@@ -48,6 +48,14 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.Role == "" {
 		req.Role = models.RoleViewer
 	}
+	if req.Email == "" || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "email and password required")
+		return
+	}
+	if len(req.Password) < 8 {
+		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "hash")

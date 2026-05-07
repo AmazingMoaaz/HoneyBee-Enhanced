@@ -33,6 +33,9 @@ func main() {
 	}
 
 	logger := newLogger(cfg.Log.Level)
+	if cfg.JWT.Secret == "change-me" {
+		logger.Warn("SECURITY: JWT_SECRET is set to the insecure default 'change-me' — set the JWT_SECRET environment variable before deploying")
+	}
 	logger.Info("starting honeybee-enhanced core",
 		slog.String("http", cfg.Server.HTTPAddr),
 		slog.String("node", cfg.Server.NodeAddr))

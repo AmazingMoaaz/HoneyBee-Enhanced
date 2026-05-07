@@ -10,6 +10,9 @@ import (
 	"github.com/honeybee-enhanced/shared/models"
 )
 
+// ErrDuplicatePotID is returned by CreateDeployment when (node_id, pot_id) already exists.
+var ErrDuplicatePotID = errors.New("duplicate pot_id for node")
+
 // CreateDeployment inserts a deployment row and returns its ID.
 func (s *Store) CreateDeployment(ctx context.Context, orgID, nodeID int64, potID, potType, configJSON string) (int64, error) {
 	res, err := s.DB.ExecContext(ctx,
@@ -17,6 +20,11 @@ func (s *Store) CreateDeployment(ctx context.Context, orgID, nodeID int64, potID
 		 VALUES (?, ?, ?, ?, ?, 'pending')`,
 		orgID, nodeID, potID, potType, configJSON)
 	if err != nil {
+		// MySQL duplicate-key error: surface as a typed sentinel so the API can return 409.
+		msg := err.Error()
+		if strings.Contains(msg, "Error 1062") || strings.Contains(msg, "Duplicate entry") || strings.Contains(msg, "uq_deploy_node_pot") {
+			return 0, ErrDuplicatePotID
+		}
 		return 0, fmt.Errorf("insert deployment: %w", err)
 	}
 	return res.LastInsertId()

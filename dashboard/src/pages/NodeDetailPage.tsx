@@ -26,15 +26,20 @@ const I = {
   check:   "M20 6L9 17l-5-5",
   shield:  "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
   install: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 12l-4 4-4-4M12 3v13",
+  honey:   "M5 8h14l-1 11a3 3 0 01-3 3H9a3 3 0 01-3-3L5 8zM5 8V6a2 2 0 012-2h10a2 2 0 012 2v2M9 12h6M9 16h6",
+  bee:     "M12 2a4 4 0 014 4v1h-8V6a4 4 0 014-4zM4 11h16M4 15h16M8 7v14a4 4 0 008 0V7",
+  linux:   "M12 2a5 5 0 00-5 5v3a4 4 0 01-1.5 3.1l-1.2 1A2 2 0 003 16v.5A1.5 1.5 0 004.5 18h15a1.5 1.5 0 001.5-1.5V16a2 2 0 00-1.3-1.9l-1.2-1A4 4 0 0117 10V7a5 5 0 00-5-5z",
+  windows: "M3 5l8-1v8H3V5zM13 4l8-1v9h-8V4zM3 13h8v8l-8-1v-7zM13 13h8v9l-8-1v-8z",
 };
 
 /* ── Status config ─────────────────────────────── */
 const STATUS: Record<string, { bg: string; color: string; border: string; label: string; dot: string }> = {
-  running: { bg: "rgba(34,197,94,0.1)",    color: "#16A34A", border: "rgba(34,197,94,0.3)",    label: "Running",  dot: "#22C55E" },
-  failed:  { bg: "rgba(239,68,68,0.1)",    color: "#DC2626", border: "rgba(239,68,68,0.3)",    label: "Failed",   dot: "#EF4444" },
-  pending: { bg: "rgba(245,158,11,0.1)",   color: "#B45309", border: "rgba(245,158,11,0.3)",   label: "Pending",  dot: "#F59E0B" },
-  stopped: { bg: "rgba(100,116,139,0.08)", color: "#64748B", border: "rgba(100,116,139,0.2)",  label: "Stopped",  dot: "#94A3B8" },
-  removed: { bg: "rgba(100,116,139,0.05)", color: "#94A3B8", border: "rgba(100,116,139,0.12)", label: "Removed",  dot: "#CBD5E1" },
+  running:    { bg: "rgba(34,197,94,0.1)",    color: "#16A34A", border: "rgba(34,197,94,0.3)",    label: "Running",    dot: "#22C55E" },
+  failed:     { bg: "rgba(239,68,68,0.1)",    color: "#DC2626", border: "rgba(239,68,68,0.3)",    label: "Failed",     dot: "#EF4444" },
+  pending:    { bg: "rgba(245,158,11,0.1)",   color: "#B45309", border: "rgba(245,158,11,0.3)",   label: "Pending",    dot: "#F59E0B" },
+  installing: { bg: "rgba(59,130,246,0.1)",   color: "#1D4ED8", border: "rgba(59,130,246,0.3)",   label: "Installing", dot: "#3B82F6" },
+  stopped:    { bg: "rgba(100,116,139,0.08)", color: "#64748B", border: "rgba(100,116,139,0.2)",  label: "Stopped",    dot: "#94A3B8" },
+  removed:    { bg: "rgba(100,116,139,0.05)", color: "#94A3B8", border: "rgba(100,116,139,0.12)", label: "Removed",    dot: "#CBD5E1" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -46,7 +51,7 @@ function StatusBadge({ status }: { status: string }) {
       background: s.bg, color: s.color, border: `1px solid ${s.border}`,
     }}>
       <span style={{ width: 5, height: 5, borderRadius: "50%", background: s.dot,
-        animation: status === "running" ? "pulse-green 2s infinite" : status === "pending" ? "pulse-green 1.2s infinite" : "none",
+        animation: status === "running" ? "pulse-green 2s infinite" : (status === "pending" || status === "installing") ? "pulse-green 1.2s infinite" : "none",
       }} />
       {s.label}
     </span>
@@ -121,7 +126,7 @@ function DeployModal({
           background: "rgba(245,158,11,0.06)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 22 }}>🍯</span>
+            <Ico d={I.honey} size={22} color="#D97706" sw={1.8} />
             <div>
               <p style={{ fontWeight: 800, fontSize: 15, color: "#0F172A" }}>Deploy a Honeypot</p>
               <p style={{ fontSize: 12, color: "#B45309", fontWeight: 600 }}>Pick a type — instance ID is assigned automatically</p>
@@ -184,7 +189,11 @@ function DeployModal({
               marginTop: 14, padding: "10px 14px", borderRadius: 9, fontSize: 13,
               background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#DC2626",
             }}>
-              Deployment failed. Verify the node is reachable and online.
+              {(() => {
+                const e: any = deploy.error;
+                const msg = e?.response?.data?.error || e?.message || "Deployment failed.";
+                return msg;
+              })()}
             </div>
           )}
 
@@ -211,7 +220,7 @@ export default function NodeDetailPage() {
   const { id }   = useParams();
   const qc       = useQueryClient();
   const navigate = useNavigate();
-  const [tab,              setTab]              = useState<"deployments" | "install" | "danger">("deployments");
+  const [tab,              setTab]              = useState<"deployments" | "install" | "uninstall" | "danger">("deployments");
   const [activeDeployID,   setActiveDeployID]   = useState<number | null>(null);
   const [showDeployModal,  setShowDeployModal]  = useState(false);
   const [confirmUninstall, setConfirmUninstall] = useState(false);
@@ -255,7 +264,9 @@ export default function NodeDetailPage() {
 
   if (isLoading) return (
     <div style={{ textAlign: "center", padding: "80px 0" }}>
-      <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.4 }}>🐝</div>
+      <div style={{ marginBottom: 12, opacity: 0.4, display: "flex", justifyContent: "center" }}>
+        <Ico d={I.honey} size={36} color="#94A3B8" sw={1.6} />
+      </div>
       <p style={{ color: "#94A3B8", fontWeight: 600 }}>Loading node…</p>
     </div>
   );
@@ -342,10 +353,10 @@ export default function NodeDetailPage() {
                     {online ? "Online" : "Offline"}
                   </span>
                 </div>
-                <span style={{ fontSize: 12, fontFamily: "monospace", color: "#94A3B8" }}>ID #{node.id}</span>
+                <span style={{ fontSize: 12, fontFamily: "monospace", color: "#94A3B8" }}>ID #{node.display_order}</span>
                 <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94A3B8" }}>
                   <Ico d={I.clock} size={12} color="#CBD5E1" />
-                  {relTime(node.last_seen)}
+                  {relTime(node.last_heartbeat)}
                 </span>
               </div>
             </div>
@@ -446,6 +457,7 @@ export default function NodeDetailPage() {
         {([
           { key: "deployments", label: `Deployments`, count: deps.length },
           { key: "install",     label: "Install / Reinstall",  count: null },
+          { key: "uninstall",   label: "Uninstall Agent",      count: null },
           { key: "danger",      label: "Danger Zone",          count: null },
         ] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
@@ -473,7 +485,9 @@ export default function NodeDetailPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {deps.length === 0 ? (
             <div className="card" style={{ padding: "56px 24px", textAlign: "center" }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>🍯</div>
+              <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
+                <Ico d={I.honey} size={36} color="#F59E0B" sw={1.6} />
+              </div>
               <p style={{ fontWeight: 800, fontSize: 15, color: "#0F172A", marginBottom: 6 }}>No deployments yet</p>
               <p style={{ fontSize: 13, color: "#64748B", marginBottom: 20 }}>
                 Deploy your first honeypot on this node.
@@ -510,7 +524,6 @@ export default function NodeDetailPage() {
                           background: "rgba(15,23,42,0.04)", padding: "1px 7px", borderRadius: 5,
                           border: "1px solid rgba(15,23,42,0.07)", fontWeight: 600,
                         }}>{d.honeypot_type}</span>
-                        <span style={{ fontSize: 11.5, fontFamily: "monospace", color: "#CBD5E1" }}>#{d.id}</span>
                       </div>
                     </div>
                   </div>
@@ -617,7 +630,8 @@ export default function NodeDetailPage() {
             return (
               <div key={plat} style={{ marginBottom: 16 }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: "#64748B", marginBottom: 7, display: "flex", alignItems: "center", gap: 6 }}>
-                  {plat === "linux" ? "🐧" : "🪟"} {plat === "linux" ? "Linux / macOS" : "Windows — PowerShell (Admin)"}
+                  <Ico d={plat === "linux" ? I.linux : I.windows} size={14} color="#64748B" />
+                  {plat === "linux" ? "Linux / macOS" : "Windows — PowerShell (Admin)"}
                 </p>
                 <div style={{ display: "flex", gap: 8 }}>
                   <code style={{
@@ -652,6 +666,67 @@ export default function NodeDetailPage() {
             fontSize: 12.5, color: "#92400E", lineHeight: 1.6,
           }}>
             <strong>Note:</strong> Replace <code style={{ background: "rgba(245,158,11,0.15)", padding: "1px 5px", borderRadius: 4 }}>YOUR_TOKEN</code> with the token shown when this node was registered. Lost it? Delete the node and re-register.
+          </div>
+        </div>
+      )}
+
+      {/* ── UNINSTALL tab ── */}
+      {tab === "uninstall" && (
+        <div className="card" style={{ padding: "24px 26px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(100,116,139,0.08)", display: "grid", placeItems: "center", border: "1.5px solid rgba(100,116,139,0.2)" }}>
+              <Ico d={I.trash} size={18} color="#64748B" />
+            </div>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Uninstall Agent</h3>
+          </div>
+          <p style={{ fontSize: 13, color: "#64748B", marginBottom: 22, lineHeight: 1.6 }}>
+            Run one of these commands as <strong>root / admin</strong> on the target machine to stop the scheduled task/service, remove the binary, and wipe local data. This <em>does not</em> delete the node from the dashboard — use <strong>Danger Zone</strong> for that.
+          </p>
+
+          {(["linux", "windows"] as const).map(plat => {
+            const cmd = plat === "linux"
+              ? `curl -fsSL "${base}/api/v1/nodes/${id}/uninstall" | sudo bash`
+              : `irm "${base}/api/v1/nodes/${id}/uninstall?platform=windows" | iex`;
+            const key = `uninstall-${plat}`;
+            return (
+              <div key={plat} style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "#64748B", marginBottom: 7, display: "flex", alignItems: "center", gap: 6 }}>
+                  <Ico d={plat === "linux" ? I.linux : I.windows} size={14} color="#64748B" />
+                  {plat === "linux" ? "Linux / macOS" : "Windows — PowerShell (Admin)"}
+                </p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <code style={{
+                    flex: 1, padding: "11px 14px", borderRadius: 9, fontSize: 12, fontFamily: "monospace",
+                    background: "#0D1117", color: "#94A3B8", wordBreak: "break-all", lineHeight: 1.65,
+                  }}>
+                    <span style={{ color: "#FCD34D" }}>{cmd.split(" ")[0]}</span>
+                    {" " + cmd.slice(cmd.indexOf(" ") + 1)}
+                  </code>
+                  <button
+                    onClick={() => copyText(cmd, key)}
+                    style={{
+                      padding: "11px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      background: copied === key ? "#F59E0B" : "#F8FAFC",
+                      border: "1.5px solid rgba(15,23,42,0.12)",
+                      color: copied === key ? "#1C0A00" : "#64748B",
+                      display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                    }}
+                  >
+                    {copied === key
+                      ? <><Ico d={I.check} size={13} color="#1C0A00" /> Copied</>
+                      : <><Ico d={I.copy}  size={13} color="#64748B" /> Copy</>}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          <div style={{
+            padding: "12px 16px", borderRadius: 10, marginTop: 8,
+            background: "rgba(100,116,139,0.06)", border: "1px solid rgba(100,116,139,0.2)",
+            fontSize: 12.5, color: "#475569", lineHeight: 1.6,
+          }}>
+            <strong>What it removes:</strong> the scheduled task / systemd service, the <code>hb-node</code> binary, and the local <code>HoneyBeeNode/</code> data folder (including any installed honeypots). Server-side deployment history is preserved.
           </div>
         </div>
       )}

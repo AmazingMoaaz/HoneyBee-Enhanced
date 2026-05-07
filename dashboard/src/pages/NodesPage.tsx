@@ -22,11 +22,16 @@ const I = {
   server: "M20 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2zM8 21h8M12 17v4",
   signal: "M1 6l7 7 4-4 9 9M1 1l4 4",
   check:  "M20 6L9 17l-5-5",
+  spark:  "M5 3v4M3 5h4M6 17v4M4 19h4M13 3l3 7-7 3 7 3-3 7 3-7 7-3-7-3-3-7z",
+  bee:    "M12 2a4 4 0 014 4v1h-8V6a4 4 0 014-4zM4 11h16M4 15h16M8 7v14a4 4 0 008 0V7",
+  linux:  "M12 2a5 5 0 00-5 5v3a4 4 0 01-1.5 3.1l-1.2 1A2 2 0 003 16v.5A1.5 1.5 0 004.5 18h15a1.5 1.5 0 001.5-1.5V16a2 2 0 00-1.3-1.9l-1.2-1A4 4 0 0117 10V7a5 5 0 00-5-5z",
+  windows:"M3 5l8-1v8H3V5zM13 4l8-1v9h-8V4zM3 13h8v8l-8-1v-7zM13 13h8v9l-8-1v-8z",
+  pc:     "M2 4h20v12H2zM7 20h10M9 16v4M15 16v4",
 };
 
 /* ── Helpers ────────────────────────────────────── */
 type CreatedNode = { id: number; name: string; token: string };
-type Node        = { id: number; name: string; online: boolean; last_seen: string | null };
+type Node        = { id: number; name: string; online: boolean; last_heartbeat: string | null; display_order: number };
 
 function relTime(iso: string | null): string {
   if (!iso) return "Never";
@@ -66,9 +71,11 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{
               width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center",
-              background: "linear-gradient(135deg,#FCD34D,#D97706)", fontSize: 20,
+              background: "linear-gradient(135deg,#FCD34D,#D97706)",
               boxShadow: "0 4px 12px rgba(245,158,11,0.3)",
-            }}>🎉</div>
+            }}>
+              <Ico d={I.spark} size={20} color="#1C0A00" sw={2.2} />
+            </div>
             <div>
               <p style={{ fontWeight: 800, fontSize: 15, color: "#0F172A" }}>
                 Node <span style={{ color: "#B45309" }}>{created.name}</span> registered!
@@ -130,7 +137,7 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
                     background: platform === p ? "#F59E0B" : "rgba(255,255,255,0.08)",
                     border: `1px solid ${platform === p ? "#D97706" : "rgba(255,255,255,0.12)"}`,
                     color: platform === p ? "#1C0A00" : "#64748B",
-                  }}>{p === "linux" ? "🐧 Linux" : "🪟 Windows"}</button>
+                  }}><Ico d={p === "linux" ? I.linux : I.windows} size={11} color={platform === p ? "#1C0A00" : "#94A3B8"} /> {p === "linux" ? "Linux" : "Windows"}</button>
                 ))}
               </div>
               <button onClick={() => copy(cmd, "cmd")} style={{
@@ -213,11 +220,11 @@ function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => vo
                 fontSize: 11, fontFamily: "monospace", color: "#CBD5E1",
                 background: "rgba(15,23,42,0.04)", padding: "2px 7px", borderRadius: 6,
                 border: "1px solid rgba(15,23,42,0.07)",
-              }}>#{node.id}</span>
+              }}>#{node.display_order}</span>
 
               <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "#94A3B8" }}>
                 <Ico d={I.clock} size={11} color="#CBD5E1" />
-                {relTime(node.last_seen)}
+                {relTime(node.last_heartbeat)}
               </span>
             </div>
           </div>
@@ -406,8 +413,10 @@ export default function NodesPage() {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
             <div style={{
               width: 40, height: 40, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0,
-              background: "linear-gradient(135deg,#FCD34D,#D97706)", fontSize: 20,
-            }}>🖥️</div>
+              background: "linear-gradient(135deg,#FCD34D,#D97706)",
+            }}>
+              <Ico d={I.pc} size={20} color="#1C0A00" sw={2} />
+            </div>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 800, fontSize: 14.5, color: "#0F172A", marginBottom: 3 }}>Register New Node</p>
               <p style={{ fontSize: 12.5, color: "#64748B", marginBottom: 14, lineHeight: 1.55 }}>
@@ -439,12 +448,16 @@ export default function NodesPage() {
       {/* ── Grid / Empty ── */}
       {isLoading ? (
         <div style={{ textAlign: "center", padding: "60px 0" }}>
-          <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.4 }}>🐝</div>
+          <div style={{ marginBottom: 12, opacity: 0.4, display: "flex", justifyContent: "center" }}>
+            <Ico d={I.bee} size={32} color="#94A3B8" />
+          </div>
           <p style={{ color: "#94A3B8", fontWeight: 600 }}>Loading nodes…</p>
         </div>
       ) : visible.length === 0 ? (
         <div className="card" style={{ padding: "64px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>{query ? "🔍" : "🐝"}</div>
+          <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
+            <Ico d={query ? I.search : I.bee} size={40} color="#94A3B8" sw={1.6} />
+          </div>
           <p style={{ fontWeight: 800, fontSize: 16, color: "#0F172A", marginBottom: 6 }}>
             {query ? `No nodes match "${query}"` : "No nodes yet"}
           </p>

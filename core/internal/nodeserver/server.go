@@ -85,6 +85,13 @@ func (s *Server) IsOnline(nodeID int64) bool {
 	return ok
 }
 
+// ConnectedCount returns the number of nodes with an active WebSocket session.
+func (s *Server) ConnectedCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.sessions)
+}
+
 // SendToNode delivers a TaskAssign to the node if online.
 func (s *Server) SendToNode(nodeID int64, taskID int64, command string, payload any) error {
 	sess, ok := s.Session(nodeID)

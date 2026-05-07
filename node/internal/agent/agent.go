@@ -188,7 +188,8 @@ func (a *Agent) sendHeartbeat() {
 	_ = a.send(protocol.MsgHeartbeat, hb)
 }
 
-func (a *Agent) reportInstalledLoop(ctx context.Context) {	t := time.NewTicker(5 * time.Minute)
+func (a *Agent) reportInstalledLoop(ctx context.Context) {
+	t := time.NewTicker(5 * time.Minute)
 	defer t.Stop()
 	a.sendInstalledList(0)
 	for {
@@ -249,8 +250,11 @@ func (a *Agent) handleTask(ctx context.Context, ta protocol.TaskAssign) {
 			RunCmd:      p.RunCmd,
 			Subdir:      p.Subdir,
 		}
+		// Tell the core we've started installing so the dashboard can show progress.
+		a.sendPotStatus(p.PotID, p.HoneypotType, protocol.PotStatusInstalling, "install started")
 		_, err := a.hp.Install(ctx, p.PotID, p.HoneypotType, p.GitURL, p.GitBranch, p.Config, opts)
 		if err != nil {
+			a.sendPotStatus(p.PotID, p.HoneypotType, protocol.PotStatusFailed, err.Error())
 			status, msg = protocol.TaskStatusFailed, err.Error()
 		} else {
 			a.sendPotStatus(p.PotID, p.HoneypotType, protocol.PotStatusStopped, "installed")

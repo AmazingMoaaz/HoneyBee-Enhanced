@@ -56,8 +56,10 @@ type Node struct {
 	LastHeartbeat *time.Time `json:"last_heartbeat" db:"last_heartbeat"`
 	CreatedAt     time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
-	DeletedAt     *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
-	Online        bool       `json:"online" db:"-"`
+	// DisplayOrder is the 1-based sequential rank by created_at within the org.
+	// Always contiguous (1, 2, 3…) regardless of DB id gaps.
+	DisplayOrder int  `json:"display_order" db:"display_order"`
+	Online       bool `json:"online" db:"-"`
 }
 
 // Deployment is one honeypot installed on a node.
@@ -76,16 +78,16 @@ type Deployment struct {
 
 // Task is a durable command queued for a node.
 type Task struct {
-	ID        int64      `json:"id" db:"id"`
-	OrgID     int64      `json:"org_id" db:"org_id"`
-	NodeID    int64      `json:"node_id" db:"node_id"`
-	DeployID  *int64     `json:"deploy_id" db:"deploy_id"`
-	Command   string     `json:"command" db:"command"`
-	Payload   string     `json:"payload" db:"payload"` // JSON string
-	Status    string     `json:"status" db:"status"`
-	Result    string     `json:"result" db:"result"`
-	CreatedAt time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
+	ID        int64     `json:"id" db:"id"`
+	OrgID     int64     `json:"org_id" db:"org_id"`
+	NodeID    int64     `json:"node_id" db:"node_id"`
+	DeployID  *int64    `json:"deploy_id" db:"deploy_id"`
+	Command   string    `json:"command" db:"command"`
+	Payload   string    `json:"payload" db:"payload"` // JSON string
+	Status    string    `json:"status" db:"status"`
+	Result    string    `json:"result" db:"result"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // Event is an attacker interaction record.
@@ -157,17 +159,17 @@ type AuditEntry struct {
 
 // PotStoreEntry is a catalog item from potstore.json.
 type PotStoreEntry struct {
-	ID          string         `json:"id"`
-	Name        string         `json:"name"`
-	Type        string         `json:"type"`
-	Description string         `json:"description"`
-	GitURL      string         `json:"git_url"`
-	GitBranch   string         `json:"git_branch"`
-	EntryPoint  string         `json:"entry_point"`
-	InstallCmd  []string       `json:"install_cmd"`
-	RunCmd      []string       `json:"run_cmd"`
+	ID           string         `json:"id"`
+	Name         string         `json:"name"`
+	Type         string         `json:"type"`
+	Description  string         `json:"description"`
+	GitURL       string         `json:"git_url"`
+	GitBranch    string         `json:"git_branch"`
+	EntryPoint   string         `json:"entry_point"`
+	InstallCmd   []string       `json:"install_cmd"`
+	RunCmd       []string       `json:"run_cmd"`
 	DefaultPorts map[string]int `json:"default_ports"`
-	Language    string         `json:"language"`
+	Language     string         `json:"language"`
 	// Subdir, if set, is the path WITHIN the cloned repo that contains the
 	// actual pot files. After clone the node flattens dir/<Subdir>/* into
 	// dir/. Used for the honeybee_potstore monorepo (HonnyPotter, WebTrap).

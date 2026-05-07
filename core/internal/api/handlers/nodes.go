@@ -218,14 +218,33 @@ $HBAddr    = "%s"
 # --- detect arch ---
 $Arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
 
-$BinDir = "$env:LOCALAPPDATA\HoneyBeeNode"
+$taskName = "HoneyBeeNode"
+$BinDir   = "$env:LOCALAPPDATA\HoneyBeeNode"
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 New-Item -ItemType Directory -Force -Path "$BinDir\data" | Out-Null
 
-Write-Host "[1/4] Downloading honeybee-node (windows/$Arch)..."
-Invoke-WebRequest "$HBServer/api/v1/download/node-agent?os=windows&arch=$Arch" -OutFile "$BinDir\hb-node.exe"
+# Stop any already-running instance so we can overwrite the exe
+Write-Host "[1/4] Stopping any existing HoneyBeeNode instance..."
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($existingTask) {
+    Stop-ScheduledTask  -TaskName $taskName -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 800
+}
+# Also stop any stray hb-node.exe processes
+Get-Process -Name "hb-node" -ErrorAction SilentlyContinue | ForEach-Object { $_.Kill(); $_.WaitForExit(3000) }
 
-Write-Host "[2/4] Writing config..."
+# If the file is still locked (rare), stage the new binary next to it and swap after
+$newExe = "$BinDir\hb-node-new.exe"
+Write-Host "[2/4] Downloading honeybee-node (windows/$Arch)..."
+Invoke-WebRequest "$HBServer/api/v1/download/node-agent?os=windows&arch=$Arch" -OutFile $newExe
+# Swap: rename old → .old, new → hb-node.exe
+if (Test-Path "$BinDir\hb-node.exe") {
+    Remove-Item "$BinDir\hb-node.exe.old" -ErrorAction SilentlyContinue
+    Rename-Item "$BinDir\hb-node.exe" "$BinDir\hb-node.exe.old" -ErrorAction SilentlyContinue
+}
+Rename-Item $newExe "$BinDir\hb-node.exe"
+
+Write-Host "[3/4] Writing config..."
 $DataDir = "$BinDir\data" -replace '\\', '/'
 $BinDirFwd = $BinDir -replace '\\', '/'
 @"
@@ -239,7 +258,6 @@ log:
   level: "info"
 "@ | Set-Content "$BinDir\node.yaml"
 
-$taskName = "HoneyBeeNode"
 $exe  = "$BinDir\hb-node.exe"
 $args = "--config " + '"' + "$BinDir\node.yaml" + '"'
 $action   = New-ScheduledTaskAction -Execute $exe -Argument $args
@@ -248,16 +266,16 @@ $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if ($isAdmin) {
-    Write-Host "[3/4] Registering scheduled task (runs at startup as SYSTEM)..."
+    Write-Host "[4/4] Registering scheduled task (runs at startup as SYSTEM)..."
     $trigger   = New-ScheduledTaskTrigger -AtStartup
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
     Start-ScheduledTask -TaskName $taskName
-    Write-Host "[4/4] Done. Node '$NodeName' (ID $NodeID) is running as SYSTEM."
+    Write-Host "Done. Node '$NodeName' (ID $NodeID) is running as SYSTEM."
     Write-Host "      Manage: Get-ScheduledTask -TaskName HoneyBeeNode"
 } else {
-    Write-Host "[3/4] Registering scheduled task (runs at logon for current user)..."
+    Write-Host "[4/4] Registering scheduled task (runs at logon for current user)..."
     $trigger   = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
     $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -415,23 +433,57 @@ $ErrorActionPreference = 'SilentlyContinue'
 $taskName = "HoneyBeeNode"
 $BinDir   = "$env:LOCALAPPDATA\HoneyBeeNode"
 
+# ── Already-uninstalled check ────────────────────────────────────────────────
+$taskExists = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+$binExists  = Test-Path "$BinDir\hb-node.exe"
+if (-not $taskExists -and -not $binExists) {
+    Write-Host "HoneyBeeNode is not installed on this device — nothing to do."
+    exit 0
+}
+# ─────────────────────────────────────────────────────────────────────────────
+
 Write-Host "[1/4] Stopping scheduled task..."
-Stop-ScheduledTask -TaskName $taskName
+if ($taskExists) {
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    Write-Host "      Task stopped."
+} else {
+    Write-Host "      No scheduled task found — skipping."
+}
 
 Write-Host "[2/4] Removing scheduled task..."
-Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+if ($taskExists) {
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Host "      Task removed."
+} else {
+    Write-Host "      No scheduled task found — skipping."
+}
 
-Write-Host "[3/4] Killing any honeypot child processes (python.exe, twistd.exe ...) running from $BinDir..."
-Get-CimInstance Win32_Process | Where-Object {
+Write-Host "[3/4] Killing any remaining processes running from $BinDir..."
+$procs = Get-CimInstance Win32_Process | Where-Object {
     $_.ExecutablePath -and $_.ExecutablePath.StartsWith($BinDir, [System.StringComparison]::OrdinalIgnoreCase)
-} | ForEach-Object {
-    Write-Host "  killing PID $($_.ProcessId) - $($_.ExecutablePath)"
-    Stop-Process -Id $_.ProcessId -Force
+}
+if ($procs) {
+    $procs | ForEach-Object {
+        Write-Host "      killing PID $($_.ProcessId) - $($_.ExecutablePath)"
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Milliseconds 800
+} else {
+    Write-Host "      No running processes found — skipping."
 }
 
 Write-Host "[4/4] Deleting files..."
-Start-Sleep -Seconds 3
-Remove-Item -Recurse -Force $BinDir
+if (Test-Path $BinDir) {
+    Start-Sleep -Seconds 2
+    Remove-Item -Recurse -Force $BinDir -ErrorAction SilentlyContinue
+    if (Test-Path $BinDir) {
+        Write-Host "      Warning: some files could not be deleted (may need a reboot)."
+    } else {
+        Write-Host "      Directory removed."
+    }
+} else {
+    Write-Host "      Directory not found — skipping."
+}
 
 Write-Host "Done. HoneyBeeNode has been removed from this device."
 `)
@@ -444,25 +496,50 @@ set -euo pipefail
 SERVICE=honeybee-node
 BIN_DIR="$HOME/.honeybee"
 
+# ── Already-uninstalled check ────────────────────────────────────────────────
+task_exists=false
+bin_exists=false
+systemctl --user is-enabled "$SERVICE" &>/dev/null && task_exists=true || true
+systemctl        is-enabled "$SERVICE" &>/dev/null && task_exists=true || true
+[ -f "$BIN_DIR/hb-node" ] && bin_exists=true || true
+[ -f /usr/local/bin/hb-node ] && bin_exists=true || true
+if ! $task_exists && ! $bin_exists; then
+  echo "HoneyBeeNode is not installed on this device — nothing to do."
+  exit 0
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 echo "[1/3] Stopping service..."
 if systemctl --user is-active --quiet "$SERVICE" 2>/dev/null; then
   systemctl --user stop "$SERVICE"
+  echo "      User service stopped."
 elif systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
   sudo systemctl stop "$SERVICE"
+  echo "      System service stopped."
+else
+  echo "      Service not running — skipping."
 fi
-pkill -f "hb-node" 2>/dev/null || true
+pkill -f "hb-node" 2>/dev/null && echo "      Stray process killed." || true
 
 echo "[2/3] Removing service unit..."
-systemctl --user disable "$SERVICE" 2>/dev/null || true
+systemctl --user disable "$SERVICE" 2>/dev/null && echo "      User unit disabled." || true
 rm -f "$HOME/.config/systemd/user/${SERVICE}.service"
 systemctl --user daemon-reload 2>/dev/null || true
-sudo systemctl disable "$SERVICE" 2>/dev/null || true
+sudo systemctl disable "$SERVICE" 2>/dev/null && echo "      System unit disabled." || true
 sudo rm -f "/etc/systemd/system/${SERVICE}.service"
 sudo systemctl daemon-reload 2>/dev/null || true
 
 echo "[3/3] Deleting files..."
-rm -rf "$BIN_DIR"
-sudo rm -f /usr/local/bin/hb-node 2>/dev/null || true
+if [ -d "$BIN_DIR" ]; then
+  rm -rf "$BIN_DIR"
+  echo "      $BIN_DIR removed."
+else
+  echo "      $BIN_DIR not found — skipping."
+fi
+if [ -f /usr/local/bin/hb-node ]; then
+  sudo rm -f /usr/local/bin/hb-node
+  echo "      /usr/local/bin/hb-node removed."
+fi
 
 echo "Done. HoneyBeeNode has been removed from this device."
 `)
