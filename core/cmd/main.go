@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -58,7 +60,16 @@ func main() {
 		logger.Warn("reset sent tasks", slog.Any("err", err))
 	}
 
-	psClient := potstore.NewClient(cfg.PotStore.RepoURL, cfg.PotStore.SyncInterval.Duration, logger)
+	psRepoURL := cfg.PotStore.RepoURL
+	if strings.HasPrefix(psRepoURL, "file://") {
+		rel := strings.TrimPrefix(psRepoURL, "file://")
+		if !filepath.IsAbs(rel) {
+			cfgAbs, _ := filepath.Abs(*cfgPath)
+			rel = filepath.Join(filepath.Dir(cfgAbs), rel)
+		}
+		psRepoURL = "file://" + rel
+	}
+	psClient := potstore.NewClient(psRepoURL, cfg.PotStore.SyncInterval.Duration, logger)
 	psClient.Start(rootCtx)
 
 	var tlsCfg *tls.Config

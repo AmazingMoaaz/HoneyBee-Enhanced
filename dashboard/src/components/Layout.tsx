@@ -164,22 +164,6 @@ export default function Layout() {
             }}
           />
 
-          {/* Left edge accent bar (outside rail) */}
-          <div
-            aria-hidden
-            style={{
-              position: "absolute", left: -6, width: 3,
-              top: pill.top + 8, height: Math.max(0, pill.height - 16),
-              background: "linear-gradient(180deg, #F59E0B, #B45309)",
-              borderRadius: 999,
-              opacity: pill.opacity,
-              boxShadow: "0 0 12px rgba(245,158,11,0.7)",
-              transition:
-                "top .38s cubic-bezier(.5,1.4,.4,1), height .38s cubic-bezier(.5,1.4,.4,1), opacity .25s",
-              pointerEvents: "none",
-            }}
-          />
-
           {navItems.map((item) => {
             const active = item.to === activeKey;
             return (

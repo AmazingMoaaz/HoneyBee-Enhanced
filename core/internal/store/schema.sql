@@ -160,3 +160,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
     CONSTRAINT fk_audit_org  FOREIGN KEY (org_id)  REFERENCES organizations(id) ON DELETE CASCADE,
     CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id)         ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Incremental migrations (idempotent: error 1060/1061 suppressed by Migrate) ──────
+
+-- Add deployment_id to pot_logs (missing from early schema versions)
+ALTER TABLE pot_logs ADD COLUMN deployment_id BIGINT NULL AFTER node_id;
+ALTER TABLE pot_logs ADD INDEX idx_potlogs_dep (deployment_id);
+ALTER TABLE pot_logs ADD CONSTRAINT fk_potlogs_deploy FOREIGN KEY (deployment_id) REFERENCES deployments(id) ON DELETE CASCADE;

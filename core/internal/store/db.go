@@ -58,9 +58,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 		}
 		if _, err := s.DB.ExecContext(ctx, stmt); err != nil {
 			var myErr *mysql.MySQLError
-			if errors.As(err, &myErr) && (myErr.Number == 1060 || myErr.Number == 1061) {
-				// 1060 = duplicate column name, 1061 = duplicate key name
-				// column/index already exists from a previous migration run — safe to skip
+			if errors.As(err, &myErr) && (myErr.Number == 1060 || myErr.Number == 1061 || myErr.Number == 1826) {
+				// 1060 = duplicate column name, 1061 = duplicate key name, 1826 = duplicate FK name
+				// already applied on a previous migration run — safe to skip
 				continue
 			}
 			return fmt.Errorf("exec migration: %w\nstatement: %s", err, stmt)
