@@ -1,4 +1,4 @@
-# HoneyBee-Enhanced
+# HoneyBee Enhanced
 
 A multi-tenant honeypot orchestration platform — combines the proven
 honeypot-portfolio approach (cowrie + custom pots) of [HoneyBee] with the
@@ -44,13 +44,13 @@ durable task queue / WebSocket / multi-org architecture of [HoneyPots].
 
 ## Modules
 
-| Path        | Purpose                                                     |
-|-------------|-------------------------------------------------------------|
-| `shared/`   | Wire protocol (`v4` envelope) + DTO models                  |
-| `core/`     | Control-plane: HTTP API, WS hub, node TCP, potstore client  |
-| `node/`     | Per-host agent: TCP client, honeypot lifecycle, capture     |
-| `cli/`      | Interactive REPL over the REST API                          |
-| `dashboard/`| React/Vite SPA with xterm.js session replay                 |
+| Path         | Purpose                                                    |
+| ------------ | ---------------------------------------------------------- |
+| `shared/`    | Wire protocol (`v4` envelope) + DTO models                 |
+| `core/`      | Control-plane: HTTP API, WS hub, node TCP, potstore client |
+| `node/`      | Per-host agent: TCP client, honeypot lifecycle, capture    |
+| `cli/`       | Interactive REPL over the REST API                         |
+| `dashboard/` | React/Vite SPA with xterm.js session replay                |
 
 ## Quickstart (Docker)
 

@@ -20,6 +20,7 @@ bin/
 .env
 .env.local
 
+
 # Node / Vite
 node_modules/
 dashboard/dist/
