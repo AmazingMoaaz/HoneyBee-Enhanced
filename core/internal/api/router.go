@@ -91,9 +91,28 @@ func Build(
 			if goos == "windows" {
 				asset += ".exe"
 			}
-			// Serve local binary if available (built into the image at /app/bin/).
-			localPath := filepath.Join("/app/bin", asset)
-			if f, err := os.Open(localPath); err == nil {
+			// Serve local binary if available — search multiple locations so the
+			// freshly-built dev binary is preferred over the GitHub release.
+			//   1. /app/bin/<asset>           (Docker image)
+			//   2. <cwd>/bin/<asset>          (running from repo root)
+			//   3. <exeDir>/bin/<asset>       (next to compiled core)
+			//   4. <exeDir>/../bin/<asset>
+			candidates := []string{filepath.Join("/app/bin", asset)}
+			if cwd, err := os.Getwd(); err == nil {
+				candidates = append(candidates, filepath.Join(cwd, "bin", asset))
+			}
+			if exe, err := os.Executable(); err == nil {
+				exeDir := filepath.Dir(exe)
+				candidates = append(candidates,
+					filepath.Join(exeDir, "bin", asset),
+					filepath.Join(exeDir, "..", "bin", asset),
+				)
+			}
+			for _, p := range candidates {
+				f, err := os.Open(p)
+				if err != nil {
+					continue
+				}
 				defer f.Close()
 				if goos == "windows" {
 					w.Header().Set("Content-Type", "application/octet-stream")
