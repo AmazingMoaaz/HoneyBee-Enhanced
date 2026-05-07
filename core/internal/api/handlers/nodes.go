@@ -562,17 +562,46 @@ Write-Host "Done. HoneyBeeNode has been removed from this device."
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprint(w, `#!/usr/bin/env bash
 # HoneyBee-Enhanced node uninstall — Linux / macOS
-set -euo pipefail
+set -uo pipefail
 
 SERVICE=honeybee-node
-BIN_DIR="$HOME/.honeybee"
+
+# ── Detect target user (handle "curl ... | sudo bash") ──────────────────────
+# Install runs without sudo and lands in the invoking user's home. If the
+# uninstall is piped to sudo, $HOME becomes /root and systemctl --user finds
+# nothing — so we resolve back to the original user via $SUDO_USER.
+TARGET_USER="${SUDO_USER:-$(id -un)}"
+if [ "$TARGET_USER" = "root" ] && [ -n "${SUDO_USER:-}" ]; then
+  TARGET_USER="$SUDO_USER"
+fi
+TARGET_HOME=$(getent passwd "$TARGET_USER" 2>/dev/null | cut -d: -f6)
+[ -z "$TARGET_HOME" ] && TARGET_HOME="$HOME"
+TARGET_UID=$(id -u "$TARGET_USER" 2>/dev/null || echo "")
+
+BIN_DIR="$TARGET_HOME/.honeybee"
+USER_UNIT="$TARGET_HOME/.config/systemd/user/${SERVICE}.service"
+
+# Helper: run a systemctl --user command as the target user, with the proper
+# DBus / runtime env so it can talk to that user's systemd instance.
+run_user_systemctl() {
+  if [ "$(id -u)" = "0" ] && [ "$TARGET_USER" != "root" ] && [ -n "$TARGET_UID" ]; then
+    sudo -u "$TARGET_USER" \
+      XDG_RUNTIME_DIR="/run/user/$TARGET_UID" \
+      DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$TARGET_UID/bus" \
+      systemctl --user "$@" 2>/dev/null
+  else
+    systemctl --user "$@" 2>/dev/null
+  fi
+}
 
 # ── Already-uninstalled check ────────────────────────────────────────────────
 task_exists=false
 bin_exists=false
-systemctl --user is-enabled "$SERVICE" &>/dev/null && task_exists=true || true
-systemctl        is-enabled "$SERVICE" &>/dev/null && task_exists=true || true
-[ -f "$BIN_DIR/hb-node" ] && bin_exists=true || true
+run_user_systemctl is-enabled "$SERVICE" >/dev/null 2>&1 && task_exists=true || true
+systemctl is-enabled "$SERVICE" >/dev/null 2>&1 && task_exists=true || true
+[ -f "$BIN_DIR/hb-node" ]     && bin_exists=true || true
+[ -f "$USER_UNIT" ]           && task_exists=true || true
+[ -f /etc/systemd/system/${SERVICE}.service ] && task_exists=true || true
 [ -f /usr/local/bin/hb-node ] && bin_exists=true || true
 if ! $task_exists && ! $bin_exists; then
   echo "HoneyBeeNode is not installed on this device — nothing to do."
@@ -581,24 +610,41 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 
 echo "[1/3] Stopping service..."
-if systemctl --user is-active --quiet "$SERVICE" 2>/dev/null; then
-  systemctl --user stop "$SERVICE"
-  echo "      User service stopped."
+if run_user_systemctl is-active --quiet "$SERVICE"; then
+  run_user_systemctl stop "$SERVICE"
+  echo "      User service stopped (user: $TARGET_USER)."
 elif systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
-  sudo systemctl stop "$SERVICE"
+  if [ "$(id -u)" = "0" ]; then
+    systemctl stop "$SERVICE" || true
+  else
+    sudo systemctl stop "$SERVICE" || true
+  fi
   echo "      System service stopped."
 else
   echo "      Service not running — skipping."
 fi
-pkill -f "hb-node" 2>/dev/null && echo "      Stray process killed." || true
+pkill -u "$TARGET_USER" -f "hb-node" 2>/dev/null && echo "      Stray process killed." || true
 
 echo "[2/3] Removing service unit..."
-systemctl --user disable "$SERVICE" 2>/dev/null && echo "      User unit disabled." || true
-rm -f "$HOME/.config/systemd/user/${SERVICE}.service"
-systemctl --user daemon-reload 2>/dev/null || true
-sudo systemctl disable "$SERVICE" 2>/dev/null && echo "      System unit disabled." || true
-sudo rm -f "/etc/systemd/system/${SERVICE}.service"
-sudo systemctl daemon-reload 2>/dev/null || true
+run_user_systemctl disable "$SERVICE" >/dev/null 2>&1 && echo "      User unit disabled." || true
+if [ "$(id -u)" = "0" ] && [ "$TARGET_USER" != "root" ]; then
+  sudo -u "$TARGET_USER" rm -f "$USER_UNIT" 2>/dev/null || true
+else
+  rm -f "$USER_UNIT" 2>/dev/null || true
+fi
+run_user_systemctl daemon-reload >/dev/null 2>&1 || true
+
+if [ -f "/etc/systemd/system/${SERVICE}.service" ]; then
+  if [ "$(id -u)" = "0" ]; then
+    systemctl disable "$SERVICE" 2>/dev/null && echo "      System unit disabled." || true
+    rm -f "/etc/systemd/system/${SERVICE}.service"
+    systemctl daemon-reload 2>/dev/null || true
+  else
+    sudo systemctl disable "$SERVICE" 2>/dev/null && echo "      System unit disabled." || true
+    sudo rm -f "/etc/systemd/system/${SERVICE}.service"
+    sudo systemctl daemon-reload 2>/dev/null || true
+  fi
+fi
 
 echo "[3/3] Deleting files..."
 if [ -d "$BIN_DIR" ]; then
@@ -608,7 +654,11 @@ else
   echo "      $BIN_DIR not found — skipping."
 fi
 if [ -f /usr/local/bin/hb-node ]; then
-  sudo rm -f /usr/local/bin/hb-node
+  if [ "$(id -u)" = "0" ]; then
+    rm -f /usr/local/bin/hb-node
+  else
+    sudo rm -f /usr/local/bin/hb-node
+  fi
   echo "      /usr/local/bin/hb-node removed."
 fi
 
