@@ -23,7 +23,7 @@ import (
 )
 
 func main() {
-	cfgPath := flag.String("config", "config.json", "path to JSON/YAML config")
+	cfgPath := flag.String("config", findConfig("config.json"), "path to JSON/YAML config")
 	flag.Parse()
 
 	cfg, err := config.Load(*cfgPath)
@@ -140,4 +140,26 @@ func signalCtx() (context.Context, context.CancelFunc) {
 		cancel()
 	}()
 	return ctx, cancel
+}
+
+// findConfig walks up from cwd until it finds filename, returning the first
+// match. Falls back to the bare filename (original behaviour) if not found.
+// This allows running `go run ./cmd` from any subdirectory of the repo.
+func findConfig(filename string) string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return filename
+	}
+	for {
+		candidate := filepath.Join(dir, filename)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return filename
 }
