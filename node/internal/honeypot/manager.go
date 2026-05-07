@@ -833,7 +833,7 @@ trust_proxy_headers: true
 
 // postInstallHonnypotter verifies PHP is available and writes a small
 // HoneyBee config file consumed by honeybee-forwarder.php at runtime.
-func (m *Manager) postInstallHonnypotter(ctx context.Context, potID, dir string, cfg map[string]any) error {
+func (m *Manager) postInstallHonnypotter(_ context.Context, potID, dir string, cfg map[string]any) error {
 	php, err := exec.LookPath("php")
 	if err != nil {
 		return fmt.Errorf("PHP not found in PATH — install PHP 7.4+ to run HonnyPotter")

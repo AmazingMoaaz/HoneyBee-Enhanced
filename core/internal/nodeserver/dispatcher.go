@@ -194,7 +194,7 @@ func (d *Dispatcher) handlePotLog(ctx context.Context, sess *Session, env *proto
 	}
 }
 
-func (d *Dispatcher) handlePotInstalledList(ctx context.Context, sess *Session, env *protocol.Envelope) {
+func (d *Dispatcher) handlePotInstalledList(_ context.Context, sess *Session, env *protocol.Envelope) {
 	var lst protocol.PotInstalledList
 	if err := protocol.DecodePayload(env, &lst); err != nil {
 		return
@@ -204,7 +204,7 @@ func (d *Dispatcher) handlePotInstalledList(ctx context.Context, sess *Session, 
 	}
 }
 
-func (d *Dispatcher) handlePotInfoResult(ctx context.Context, sess *Session, env *protocol.Envelope) {
+func (d *Dispatcher) handlePotInfoResult(_ context.Context, sess *Session, env *protocol.Envelope) {
 	var r protocol.PotInfoResult
 	if err := protocol.DecodePayload(env, &r); err != nil {
 		return
@@ -214,7 +214,7 @@ func (d *Dispatcher) handlePotInfoResult(ctx context.Context, sess *Session, env
 	}
 }
 
-func (d *Dispatcher) handlePotMetricsResult(ctx context.Context, sess *Session, env *protocol.Envelope) {
+func (d *Dispatcher) handlePotMetricsResult(_ context.Context, sess *Session, env *protocol.Envelope) {
 	var r protocol.PotMetricsResult
 	if err := protocol.DecodePayload(env, &r); err != nil {
 		return

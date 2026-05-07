@@ -53,7 +53,7 @@ func (l *Listener) Start(ctx context.Context) error {
 	}
 }
 
-func (l *Listener) handle(ctx context.Context, conn net.Conn) {
+func (l *Listener) handle(_ context.Context, conn net.Conn) {
 	defer conn.Close()
 	r := bufio.NewReader(conn)
 	for {
