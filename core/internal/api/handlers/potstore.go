@@ -20,6 +20,7 @@ func NewPotStoreHandler(c *potstore.Client) *PotStoreHandler {
 func (h *PotStoreHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"pots":         h.Client.List(),
+		"coming_soon":  h.Client.ListComingSoon(),
 		"last_updated": h.Client.LastUpdated(),
 	})
 }

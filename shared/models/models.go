@@ -170,6 +170,9 @@ type PotStoreEntry struct {
 	RunCmd       []string       `json:"run_cmd"`
 	DefaultPorts map[string]int `json:"default_ports"`
 	Language     string         `json:"language"`
+	Status       string         `json:"status,omitempty"`
+	Version      string         `json:"version,omitempty"`
+	Protocols    []string       `json:"protocols,omitempty"`
 	// Subdir, if set, is the path WITHIN the cloned repo that contains the
 	// actual pot files. After clone the node flattens dir/<Subdir>/* into
 	// dir/. Used for the honeybee_potstore monorepo (HonnyPotter, WebTrap).

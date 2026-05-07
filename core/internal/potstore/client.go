@@ -23,10 +23,11 @@ type Client struct {
 	logger   *slog.Logger
 	http     *http.Client
 
-	mu      sync.RWMutex
-	entries []models.PotStoreEntry
-	byID    map[string]models.PotStoreEntry
-	updated time.Time
+	mu         sync.RWMutex
+	entries    []models.PotStoreEntry
+	comingSoon []models.PotStoreEntry
+	byID       map[string]models.PotStoreEntry
+	updated    time.Time
 }
 
 // NewClient constructs a Client.
@@ -92,13 +93,16 @@ func (c *Client) Sync(ctx context.Context) error {
 	}
 
 	var entries []models.PotStoreEntry
+	var comingSoon []models.PotStoreEntry
 	if err := json.Unmarshal(body, &entries); err != nil {
-		// Tolerate {"pots":[...]} wrapper.
+		// Tolerate {"pots":[...], "coming_soon":[...]} wrapper.
 		var wrap struct {
-			Pots []models.PotStoreEntry `json:"pots"`
+			Pots       []models.PotStoreEntry `json:"pots"`
+			ComingSoon []models.PotStoreEntry `json:"coming_soon"`
 		}
 		if err2 := json.Unmarshal(body, &wrap); err2 == nil {
 			entries = wrap.Pots
+			comingSoon = wrap.ComingSoon
 		} else {
 			return fmt.Errorf("parse potstore: %w", err)
 		}
@@ -109,19 +113,29 @@ func (c *Client) Sync(ctx context.Context) error {
 	}
 	c.mu.Lock()
 	c.entries = entries
+	c.comingSoon = comingSoon
 	c.byID = byID
 	c.updated = time.Now().UTC()
 	c.mu.Unlock()
-	c.logger.Info("potstore synced", slog.Int("count", len(entries)))
+	c.logger.Info("potstore synced", slog.Int("count", len(entries)), slog.Int("coming_soon", len(comingSoon)))
 	return nil
 }
 
-// List returns all entries.
+// List returns all available entries.
 func (c *Client) List() []models.PotStoreEntry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	out := make([]models.PotStoreEntry, len(c.entries))
 	copy(out, c.entries)
+	return out
+}
+
+// ListComingSoon returns the coming-soon / roadmap entries.
+func (c *Client) ListComingSoon() []models.PotStoreEntry {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]models.PotStoreEntry, len(c.comingSoon))
+	copy(out, c.comingSoon)
 	return out
 }
 
