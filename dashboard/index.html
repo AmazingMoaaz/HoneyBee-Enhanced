@@ -11,6 +11,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.addEventListener('error', (event) => {
+        document.body.innerHTML += '<div style="color: red; padding: 20px; z-index: 9999; position: absolute; top: 0; left: 0; background: white;">Error: ' + event.message + '</div>';
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        document.body.innerHTML += '<div style="color: red; padding: 20px; z-index: 9999; position: absolute; top: 0; left: 0; background: white;">Promise Error: ' + (event.reason ? event.reason.message || event.reason : 'unknown') + '</div>';
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

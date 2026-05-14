@@ -167,3 +167,57 @@ CREATE TABLE IF NOT EXISTS audit_log (
 ALTER TABLE pot_logs ADD COLUMN deployment_id BIGINT NULL AFTER node_id;
 ALTER TABLE pot_logs ADD INDEX idx_potlogs_dep (deployment_id);
 ALTER TABLE pot_logs ADD CONSTRAINT fk_potlogs_deploy FOREIGN KEY (deployment_id) REFERENCES deployments(id) ON DELETE CASCADE;
+
+-- Add ip_address to nodes for tracking node connectivity source
+ALTER TABLE nodes ADD COLUMN ip_address VARCHAR(64) NOT NULL DEFAULT '' AFTER token_hash;
+
+-- ── Node performance metrics (heartbeat history) ────────────────────────────
+CREATE TABLE IF NOT EXISTS node_metrics (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    node_id     BIGINT NOT NULL,
+    cpu_pct     DOUBLE NOT NULL DEFAULT 0,
+    mem_pct     DOUBLE NOT NULL DEFAULT 0,
+    disk_pct    DOUBLE NOT NULL DEFAULT 0,
+    uptime_secs BIGINT NOT NULL DEFAULT 0,
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_nm_node_time (node_id, recorded_at),
+    CONSTRAINT fk_nm_node FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Alerting system ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    org_id          BIGINT NOT NULL,
+    name            VARCHAR(255) NOT NULL,
+    description     TEXT NOT NULL,
+    event_type      VARCHAR(128) NOT NULL DEFAULT '',
+    `condition`     JSON NOT NULL,
+    severity        ENUM('critical','high','medium','low','info') NOT NULL DEFAULT 'medium',
+    enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+    cooldown_secs   INT NOT NULL DEFAULT 300,
+    last_fired      TIMESTAMP NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_ar_org (org_id),
+    CONSTRAINT fk_ar_org FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    org_id          BIGINT NOT NULL,
+    rule_id         BIGINT NULL,
+    severity        ENUM('critical','high','medium','low','info') NOT NULL DEFAULT 'medium',
+    title           VARCHAR(512) NOT NULL,
+    message         TEXT NOT NULL,
+    source          VARCHAR(128) NOT NULL DEFAULT '',
+    source_ref      VARCHAR(255) NOT NULL DEFAULT '',
+    acknowledged    BOOLEAN NOT NULL DEFAULT FALSE,
+    acknowledged_by BIGINT NULL,
+    acknowledged_at TIMESTAMP NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_alerts_org_time (org_id, created_at),
+    INDEX idx_alerts_severity (severity),
+    CONSTRAINT fk_alerts_org  FOREIGN KEY (org_id)  REFERENCES organizations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_alerts_rule FOREIGN KEY (rule_id) REFERENCES alert_rules(id)   ON DELETE SET NULL,
+    CONSTRAINT fk_alerts_user FOREIGN KEY (acknowledged_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

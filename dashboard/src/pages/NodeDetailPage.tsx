@@ -4,6 +4,9 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api/client";
 import { copyToClipboard } from "../hooks/useCopy";
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
 
 /* ── Icons ─────────────────────────────────────── */
 const Ico = ({ d, size = 16, color = "currentColor", sw = 2 }: { d: string; size?: number; color?: string; sw?: number }) => (
@@ -221,7 +224,7 @@ export default function NodeDetailPage() {
   const { id }   = useParams();
   const qc       = useQueryClient();
   const navigate = useNavigate();
-  const [tab,              setTab]              = useState<"deployments" | "install" | "uninstall" | "danger">("deployments");
+  const [tab,              setTab]              = useState<"deployments" | "metrics" | "install" | "uninstall" | "danger">("deployments");
   const [activeDeployID,   setActiveDeployID]   = useState<number | null>(null);
   const [showDeployModal,  setShowDeployModal]  = useState(false);
   const [confirmUninstall, setConfirmUninstall] = useState(false);
@@ -379,6 +382,21 @@ export default function NodeDetailPage() {
                   <Ico d={I.clock} size={12} color="#CBD5E1" />
                   {relTime(node.last_heartbeat)}
                 </span>
+                {node.ip_address && (
+                  <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94A3B8", fontFamily: "monospace" }}>
+                    {node.ip_address}
+                  </span>
+                )}
+                {node.os && (
+                  <span style={{ fontSize: 12, color: "#94A3B8" }}>
+                    {node.os}/{node.arch}
+                  </span>
+                )}
+                {node.hostname && (
+                  <span style={{ fontSize: 12, color: "#94A3B8" }}>
+                    {node.hostname}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -478,6 +496,7 @@ export default function NodeDetailPage() {
       <div style={{ display: "flex", gap: 2, borderBottom: "2px solid rgba(15,23,42,0.07)" }}>
         {([
           { key: "deployments", label: `Deployments`, count: deps.length },
+          { key: "metrics",     label: "Performance",          count: null },
           { key: "install",     label: "Install / Reinstall",  count: null },
           { key: "uninstall",   label: "Uninstall Agent",      count: null },
           { key: "danger",      label: "Danger Zone",          count: null },
@@ -655,6 +674,9 @@ export default function NodeDetailPage() {
         </div>
       )}
 
+      {/* ── METRICS tab ── */}
+      {tab === "metrics" && <NodeMetricsPanel nodeId={id!} online={online} />}
+
       {/* ── INSTALL tab ── */}
       {tab === "install" && (
         <div className="card" style={{ padding: "24px 26px" }}>
@@ -824,3 +846,128 @@ export default function NodeDetailPage() {
     </div>
   );
 }
+
+/* ── Node Metrics Panel ───────────────────────────── */
+function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean }) {
+  const [hours, setHours] = useState(1);
+  const { data, isLoading } = useQuery({
+    queryKey: ["node-metrics", nodeId, hours],
+    queryFn: async () => (await api.get(`/nodes/${nodeId}/metrics?hours=${hours}`)).data,
+    refetchInterval: online ? 15000 : false,
+  });
+
+  const history: any[] = data?.history ?? [];
+  const latest = data?.latest;
+
+  function fmtTime(iso: string) {
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  return (
+    <div className="space-y-4 animate-fade-up">
+      {/* Current stats */}
+      <div className="card p-5">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(245,158,11,0.1)", display: "grid", placeItems: "center", border: "1.5px solid rgba(245,158,11,0.25)" }}>
+              <Ico d={I.shield} size={18} color="#F59E0B" />
+            </div>
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0F172A", margin: 0 }}>Performance Metrics</h3>
+              <p style={{ fontSize: 12, color: "#94A3B8", margin: 0 }}>
+                {online ? "Real-time monitoring" : "Last known values"}
+              </p>
+            </div>
+          </div>
+          <select
+            className="input"
+            value={hours}
+            onChange={(e) => setHours(Number(e.target.value))}
+            style={{ width: 160 }}
+          >
+            <option value={1}>Last 1 hour</option>
+            <option value={6}>Last 6 hours</option>
+            <option value={24}>Last 24 hours</option>
+            <option value={168}>Last 7 days</option>
+          </select>
+        </div>
+
+        {/* Current values */}
+        {latest && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+            <MetricGauge label="CPU" value={latest.cpu_pct} color="#F59E0B" />
+            <MetricGauge label="Memory" value={latest.mem_pct} color="#3B82F6" />
+            <MetricGauge label="Disk" value={latest.disk_pct} color="#10B981" />
+            <div style={{ padding: 12, borderRadius: 10, background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.07)", textAlign: "center" }}>
+              <p style={{ fontSize: 10.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Uptime</p>
+              <p style={{ fontSize: 18, fontWeight: 900, color: "#0F172A" }}>{formatUptime(latest.uptime_secs)}</p>
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div style={{ height: 200, display: "grid", placeItems: "center" }}>
+            <div style={{ width: 24, height: 24, borderRadius: "50%", border: "3px solid #F59E0B", borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
+          </div>
+        ) : history.length === 0 ? (
+          <div style={{ padding: "40px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
+            No metrics data available yet. Metrics are recorded with each heartbeat.
+          </div>
+        ) : (
+          <div style={{ height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={history}>
+                <defs>
+                  <linearGradient id="cpuGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="memGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="diskGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                <XAxis dataKey="recorded_at" tickFormatter={fmtTime} tick={{ fontSize: 11 }} stroke="#94A3B8" />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="#94A3B8" tickFormatter={(v: number) => `${v}%`} />
+                <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }} formatter={(v: any) => `${Number(v).toFixed(1)}%`} labelFormatter={(label: any) => fmtTime(String(label))} />
+                <Legend />
+                <Area type="monotone" dataKey="cpu_pct" stroke="#F59E0B" strokeWidth={2} fill="url(#cpuGrad)" name="CPU %" />
+                <Area type="monotone" dataKey="mem_pct" stroke="#3B82F6" strokeWidth={2} fill="url(#memGrad)" name="Memory %" />
+                <Area type="monotone" dataKey="disk_pct" stroke="#10B981" strokeWidth={2} fill="url(#diskGrad)" name="Disk %" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MetricGauge({ label, value, color }: { label: string; value: number; color: string }) {
+  const pct = Math.min(value, 100);
+  return (
+    <div style={{ padding: 12, borderRadius: 10, background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.07)", textAlign: "center" }}>
+      <p style={{ fontSize: 10.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{label}</p>
+      <p style={{ fontSize: 22, fontWeight: 900, color, marginBottom: 6 }}>{pct.toFixed(1)}%</p>
+      <div style={{ height: 5, borderRadius: 3, background: "rgba(15,23,42,0.06)" }}>
+        <div style={{ height: 5, borderRadius: 3, background: color, width: `${pct}%`, transition: "width 0.5s ease" }} />
+      </div>
+    </div>
+  );
+}
+
+function formatUptime(secs: number): string {
+  if (!secs || secs <= 0) return "—";
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+

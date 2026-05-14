@@ -6,6 +6,9 @@ import DashboardPage from "./pages/DashboardPage";
 import NodesPage from "./pages/NodesPage";
 import NodeDetailPage from "./pages/NodeDetailPage";
 import EventsPage from "./pages/EventsPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import AlertsPage from "./pages/AlertsPage";
+import AuditLogPage from "./pages/AuditLogPage";
 import PotStorePage from "./pages/PotStorePage";
 import UsersPage from "./pages/UsersPage";
 import SystemCheckPage from "./pages/SystemCheckPage";
@@ -26,6 +29,9 @@ export default function App() {
         <Route path="/nodes" element={<NodesPage />} />
         <Route path="/nodes/:id" element={<NodeDetailPage />} />
         <Route path="/events" element={<EventsPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/audit-log" element={<AuditLogPage />} />
         <Route path="/potstore" element={<PotStorePage />} />
         <Route path="/system" element={<SystemCheckPage />} />
         <Route path="/users" element={<UsersPage />} />

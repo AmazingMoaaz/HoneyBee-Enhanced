@@ -1,6 +1,8 @@
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/auth";
+import api from "../api/client";
 import logoUrl from "../assets/logo.png";
 import ParticleCanvas from "./ParticleCanvas";
 import { Icon, Icons } from "./Icons";
@@ -15,32 +17,62 @@ import { Icon, Icons } from "./Icons";
 ─────────────────────────────────────────────────────────────────── */
 
 const NAV = [
-  { to: "/",         label: "Dashboard",      icon: Icons.hex,          end: true },
-  { to: "/nodes",    label: "Nodes",          icon: Icons.server },
-  { to: "/events",   label: "Events",         icon: Icons.activity },
-  { to: "/potstore", label: "HoneyBee Store", icon: Icons.honeypot },
-  { to: "/system",   label: "System Check",   icon: Icons.shield },
+  { to: "/",           label: "Dashboard",      icon: Icons.hex,          end: true },
+  { to: "/nodes",      label: "Nodes",          icon: Icons.server },
+  { to: "/events",     label: "Events",         icon: Icons.activity },
+  { to: "/analytics",  label: "Analytics",      icon: Icons.chart },
+  { to: "/alerts",     label: "Alerts",         icon: Icons.bell },
+  { to: "/potstore",   label: "HoneyBee Store", icon: Icons.honeypot },
+  { to: "/audit-log",  label: "Audit Log",      icon: Icons.clipboard },
+  { to: "/system",     label: "System Check",   icon: Icons.shield },
 ];
 
 function getPageTitle(pathname: string): string {
-  if (pathname === "/")                 return "Dashboard";
-  if (pathname.startsWith("/nodes"))    return "Node Manager";
-  if (pathname.startsWith("/events"))   return "Event Stream";
-  if (pathname.startsWith("/potstore")) return "HoneyBee Store";
-  if (pathname.startsWith("/system"))   return "System Check";
-  if (pathname.startsWith("/users"))    return "User Management";
+  if (pathname === "/")                  return "Dashboard";
+  if (pathname.startsWith("/nodes"))     return "Node Manager";
+  if (pathname.startsWith("/events"))    return "Event Stream";
+  if (pathname.startsWith("/analytics")) return "Attack Analytics";
+  if (pathname.startsWith("/alerts"))    return "Alerts";
+  if (pathname.startsWith("/audit-log")) return "Audit Log";
+  if (pathname.startsWith("/potstore"))  return "HoneyBee Store";
+  if (pathname.startsWith("/system"))    return "System Check";
+  if (pathname.startsWith("/users"))     return "User Management";
   return "HoneyBee";
 }
 
 function getPageBreadcrumb(pathname: string): string[] {
-  if (pathname === "/")                  return ["Home"];
-  if (pathname.startsWith("/nodes/"))    return ["Fleet", "Node detail"];
-  if (pathname.startsWith("/nodes"))     return ["Fleet"];
-  if (pathname.startsWith("/events"))    return ["Telemetry"];
-  if (pathname.startsWith("/potstore"))  return ["Catalog"];
-  if (pathname.startsWith("/system"))    return ["Diagnostics"];
-  if (pathname.startsWith("/users"))     return ["Admin"];
+  if (pathname === "/")                   return ["Home"];
+  if (pathname.startsWith("/nodes/"))     return ["Fleet", "Node detail"];
+  if (pathname.startsWith("/nodes"))      return ["Fleet"];
+  if (pathname.startsWith("/events"))     return ["Telemetry"];
+  if (pathname.startsWith("/analytics"))  return ["Intelligence"];
+  if (pathname.startsWith("/alerts"))     return ["Security"];
+  if (pathname.startsWith("/audit-log"))  return ["Security"];
+  if (pathname.startsWith("/potstore"))   return ["Catalog"];
+  if (pathname.startsWith("/system"))     return ["Diagnostics"];
+  if (pathname.startsWith("/users"))      return ["Admin"];
   return [];
+}
+
+function AlertBell() {
+  const nav = useNavigate();
+  const { data } = useQuery({
+    queryKey: ["alert-count"],
+    queryFn: async () => (await api.get("/alerts/count")).data,
+    refetchInterval: 10000,
+  });
+  const count = data?.count ?? 0;
+  return (
+    <button onClick={() => nav("/alerts")} className="relative icon-btn" title="Alerts">
+      <Icon d={Icons.bell} size={16} />
+      {count > 0 && (
+        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold px-1"
+              style={{ background: "#EF4444", color: "#FFF", boxShadow: "0 2px 6px rgba(239,68,68,0.4)" }}>
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </button>
+  );
 }
 
 export default function Layout() {
@@ -255,6 +287,9 @@ export default function Layout() {
               {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </span>
           </div>
+
+          {/* Alert bell */}
+          <AlertBell />
 
           {/* User pill */}
           <div className="flex items-center gap-2.5 pl-2 pr-3 py-1 rounded-full"

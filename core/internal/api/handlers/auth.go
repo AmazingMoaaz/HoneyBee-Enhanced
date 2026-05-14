@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -182,5 +181,4 @@ func (h *AuthHandler) signPair(userID, orgID int64, role models.Role) (string, s
 	return access, refresh, nil
 }
 
-// _ avoids unused import
-var _ = errors.New
+

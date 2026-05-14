@@ -42,15 +42,13 @@ func isDuplicateKeyError(err error) bool {
 }
 
 // GetNode fetches by ID, scoped to org.
-// The WHERE must sit outside the window-function scope so that ROW_NUMBER is
-// computed across all org rows first, then the single target row is selected.
 func (s *Store) GetNode(ctx context.Context, orgID, id int64) (*models.Node, error) {
 	var n models.Node
 	err := s.DB.GetContext(ctx, &n, `
-		SELECT id, org_id, name, token_hash, os, arch, hostname, status,
+		SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
 		       last_heartbeat, created_at, updated_at, display_order
 		FROM (
-		  SELECT id, org_id, name, token_hash, os, arch, hostname, status,
+		  SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
 		         last_heartbeat, created_at, updated_at,
 		         ROW_NUMBER() OVER (PARTITION BY org_id ORDER BY created_at ASC) AS display_order
 		  FROM nodes
@@ -67,10 +65,10 @@ func (s *Store) GetNode(ctx context.Context, orgID, id int64) (*models.Node, err
 func (s *Store) GetNodeByID(ctx context.Context, id int64) (*models.Node, error) {
 	var n models.Node
 	err := s.DB.GetContext(ctx, &n, `
-		SELECT id, org_id, name, token_hash, os, arch, hostname, status,
+		SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
 		       last_heartbeat, created_at, updated_at, display_order
 		FROM (
-		  SELECT id, org_id, name, token_hash, os, arch, hostname, status,
+		  SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
 		         last_heartbeat, created_at, updated_at,
 		         ROW_NUMBER() OVER (PARTITION BY org_id ORDER BY created_at ASC) AS display_order
 		  FROM nodes
@@ -86,7 +84,7 @@ func (s *Store) GetNodeByID(ctx context.Context, id int64) (*models.Node, error)
 func (s *Store) ListAllNodes(ctx context.Context) ([]models.Node, error) {
 	var out []models.Node
 	err := s.DB.SelectContext(ctx, &out,
-		`SELECT id, org_id, name, token_hash, os, arch, hostname, status,
+		`SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
 		        last_heartbeat, created_at, updated_at
 		 FROM nodes`)
 	return out, err
@@ -98,7 +96,7 @@ func (s *Store) ListAllNodes(ctx context.Context) ([]models.Node, error) {
 func (s *Store) ListNodes(ctx context.Context, orgID int64) ([]models.Node, error) {
 	var out []models.Node
 	err := s.DB.SelectContext(ctx, &out, `
-		SELECT id, org_id, name, token_hash, os, arch, hostname, status,
+		SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
 		       last_heartbeat, created_at, updated_at,
 		       ROW_NUMBER() OVER (PARTITION BY org_id ORDER BY created_at ASC) AS display_order
 		FROM nodes
@@ -107,8 +105,8 @@ func (s *Store) ListNodes(ctx context.Context, orgID int64) ([]models.Node, erro
 	return out, err
 }
 
-// SoftDeleteNode hard-deletes a node. ON DELETE CASCADE handles all child rows.
-func (s *Store) SoftDeleteNode(ctx context.Context, orgID, id int64) error {
+// DeleteNode hard-deletes a node. ON DELETE CASCADE handles all child rows.
+func (s *Store) DeleteNode(ctx context.Context, orgID, id int64) error {
 	_, err := s.DB.ExecContext(ctx,
 		`DELETE FROM nodes WHERE id = ? AND org_id = ?`, id, orgID)
 	return err
@@ -122,10 +120,10 @@ func (s *Store) RegenerateNodeToken(ctx context.Context, orgID, id int64, newHas
 }
 
 // UpdateNodeRegistration is called once a node successfully authenticates and identifies itself.
-func (s *Store) UpdateNodeRegistration(ctx context.Context, id int64, hostname, os, arch string) error {
+func (s *Store) UpdateNodeRegistration(ctx context.Context, id int64, hostname, osName, arch, ipAddress string) error {
 	_, err := s.DB.ExecContext(ctx,
-		`UPDATE nodes SET hostname = ?, os = ?, arch = ?, status = 'online', last_heartbeat = NOW() WHERE id = ?`,
-		hostname, os, arch, id)
+		`UPDATE nodes SET hostname = ?, os = ?, arch = ?, ip_address = ?, status = 'online', last_heartbeat = NOW() WHERE id = ?`,
+		hostname, osName, arch, ipAddress, id)
 	return err
 }
 
@@ -156,6 +154,3 @@ func (s *Store) MarkAllNodesOffline(ctx context.Context) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE nodes SET status = 'offline'`)
 	return err
 }
-
-// _ static check.
-var _ = time.Now

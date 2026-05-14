@@ -15,7 +15,7 @@ import { copyToClipboard } from "../hooks/useCopy";
 ───────────────────────────────────────────────────────────────────── */
 
 type CreatedNode = { id: number; name: string; token: string };
-type Node        = { id: number; name: string; online: boolean; last_heartbeat: string | null; display_order: number };
+type Node        = { id: number; name: string; online: boolean; last_heartbeat: string | null; display_order: number; ip_address?: string; os?: string; arch?: string; hostname?: string; cpu_pct?: number; mem_pct?: number; disk_pct?: number; uptime_secs?: number };
 
 function relTime(iso: string | null): string {
   if (!iso) return "Never seen";
@@ -257,6 +257,36 @@ function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => vo
           )}
         </div>
 
+        {/* ── IP + OS info row ── */}
+        {(node.ip_address || node.os) && (
+          <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
+            {node.ip_address && (
+              <span className="chip" style={{ fontFamily: "ui-monospace, monospace", fontWeight: 600, fontSize: 10.5 }}>
+                <Icon d={Icons.globe} size={10} color="#64748B" /> {node.ip_address}
+              </span>
+            )}
+            {node.os && (
+              <span className="chip" style={{ fontSize: 10.5 }}>
+                {node.os}/{node.arch}
+              </span>
+            )}
+            {node.hostname && (
+              <span className="chip" style={{ fontSize: 10.5 }}>
+                {node.hostname}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* ── Performance mini-bars ── */}
+        {online && (node.cpu_pct !== undefined || node.mem_pct !== undefined) && (
+          <div style={{ marginTop: 10, display: "flex", gap: 12 }}>
+            <MiniBar label="CPU" value={node.cpu_pct ?? 0} color="#F59E0B" />
+            <MiniBar label="MEM" value={node.mem_pct ?? 0} color="#3B82F6" />
+            <MiniBar label="DISK" value={node.disk_pct ?? 0} color="#10B981" />
+          </div>
+        )}
+
         {/* ── Bottom meta row — last heartbeat ── */}
         <div style={{
           marginTop: 14, paddingTop: 10, borderTop: "1px dashed rgba(15,23,42,0.08)",
@@ -321,6 +351,20 @@ function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => vo
             </span>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function MiniBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div style={{ flex: 1, minWidth: 50 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+        <span style={{ fontSize: 9.5, fontWeight: 700, color }}>{value.toFixed(0)}%</span>
+      </div>
+      <div style={{ height: 4, borderRadius: 2, background: "rgba(15,23,42,0.06)" }}>
+        <div style={{ height: 4, borderRadius: 2, background: color, width: `${Math.min(value, 100)}%`, transition: "width 0.5s ease" }} />
       </div>
     </div>
   );

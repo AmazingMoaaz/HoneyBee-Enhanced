@@ -3,7 +3,6 @@ package nodeserver
 
 import (
 	"context"
-	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -11,10 +10,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/honeybee-enhanced/core/internal/api/ws"
 	"github.com/honeybee-enhanced/core/internal/store"
@@ -188,7 +185,12 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 	s.sessions[node.ID] = sess
 	s.mu.Unlock()
 
-	if err := s.store.UpdateNodeRegistration(ctx, node.ID, auth.Hostname, auth.OS, auth.Arch); err != nil {
+	// Extract the IP address from the remote TCP connection.
+	ip := ""
+	if host, _, err := net.SplitHostPort(remote); err == nil {
+		ip = host
+	}
+	if err := s.store.UpdateNodeRegistration(ctx, node.ID, auth.Hostname, auth.OS, auth.Arch, ip); err != nil {
 		s.logger.Warn("update node registration", slog.Any("err", err))
 	}
 	if err := protocol.SendMessage(conn, protocol.MsgAuthResult, protocol.AuthResult{Success: true, NodeID: node.ID, Message: "ok"}); err != nil {
@@ -282,7 +284,4 @@ func (s *Server) DisconnectNode(nodeID int64) {
 	}
 }
 
-// _ keeps imports tidy.
-var _ = subtle.ConstantTimeCompare
-var _ = strconv.Itoa
-var _ = time.Now
+

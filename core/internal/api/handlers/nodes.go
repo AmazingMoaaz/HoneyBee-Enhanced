@@ -108,7 +108,7 @@ func (h *NodesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.NodeServer.DisconnectNode(id)
-	if err := h.Store.SoftDeleteNode(r.Context(), orgID, id); err != nil {
+	if err := h.Store.DeleteNode(r.Context(), orgID, id); err != nil {
 		writeError(w, http.StatusInternalServerError, "delete")
 		return
 	}
@@ -680,7 +680,7 @@ func (h *NodesHandler) Uninstall(w http.ResponseWriter, r *http.Request) {
 	}
 	// Disconnect and remove from DB.
 	h.NodeServer.DisconnectNode(id)
-	if err := h.Store.SoftDeleteNode(r.Context(), orgID, id); err != nil {
+	if err := h.Store.DeleteNode(r.Context(), orgID, id); err != nil {
 		writeError(w, http.StatusInternalServerError, "delete")
 		return
 	}

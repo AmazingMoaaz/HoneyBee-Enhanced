@@ -82,6 +82,8 @@ func (d *Dispatcher) handleHeartbeat(ctx context.Context, sess *Session, env *pr
 		return
 	}
 	_ = d.store.UpdateNodeHeartbeat(ctx, sess.nodeID)
+	// Persist the performance snapshot for historical charts.
+	_ = d.store.InsertNodeMetric(ctx, sess.nodeID, hb.CPUPct, hb.MemPct, hb.DiskPct, hb.UptimeSecs)
 	if d.broadcaster != nil {
 		d.broadcaster.Broadcast(sess.orgID, "node."+itoa(sess.nodeID), "heartbeat", hb)
 	}

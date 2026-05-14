@@ -49,6 +49,7 @@ type Node struct {
 	OrgID         int64      `json:"org_id" db:"org_id"`
 	Name          string     `json:"name" db:"name"`
 	TokenHash     string     `json:"-" db:"token_hash"`
+	IPAddress     string     `json:"ip_address" db:"ip_address"`
 	OS            string     `json:"os" db:"os"`
 	Arch          string     `json:"arch" db:"arch"`
 	Hostname      string     `json:"hostname" db:"hostname"`
@@ -58,8 +59,23 @@ type Node struct {
 	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
 	// DisplayOrder is the 1-based sequential rank by created_at within the org.
 	// Always contiguous (1, 2, 3…) regardless of DB id gaps.
-	DisplayOrder int  `json:"display_order" db:"display_order"`
-	Online       bool `json:"online" db:"-"`
+	DisplayOrder int     `json:"display_order" db:"display_order"`
+	Online       bool    `json:"online" db:"-"`
+	CPUPct       float64 `json:"cpu_pct,omitempty" db:"-"`
+	MemPct       float64 `json:"mem_pct,omitempty" db:"-"`
+	DiskPct      float64 `json:"disk_pct,omitempty" db:"-"`
+	UptimeSecs   int64   `json:"uptime_secs,omitempty" db:"-"`
+}
+
+// NodeMetric is a single performance snapshot from a node heartbeat.
+type NodeMetric struct {
+	ID         int64     `json:"id" db:"id"`
+	NodeID     int64     `json:"node_id" db:"node_id"`
+	CPUPct     float64   `json:"cpu_pct" db:"cpu_pct"`
+	MemPct     float64   `json:"mem_pct" db:"mem_pct"`
+	DiskPct    float64   `json:"disk_pct" db:"disk_pct"`
+	UptimeSecs int64     `json:"uptime_secs" db:"uptime_secs"`
+	RecordedAt time.Time `json:"recorded_at" db:"recorded_at"`
 }
 
 // Deployment is one honeypot installed on a node.
@@ -155,6 +171,49 @@ type AuditEntry struct {
 	ResourceID *string   `json:"resource_id" db:"resource_id"`
 	Details    string    `json:"details" db:"details"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+}
+
+// AlertSeverity represents alert severity levels.
+type AlertSeverity string
+
+const (
+	AlertSeverityCritical AlertSeverity = "critical"
+	AlertSeverityHigh     AlertSeverity = "high"
+	AlertSeverityMedium   AlertSeverity = "medium"
+	AlertSeverityLow      AlertSeverity = "low"
+	AlertSeverityInfo     AlertSeverity = "info"
+)
+
+// Alert is a triggered alert instance.
+type Alert struct {
+	ID             int64         `json:"id" db:"id"`
+	OrgID          int64         `json:"org_id" db:"org_id"`
+	RuleID         *int64        `json:"rule_id" db:"rule_id"`
+	Severity       AlertSeverity `json:"severity" db:"severity"`
+	Title          string        `json:"title" db:"title"`
+	Message        string        `json:"message" db:"message"`
+	Source         string        `json:"source" db:"source"`
+	SourceRef      string        `json:"source_ref" db:"source_ref"`
+	Acknowledged   bool          `json:"acknowledged" db:"acknowledged"`
+	AcknowledgedBy *int64        `json:"acknowledged_by" db:"acknowledged_by"`
+	AcknowledgedAt *time.Time    `json:"acknowledged_at" db:"acknowledged_at"`
+	CreatedAt      time.Time     `json:"created_at" db:"created_at"`
+}
+
+// AlertRule defines an alerting rule that generates alerts.
+type AlertRule struct {
+	ID          int64     `json:"id" db:"id"`
+	OrgID       int64     `json:"org_id" db:"org_id"`
+	Name        string    `json:"name" db:"name"`
+	Description string    `json:"description" db:"description"`
+	EventType   string    `json:"event_type" db:"event_type"`
+	Condition   string    `json:"condition" db:"condition"` // JSON condition
+	Severity    string    `json:"severity" db:"severity"`
+	Enabled     bool      `json:"enabled" db:"enabled"`
+	Cooldown    int       `json:"cooldown_secs" db:"cooldown_secs"`
+	LastFired   *time.Time `json:"last_fired" db:"last_fired"`
+	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
 }
 
 // PotStoreEntry is a catalog item from potstore.json.

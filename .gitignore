@@ -17,7 +17,7 @@ bin/
 *.out
 
 # Env
-.env
+#.env
 .env.local
 
 # Local config (use config.example.json as template)

@@ -57,6 +57,9 @@ func Build(
 	usersH := handlers.NewUsersHandler(st)
 	cmdH := handlers.NewCommandsHandler(st, ns)
 	sysH := handlers.NewSystemHandler(st, ns, "1.0.0")
+	analyticsH := handlers.NewAnalyticsHandler(st)
+	alertsH := handlers.NewAlertsHandler(st, hub)
+	auditH := handlers.NewAuditHandler(st)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -74,10 +77,6 @@ func Build(
 		})
 
 		// Public node-agent binary download.
-		// Serves a locally-built binary from /app/bin/ if present (preferred in
-		// development — ensures the running code matches local source).
-		// Falls back to redirecting to the configured GitHub release asset.
-		// Query params: ?os=linux|darwin|windows  ?arch=amd64|arm64  (defaults: linux/amd64)
 		r.Get("/download/node-agent", func(w http.ResponseWriter, req *http.Request) {
 			goos := req.URL.Query().Get("os")
 			arch := req.URL.Query().Get("arch")
@@ -91,12 +90,6 @@ func Build(
 			if goos == "windows" {
 				asset += ".exe"
 			}
-			// Serve local binary if available — search multiple locations so the
-			// freshly-built dev binary is preferred over the GitHub release.
-			//   1. /app/bin/<asset>           (Docker image)
-			//   2. <cwd>/bin/<asset>          (running from repo root)
-			//   3. <exeDir>/bin/<asset>       (next to compiled core)
-			//   4. <exeDir>/../bin/<asset>
 			candidates := []string{filepath.Join("/app/bin", asset)}
 			if cwd, err := os.Getwd(); err == nil {
 				candidates = append(candidates, filepath.Join(cwd, "bin", asset))
@@ -113,7 +106,6 @@ func Build(
 				if err != nil {
 					continue
 				}
-				defer f.Close()
 				if goos == "windows" {
 					w.Header().Set("Content-Type", "application/octet-stream")
 					w.Header().Set("Content-Disposition", "attachment; filename=\"hb-node.exe\"")
@@ -122,6 +114,7 @@ func Build(
 					w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", asset))
 				}
 				_, _ = io.Copy(w, f)
+				f.Close()
 				return
 			}
 			// Fall back to GitHub release.
@@ -177,6 +170,9 @@ func Build(
 				r.Post("/nodes/{id}/deployments", depsH.CreateForNode)
 			})
 
+			// Node Metrics
+			r.Get("/nodes/{id}/metrics", analyticsH.NodeMetrics)
+
 			// Deployments
 			r.Get("/deployments", depsH.List)
 			r.Get("/deployments/{id}/logs", depsH.Logs)
@@ -196,6 +192,9 @@ func Build(
 			r.Get("/events", evtsH.List)
 			r.Get("/events/stats", evtsH.Stats)
 
+			// Analytics
+			r.Get("/analytics/overview", analyticsH.Overview)
+
 			// Sessions
 			r.Get("/sessions", sessH.List)
 			r.Get("/sessions/{id}", sessH.Get)
@@ -210,6 +209,28 @@ func Build(
 
 			// System Check
 			r.Get("/system/check", sysH.Check)
+
+			// Alerts
+			r.Get("/alerts", alertsH.ListAlerts)
+			r.Get("/alerts/count", alertsH.CountUnacknowledged)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireOperator)
+				r.Post("/alerts", alertsH.CreateAlert)
+				r.Post("/alerts/{id}/acknowledge", alertsH.Acknowledge)
+				r.Delete("/alerts/{id}", alertsH.DeleteAlert)
+			})
+
+			// Alert Rules
+			r.Get("/alert-rules", alertsH.ListRules)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireAdmin)
+				r.Post("/alert-rules", alertsH.CreateRule)
+				r.Put("/alert-rules/{id}", alertsH.UpdateRule)
+				r.Delete("/alert-rules/{id}", alertsH.DeleteRule)
+			})
+
+			// Audit Log
+			r.Get("/audit-log", auditH.List)
 
 			// Broadcast
 			r.Group(func(r chi.Router) {

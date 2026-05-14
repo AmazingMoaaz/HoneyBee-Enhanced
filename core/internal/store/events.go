@@ -140,3 +140,53 @@ func (s *Store) EventTimelineHourly(ctx context.Context, orgID int64, hours int)
 		 GROUP BY bucket ORDER BY bucket ASC`, orgID, hours)
 	return out, err
 }
+
+// PortStat is a stat row for port analysis.
+type PortStat struct {
+	Port  int   `db:"port" json:"port"`
+	Count int64 `db:"count" json:"count"`
+}
+
+// TopTargetedPorts returns the most targeted destination ports.
+func (s *Store) TopTargetedPorts(ctx context.Context, orgID int64, n int) ([]PortStat, error) {
+	var out []PortStat
+	err := s.DB.SelectContext(ctx, &out,
+		fmt.Sprintf(`SELECT dest_port AS port, COUNT(*) AS count
+		             FROM events WHERE org_id = ? AND dest_port > 0
+		             GROUP BY dest_port ORDER BY count DESC LIMIT %d`, n), orgID)
+	return out, err
+}
+
+// PotStat is a stat row for events-by-honeypot.
+type PotStat struct {
+	PotID string `db:"pot_id" json:"pot_id"`
+	Type  string `db:"honeypot_type" json:"type"`
+	Count int64  `db:"count" json:"count"`
+}
+
+// EventsByPot returns event counts grouped by honeypot.
+func (s *Store) EventsByPot(ctx context.Context, orgID int64, n int) ([]PotStat, error) {
+	var out []PotStat
+	err := s.DB.SelectContext(ctx, &out,
+		fmt.Sprintf(`SELECT pot_id, honeypot_type, COUNT(*) AS count
+		             FROM events WHERE org_id = ?
+		             GROUP BY pot_id, honeypot_type ORDER BY count DESC LIMIT %d`, n), orgID)
+	return out, err
+}
+
+// HourlyHeatmapBucket represents one hour-of-day bucket.
+type HourlyHeatmapBucket struct {
+	Hour  int   `db:"hour" json:"hour"`
+	Count int64 `db:"count" json:"count"`
+}
+
+// EventHourlyHeatmap returns event counts by hour of day (0-23) for the past 30 days.
+func (s *Store) EventHourlyHeatmap(ctx context.Context, orgID int64) ([]HourlyHeatmapBucket, error) {
+	var out []HourlyHeatmapBucket
+	err := s.DB.SelectContext(ctx, &out,
+		`SELECT HOUR(event_time) AS hour, COUNT(*) AS count
+		 FROM events WHERE org_id = ? AND event_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+		 GROUP BY hour ORDER BY hour ASC`, orgID)
+	return out, err
+}
+
