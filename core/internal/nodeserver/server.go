@@ -194,7 +194,7 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 		s.logger.Warn("update node registration", slog.Any("err", err))
 	}
 	if err := protocol.SendMessage(conn, protocol.MsgAuthResult, protocol.AuthResult{Success: true, NodeID: node.ID, Message: "ok"}); err != nil {
-		s.removeSession(ctx, node.ID)
+		s.removeSession(ctx, node.ID, sess)
 		return
 	}
 	s.logger.Info("node online", slog.Int64("node_id", node.ID), slog.String("hostname", auth.Hostname))
@@ -226,14 +226,16 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 		s.dispatcher.Dispatch(ctx, sess, msgEnv)
 	}
 
-	s.removeSession(ctx, node.ID)
+	s.removeSession(ctx, node.ID, sess)
 }
 
-func (s *Server) removeSession(ctx context.Context, nodeID int64) {
+func (s *Server) removeSession(ctx context.Context, nodeID int64, sess *Session) {
 	s.mu.Lock()
-	sess, ok := s.sessions[nodeID]
-	if ok {
+	current, ok := s.sessions[nodeID]
+	if ok && current == sess {
 		delete(s.sessions, nodeID)
+	} else {
+		ok = false // a newer session replaced this one; do not mark offline
 	}
 	s.mu.Unlock()
 	if !ok {
@@ -283,5 +285,3 @@ func (s *Server) DisconnectNode(nodeID int64) {
 		_ = sess.conn.Close()
 	}
 }
-
-
