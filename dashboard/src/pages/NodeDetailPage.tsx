@@ -252,9 +252,26 @@ export default function NodeDetailPage() {
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [installLogs]);
 
   const action = useMutation({
-    mutationFn: async (p: { depID: number; act: string }) => {
+    mutationFn: async (p: { depID: number; act: string }) =>
+      (await api.post(`/deployments/${p.depID}/${p.act}`)).data,
+    onMutate: (p) => {
       setPendingAction(`${p.depID}:${p.act}`);
-      return (await api.post(`/deployments/${p.depID}/${p.act}`)).data;
+      // Optimistically flip the status so the badge changes immediately.
+      const optimistic: Record<string, string> = {
+        start: "installing", stop: "stopped", restart: "installing", remove: "removed",
+      };
+      const next = optimistic[p.act];
+      if (next) {
+        qc.setQueryData(["node", id], (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            deployments: (old.deployments ?? []).map((d: any) =>
+              d.id === p.depID ? { ...d, status: next } : d
+            ),
+          };
+        });
+      }
     },
     onSettled: () => { setPendingAction(null); qc.invalidateQueries({ queryKey: ["node", id] }); },
   });
