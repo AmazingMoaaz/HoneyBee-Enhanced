@@ -29,7 +29,10 @@ WORKDIR /app
 COPY --from=builder /out/honeybee-core /usr/local/bin/honeybee-core
 COPY --from=node-builder /out /app/bin
 COPY core/migrations /app/migrations
-COPY config.json /app/config.json
+# config.json is gitignored (contains secrets). In CI / Docker builds the
+# example config is used as a default; override at runtime by mounting your
+# real config.json or setting env vars.
+COPY config.example.json /app/config.json
 COPY potstore.json /app/potstore.json
 EXPOSE 5100 9001
 ENTRYPOINT ["honeybee-core", "--config", "/app/config.json"]

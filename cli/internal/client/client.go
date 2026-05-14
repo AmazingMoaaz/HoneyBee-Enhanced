@@ -127,7 +127,7 @@ func (c *Client) Delete(path string, out any) error {
 
 // GetWithQuery appends query params and GETs.
 func (c *Client) GetWithQuery(path string, q url.Values, out any) error {
-	if q != nil && len(q) > 0 {
+	if len(q) > 0 {
 		path = path + "?" + q.Encode()
 	}
 	return c.Get(path, out)

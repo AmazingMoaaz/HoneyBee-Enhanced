@@ -571,9 +571,6 @@ SERVICE=honeybee-node
 # uninstall is piped to sudo, $HOME becomes /root and systemctl --user finds
 # nothing — so we resolve back to the original user via $SUDO_USER.
 TARGET_USER="${SUDO_USER:-$(id -un)}"
-if [ "$TARGET_USER" = "root" ] && [ -n "${SUDO_USER:-}" ]; then
-  TARGET_USER="$SUDO_USER"
-fi
 TARGET_HOME=$(getent passwd "$TARGET_USER" 2>/dev/null | cut -d: -f6)
 [ -z "$TARGET_HOME" ] && TARGET_HOME="$HOME"
 TARGET_UID=$(id -u "$TARGET_USER" 2>/dev/null || echo "")
@@ -599,7 +596,7 @@ task_exists=false
 bin_exists=false
 run_user_systemctl is-enabled "$SERVICE" >/dev/null 2>&1 && task_exists=true || true
 systemctl is-enabled "$SERVICE" >/dev/null 2>&1 && task_exists=true || true
-[ -f "$BIN_DIR/hb-node" ]     && bin_exists=true || true
+[ -f "$BIN_DIR/bin/hb-node" ] && bin_exists=true || true
 [ -f "$USER_UNIT" ]           && task_exists=true || true
 [ -f /etc/systemd/system/${SERVICE}.service ] && task_exists=true || true
 [ -f /usr/local/bin/hb-node ] && bin_exists=true || true
