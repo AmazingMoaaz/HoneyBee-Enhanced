@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "../api/client";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Icon, Icons } from "../components/Icons";
 
@@ -79,7 +79,8 @@ export default function EventsPage() {
   const [potFilter, setPotFilter]       = useState("");
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [refreshInterval, setRefreshInterval] = useState(5000);
-  const [displayCount, setDisplayCount] = useState(20);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
 
   // build server-side query string (type only – others are client-filtered for snappiness)
   const serverQuery = typeFilter ? `event_type=${encodeURIComponent(typeFilter)}` : "";
@@ -90,6 +91,20 @@ export default function EventsPage() {
     refetchInterval: refreshInterval > 0 ? refreshInterval : false,
     refetchOnWindowFocus: refreshInterval > 0,
   });
+
+  const { data: nodesData } = useQuery({
+    queryKey: ["nodes"],
+    queryFn: async () => (await api.get("/nodes")).data,
+    staleTime: 60_000,
+  });
+  const nodeMap = useMemo(() => {
+    const m: Record<number, string> = {};
+    (nodesData ?? []).forEach((n: any) => { m[n.id] = n.name; });
+    return m;
+  }, [nodesData]);
+
+  // reset to page 0 whenever filters change
+  useEffect(() => { setPage(0); }, [typeFilter, ipFilter, potFilter]);
 
   const raw: any[] = data ?? [];
 
@@ -266,27 +281,60 @@ export default function EventsPage() {
 
       {/* ── Event feed ── */}
       <div style={{
-        background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14,
-        overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+        background: "#fff", border: "1px solid #E2E8F0", borderRadius: 16,
+        overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
       }}>
+        {/* table toolbar */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "12px 20px", borderBottom: "1px solid #F1F5F9",
+          background: "linear-gradient(to bottom, #FAFAFA, #F8FAFC)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981",
+                          boxShadow: "0 0 0 2px rgba(16,185,129,0.2)" }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>
+              {list.length.toLocaleString()} events
+            </span>
+            {hasFilters && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: "#F59E0B",
+                             background: "#FFFBEB", border: "1px solid #FDE68A",
+                             padding: "1px 7px", borderRadius: 99 }}>filtered</span>
+            )}
+          </div>
+          <span style={{ fontSize: 11, color: "#94A3B8" }}>
+            {list.length === 0 ? "0 events" : `Page ${page + 1} of ${Math.ceil(list.length / PAGE_SIZE)}`}
+          </span>
+        </div>
+
         {/* column header */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "140px 1fr 1fr 110px 160px 100px 40px",
-          padding: "10px 20px",
-          borderBottom: "1px solid #F1F5F9",
+          gridTemplateColumns: "36px 150px 1fr 1fr 120px 170px 110px 36px",
+          padding: "9px 20px",
+          borderBottom: "2px solid #F1F5F9",
           background: "#F8FAFC",
-          fontSize: 11, fontWeight: 700, color: "#94A3B8",
-          textTransform: "uppercase", letterSpacing: "0.07em",
           gap: 8,
+          alignItems: "center",
         }}>
-          <span>Time</span>
-          <span>Node</span>
-          <span>Pot</span>
-          <span>Type</span>
-          <span>Source IP</span>
-          <span>Ports</span>
-          <span />
+          {[
+            { label: "#",         icon: "", center: true  },
+            { label: "Time",      icon: Icons.clock      },
+            { label: "Node",      icon: Icons.server     },
+            { label: "Pot",       icon: Icons.honeypot   },
+            { label: "Type",      icon: Icons.bolt       },
+            { label: "Source IP", icon: Icons.globe      },
+            { label: "Ports",     icon: Icons.signal     },
+            { label: "",          icon: ""               },
+          ].map(({ label, icon, center }, idx) => (
+            <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: center ? "center" : undefined, gap: 5 }}>
+              {icon && <Icon d={icon} size={11} color="#CBD5E1" />}
+              <span style={{
+                fontSize: 10.5, fontWeight: 700, color: "#94A3B8",
+                textTransform: "uppercase", letterSpacing: "0.08em",
+              }}>{label}</span>
+            </div>
+          ))}
         </div>
 
         {/* empty state */}
@@ -310,91 +358,218 @@ export default function EventsPage() {
         )}
 
         {/* rows */}
-        {list.slice(0, displayCount).map((e: any, i: number) => {
+        {list.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((e: any, i: number) => {
+          const pageLen = Math.min(PAGE_SIZE, list.length - page * PAGE_SIZE);
           const m = typeMeta(e.event_type);
+          const isEven = i % 2 === 0;
           return (
             <div
               key={e.id}
               onClick={() => setSelectedEvent(e)}
               style={{
                 display: "grid",
-                gridTemplateColumns: "140px 1fr 1fr 110px 160px 100px 40px",
-                padding: "12px 20px",
+                gridTemplateColumns: "36px 150px 1fr 1fr 120px 170px 110px 36px",
+                padding: "13px 20px",
                 alignItems: "center",
                 gap: 8,
                 cursor: "pointer",
-                borderBottom: i < displayCount - 1 && i < list.length - 1 ? "1px solid #F8FAFC" : "none",
+                borderBottom: i < pageLen - 1 ? "1px solid #F8FAFC" : "none",
                 borderLeft: `3px solid ${m.bar}`,
-                transition: "background 0.1s",
+                background: isEven ? "#fff" : "#FDFEFF",
+                transition: "background 0.12s, border-left-color 0.12s",
               }}
-              onMouseEnter={(ev) => (ev.currentTarget.style.background = "#FAFAFA")}
-              onMouseLeave={(ev) => (ev.currentTarget.style.background = "transparent")}
+              onMouseEnter={(ev) => {
+                ev.currentTarget.style.background = `${m.bg}`;
+                ev.currentTarget.style.borderLeftColor = m.bar;
+              }}
+              onMouseLeave={(ev) => {
+                ev.currentTarget.style.background = isEven ? "#fff" : "#FDFEFF";
+                ev.currentTarget.style.borderLeftColor = m.bar;
+              }}
             >
-              {/* time */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#334155", fontVariantNumeric: "tabular-nums" }}>
-                  {fmtRelative(e.event_time)}
-                </span>
-                <span style={{ fontSize: 10.5, color: "#94A3B8" }}>
-                  {new Date(e.event_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              {/* ── # ── */}
+              <div style={{
+                fontSize: 11, fontWeight: 700, color: "#CBD5E1",
+                fontVariantNumeric: "tabular-nums", textAlign: "center",
+              }}>
+                {page * PAGE_SIZE + i + 1}
+              </div>
+
+              {/* ── Time ── */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+                  background: "#F8FAFC", border: "1px solid #E2E8F0",
+                  display: "grid", placeItems: "center",
+                }}>
+                  <Icon d={Icons.clock} size={12} color="#94A3B8" />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", fontVariantNumeric: "tabular-nums" }}>
+                    {fmtRelative(e.event_time)}
+                  </div>
+                  <div style={{ fontSize: 10, color: "#94A3B8", fontVariantNumeric: "tabular-nums" }}>
+                    {new Date(e.event_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Node ── */}
+              <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+                <div style={{
+                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                  background: "#10B981", boxShadow: "0 0 0 2px rgba(16,185,129,0.18)",
+                }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {nodeMap[e.node_id] ?? `Node #${e.node_id}`}
+                  </div>
+                  <div style={{ fontSize: 10, color: "#94A3B8", fontVariantNumeric: "tabular-nums" }}>
+                    #{e.node_id}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Pot ── */}
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                background: "#F8FAFC", border: "1px solid #E2E8F0",
+                borderRadius: 6, padding: "3px 8px", maxWidth: "100%",
+              }}>
+                <div style={{ width: 5, height: 5, borderRadius: "50%", flexShrink: 0, background: "#F59E0B" }} />
+                <span style={{ fontSize: 11, fontFamily: "monospace", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {e.pot_id ?? "—"}
                 </span>
               </div>
 
-              {/* node */}
-              <div style={{ minWidth: 0 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {e.node_id ?? "—"}
-                </span>
-                {e.honeypot_type && (
-                  <span style={{ fontSize: 10.5, color: "#94A3B8" }}>{e.honeypot_type}</span>
+              {/* ── Type badge ── */}
+              <div style={{ overflow: "hidden", minWidth: 0 }}>
+                <TypeBadge type={e.event_type} />
+              </div>
+
+              {/* ── Source IP ── */}
+              <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 7,
+                  padding: "3px 8px", minWidth: 0, overflow: "hidden", maxWidth: "100%",
+                }}>
+                  <Icon d={Icons.globe} size={10} color="#FB923C" style={{ flexShrink: 0 }} />
+                  <span style={{
+                    fontSize: 11.5, fontFamily: "monospace", fontWeight: 600, color: "#9A3412",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,
+                  }}>
+                    {e.source_ip ?? "—"}
+                  </span>
+                </div>
+              </div>
+
+              {/* ── Ports ── */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {e.source_port > 0 ? (
+                  <>
+                    <span style={{
+                      fontSize: 11, fontFamily: "monospace", fontWeight: 600,
+                      background: "#F1F5F9", color: "#475569",
+                      padding: "2px 6px", borderRadius: 5, border: "1px solid #E2E8F0",
+                    }}>{e.source_port}</span>
+                    <Icon d={Icons.arrow} size={9} color="#CBD5E1" />
+                    <span style={{
+                      fontSize: 11, fontFamily: "monospace", fontWeight: 600,
+                      background: "#F1F5F9", color: "#475569",
+                      padding: "2px 6px", borderRadius: 5, border: "1px solid #E2E8F0",
+                    }}>{e.dest_port}</span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 12, color: "#CBD5E1" }}>—</span>
                 )}
               </div>
 
-              {/* pot */}
-              <span style={{ fontSize: 11.5, fontFamily: "monospace", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {e.pot_id ?? "—"}
-              </span>
-
-              {/* type badge */}
-              <TypeBadge type={e.event_type} />
-
-              {/* source ip */}
-              <span style={{
-                fontSize: 11.5, fontFamily: "monospace", fontWeight: 600,
-                color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA",
-                padding: "2px 8px", borderRadius: 6, display: "inline-block",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {e.source_ip ?? "—"}
-              </span>
-
-              {/* ports */}
-              <span style={{ fontSize: 11.5, fontFamily: "monospace", color: "#64748B", display: "flex", alignItems: "center", gap: 4 }}>
-                {e.source_port > 0 ? <>{e.source_port}<span style={{ color: "#CBD5E1" }}>→</span>{e.dest_port}</> : "—"}
-              </span>
-
-              {/* chevron */}
-              <span style={{ color: "#CBD5E1", display: "flex", justifyContent: "flex-end" }}>
-                <Icon d={Icons.arrow} size={14} />
-              </span>
+              {/* ── Chevron ── */}
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div style={{
+                  width: 24, height: 24, borderRadius: 6,
+                  border: "1px solid #E2E8F0", background: "#F8FAFC",
+                  display: "grid", placeItems: "center",
+                }}>
+                  <Icon d={Icons.arrow} size={11} color="#94A3B8" />
+                </div>
+              </div>
             </div>
           );
         })}
 
-        {/* Load More button */}
-        {displayCount < list.length && (
-          <div style={{ padding: "16px 20px", borderTop: "1px solid #F1F5F9", display: "flex", justifyContent: "center" }}>
-            <button onClick={() => setDisplayCount((c) => c + 20)}
-              style={{
-                padding: "8px 24px", borderRadius: 9, fontSize: 12, fontWeight: 600,
-                background: "#FFFBEB", border: "1px solid #FDE68A", color: "#B45309",
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-                transition: "all 0.15s",
-              }}>
-              <Icon d={Icons.plus} size={13} color="#B45309" /> Load {Math.min(20, list.length - displayCount)} More
-            </button>
-          </div>
-        )}
+        {/* Pagination */}
+        {list.length > PAGE_SIZE && (() => {
+          const totalPages = Math.ceil(list.length / PAGE_SIZE);
+          const btnStyle = (active: boolean, disabled: boolean): React.CSSProperties => ({
+            minWidth: 32, height: 32, borderRadius: 8, fontSize: 12, fontWeight: active ? 700 : 500,
+            border: active ? "1.5px solid #3B82F6" : "1px solid #E2E8F0",
+            background: active ? "#EFF6FF" : disabled ? "#F8FAFC" : "#fff",
+            color: active ? "#1D4ED8" : disabled ? "#CBD5E1" : "#475569",
+            cursor: disabled ? "default" : "pointer",
+            display: "grid", placeItems: "center", padding: "0 6px",
+            transition: "all 0.12s",
+          });
+          // build page window: always show first, last, and ±1 around current
+          const pages: (number | "...")[] = [];
+          for (let p = 0; p < totalPages; p++) {
+            if (p === 0 || p === totalPages - 1 || Math.abs(p - page) <= 1) {
+              pages.push(p);
+            } else if (pages[pages.length - 1] !== "...") {
+              pages.push("...");
+            }
+          }
+          return (
+            <div style={{
+              padding: "12px 20px", borderTop: "1px solid #F1F5F9",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+              background: "linear-gradient(to bottom, #FAFAFA, #F8FAFC)",
+            }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                {list.length.toLocaleString()} events · page {page + 1} of {totalPages}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {/* Prev */}
+                <button
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                  style={btnStyle(false, page === 0)}
+                  onMouseEnter={(ev) => { if (page !== 0) ev.currentTarget.style.background = "#F1F5F9"; }}
+                  onMouseLeave={(ev) => { ev.currentTarget.style.background = page === 0 ? "#F8FAFC" : "#fff"; }}
+                >
+                  ‹
+                </button>
+                {/* Page numbers */}
+                {pages.map((p, idx) =>
+                  p === "..." ? (
+                    <span key={`ellipsis-${idx}`} style={{ fontSize: 12, color: "#CBD5E1", padding: "0 2px" }}>…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p as number)}
+                      style={btnStyle(p === page, false)}
+                      onMouseEnter={(ev) => { if (p !== page) ev.currentTarget.style.background = "#F1F5F9"; }}
+                      onMouseLeave={(ev) => { ev.currentTarget.style.background = p === page ? "#EFF6FF" : "#fff"; }}
+                    >
+                      {(p as number) + 1}
+                    </button>
+                  )
+                )}
+                {/* Next */}
+                <button
+                  disabled={page === totalPages - 1}
+                  onClick={() => setPage((p) => p + 1)}
+                  style={btnStyle(false, page === totalPages - 1)}
+                  onMouseEnter={(ev) => { if (page !== totalPages - 1) ev.currentTarget.style.background = "#F1F5F9"; }}
+                  onMouseLeave={(ev) => { ev.currentTarget.style.background = page === totalPages - 1 ? "#F8FAFC" : "#fff"; }}
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
     </div>
