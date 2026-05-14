@@ -1,302 +1,572 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import api from "../api/client";
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Icon, Icons } from "../components/Icons";
 
-const TYPE_STYLE: Record<string, { bg: string; color: string; border: string }> = {
-  login:       { bg: "rgba(245,158,11,0.1)", color: "#B45309", border: "rgba(245,158,11,0.3)" },
-  "ssh.login": { bg: "rgba(245,158,11,0.1)", color: "#B45309", border: "rgba(245,158,11,0.3)" },
-  command:     { bg: "rgba(16,185,129,0.1)", color: "#059669", border: "rgba(16,185,129,0.3)" },
-  connect:     { bg: "rgba(59,130,246,0.1)", color: "#1D4ED8", border: "rgba(59,130,246,0.3)" },
-  error:       { bg: "rgba(239,68,68,0.1)",  color: "#DC2626", border: "rgba(239,68,68,0.3)" },
+// ── Type colour map ─────────────────────────────────────────────────────────
+const TYPE_META: Record<string, { bg: string; fg: string; border: string; bar: string; label: string }> = {
+  login:       { bg: "#FFFBEB", fg: "#B45309", border: "#FDE68A", bar: "#F59E0B", label: "Login" },
+  "ssh.login": { bg: "#FFFBEB", fg: "#B45309", border: "#FDE68A", bar: "#F59E0B", label: "SSH Login" },
+  command:     { bg: "#ECFDF5", fg: "#065F46", border: "#A7F3D0", bar: "#10B981", label: "Command" },
+  connect:     { bg: "#EFF6FF", fg: "#1D4ED8", border: "#BFDBFE", bar: "#3B82F6", label: "Connect" },
+  disconnect:  { bg: "#F5F3FF", fg: "#6D28D9", border: "#DDD6FE", bar: "#8B5CF6", label: "Disconnect" },
+  error:       { bg: "#FEF2F2", fg: "#B91C1C", border: "#FECACA", bar: "#EF4444", label: "Error" },
+  scan:        { bg: "#FFF7ED", fg: "#C2410C", border: "#FED7AA", bar: "#F97316", label: "Scan" },
 };
 
-function EventBadge({ type }: { type: string }) {
-  const s = TYPE_STYLE[type] ?? { bg: "rgba(100,116,139,0.1)", color: "#64748B", border: "rgba(100,116,139,0.2)" };
+function typeMeta(t: string) {
+  return TYPE_META[t] ?? { bg: "#F8FAFC", fg: "#475569", border: "#E2E8F0", bar: "#94A3B8", label: t };
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+}
+
+function fmtRelative(iso: string) {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function TypeBadge({ type }: { type: string }) {
+  const m = typeMeta(type);
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", padding: "3px 10px", borderRadius: 99, 
-      fontSize: 11.5, fontWeight: 700, background: s.bg, color: s.color, border: `1px solid ${s.border}`
+      display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 99,
+      fontSize: 11, fontWeight: 700, letterSpacing: "0.02em",
+      background: m.bg, color: m.fg, border: `1px solid ${m.border}`,
     }}>
-      {type}
+      {m.label}
     </span>
   );
 }
 
-function fmtTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-export default function EventsPage() {
-  const qc = useQueryClient();
-  const [filters, setFilters] = useState({ event_type: "", source_ip: "", pot_id: "" });
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
-  const [refreshInterval, setRefreshInterval] = useState(5000);
-
-  const queryStr = Object.entries(filters)
-    .filter(([, v]) => v)
-    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-    .join("&");
-
-  const { data, refetch, isFetching } = useQuery({
-    queryKey: ["events", queryStr],
-    queryFn: async () => (await api.get(`/events?limit=200${queryStr ? "&" + queryStr : ""}`)).data,
-    refetchInterval: refreshInterval > 0 ? refreshInterval : false,
-    refetchOnWindowFocus: refreshInterval > 0,
-  });
-  const list: any[] = data ?? [];
-
-  const handleExportCSV = () => {
-    if (list.length === 0) return;
-    const headers = ["Time", "Node", "Pot", "Type", "Source IP", "Source Port", "Dest Port"];
-    const rows = list.map((e: any) => [
-      e.event_time, e.node_id, e.pot_id, e.event_type, e.source_ip, e.source_port, e.dest_port,
-    ]);
-    const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `honeybee-events-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const hasFilters = Object.values(filters).some(v => v !== "");
-
+// ── Stat card ─────────────────────────────────────────────────────────────────
+function StatCard({ label, value, icon, color }: { label: string; value: any; icon: string; color: string }) {
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(245,158,11,0.1)", display: "grid", placeItems: "center", border: "1px solid rgba(245,158,11,0.2)" }}>
-              <Icon d={Icons.activity} size={16} color="#D97706" />
-            </div>
-            <p className="page-label" style={{ margin: 0 }}>Live feed</p>
-          </div>
-          <h1 className="page-title">Events Explorer</h1>
-          <p className="text-xs mt-1" style={{ color: "rgba(54,33,12,0.45)" }}>
-            Showing {list.length} recent events
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 flex-wrap">
-          <div style={{
-            display: "inline-flex", alignItems: "center", padding: 4,
-            background: "#F8FAFC", border: "1px solid #E2E8F0",
-            borderRadius: 12, gap: 4, boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)"
-          }}>
-            <div className="flex items-center gap-2 pl-3">
-              <Icon d={Icons.clock} size={14} color="#94A3B8" />
-              <select
-                className="input"
-                value={refreshInterval}
-                onChange={(e) => setRefreshInterval(Number(e.target.value))}
-                style={{ 
-                  padding: "6px 26px 6px 4px", fontSize: 12.5, minWidth: 130, height: 30, 
-                  background: "transparent", border: "none", boxShadow: "none", color: "#475569", fontWeight: 600
-                }}
-              >
-                <option value={0}>Manual Refresh</option>
-                <option value={1000}>Every 1 second</option>
-                <option value={5000}>Every 5 seconds</option>
-                <option value={15000}>Every 15 seconds</option>
-                <option value={60000}>Every 1 minute</option>
-              </select>
-            </div>
-            
-            <div style={{ width: 1, height: 16, background: "#CBD5E1", margin: "0 2px" }} />
-            
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              title="Refresh events"
-              style={{
-                padding: "0 14px", height: 30, borderRadius: 8, fontSize: 12.5, fontWeight: 700,
-                background: "#FFFFFF", border: "1px solid #E2E8F0",
-                color: isFetching ? "#94A3B8" : "#0F172A", cursor: isFetching ? "not-allowed" : "pointer",
-                display: "flex", alignItems: "center", gap: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <span style={{ animation: isFetching ? "spin 1s linear infinite" : "none", display: "inline-flex" }}>
-                <Icon d={Icons.restart} size={13} color={isFetching ? "#94A3B8" : "#B45309"} />
-              </span>
-              {isFetching ? "..." : "Refresh"}
-            </button>
-          </div>
-
-          <button onClick={handleExportCSV}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 shadow-sm hover:shadow"
-                  style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", color: "#0F172A" }}>
-            <Icon d={Icons.arrowDown} size={14} color="#64748B" /> Export CSV
-          </button>
-        </div>
+    <div style={{
+      background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14,
+      padding: "16px 20px", display: "flex", alignItems: "center", gap: 14,
+      boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+    }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
+        background: `${color}18`, border: `1px solid ${color}30`,
+      }}>
+        <Icon d={icon} size={18} color={color} />
       </div>
-
-      <div className="card p-4 flex gap-3 flex-wrap items-center bg-white border border-slate-200/60 shadow-sm rounded-xl">
-        <div className="flex items-center gap-2 px-1 border-r border-slate-100 pr-4">
-          <Icon d={Icons.filter} size={16} color="#94A3B8" />
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Filters</span>
-        </div>
-        
-        <div className="relative flex-1 min-w-[140px] max-w-[200px]">
-          <Icon d={Icons.search} size={14} color="#94A3B8" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
-          <input value={filters.event_type} onChange={e => setFilters(f => ({ ...f, event_type: e.target.value }))}
-                 placeholder="Type (e.g. login)" className="input w-full" style={{ fontSize: 12, padding: "8px 12px 8px 30px", borderRadius: 8 }} />
-        </div>
-        <div className="relative flex-1 min-w-[140px] max-w-[200px]">
-          <Icon d={Icons.globe} size={14} color="#94A3B8" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
-          <input value={filters.source_ip} onChange={e => setFilters(f => ({ ...f, source_ip: e.target.value }))}
-                 placeholder="Source IP" className="input w-full" style={{ fontSize: 12, padding: "8px 12px 8px 30px", borderRadius: 8 }} />
-        </div>
-        <div className="relative flex-1 min-w-[140px] max-w-[200px]">
-          <Icon d={Icons.honeycomb} size={14} color="#94A3B8" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
-          <input value={filters.pot_id} onChange={e => setFilters(f => ({ ...f, pot_id: e.target.value }))}
-                 placeholder="Pot ID" className="input w-full" style={{ fontSize: 12, padding: "8px 12px 8px 30px", borderRadius: 8 }} />
-        </div>
-        
-        {hasFilters && (
-          <button onClick={() => setFilters({ event_type: "", source_ip: "", pot_id: "" })}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors hover:bg-red-100"
-                  style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA" }}>
-            <Icon d={Icons.close} size={12} color="#DC2626" /> Clear All
-          </button>
-        )}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", lineHeight: 1.1 }}>{value ?? "—"}</div>
       </div>
-
-      <div className="card p-0 overflow-hidden border border-slate-200/60 shadow-sm rounded-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
-              <tr>
-                <th className="th" style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Time</th>
-                <th className="th" style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Node</th>
-                <th className="th" style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Pot ID</th>
-                <th className="th" style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Type</th>
-                <th className="th" style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Source IP</th>
-                <th className="th" style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ports</th>
-                <th className="th" style={{ padding: "12px 16px", width: 40 }} />
-              </tr>
-            </thead>
-            <tbody>
-              {list.length === 0 && (
-                <tr>
-                  <td colSpan={7} style={{ padding: "40px 16px", textAlign: "center", color: "#94A3B8" }}>
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Icon d={Icons.search} size={32} color="#CBD5E1" />
-                      <p className="text-sm font-medium">No events found matching your criteria</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {list.map((e: any, i: number) => (
-                <tr key={e.id} className="group transition-colors hover:bg-slate-50 cursor-pointer" onClick={() => setSelectedEvent(e)} style={{ borderBottom: i === list.length - 1 ? "none" : "1px solid #F1F5F9" }}>
-                  <td style={{ padding: "12px 16px", fontSize: 12, color: "#475569", fontWeight: 500 }}>{fmtTime(e.event_time)}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 13, color: "#0F172A", fontWeight: 600 }}>{e.node_id}</td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <div className="flex items-center gap-2">
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#F59E0B" }} />
-                      <span className="font-mono text-xs text-slate-600">{e.pot_id}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: "12px 16px" }}><EventBadge type={e.event_type} /></td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <span className="font-mono text-xs px-2 py-1 rounded bg-orange-50 text-orange-700 border border-orange-100">{e.source_ip}</span>
-                  </td>
-                  <td style={{ padding: "12px 16px", fontSize: 12, color: "#64748B" }}>
-                    {e.source_port > 0 ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono">{e.source_port}</span>
-                        <Icon d={Icons.arrow} size={10} color="#94A3B8" />
-                        <span className="font-mono">{e.dest_port}</span>
-                      </div>
-                    ) : "—"}
-                  </td>
-                  <td style={{ padding: "12px 16px", color: "#CBD5E1" }} className="group-hover:text-amber-500 transition-colors">
-                    <Icon d={Icons.arrow} size={16} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {selectedEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{ background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)" }} onClick={() => setSelectedEvent(null)}>
-          <div className="card p-0 overflow-hidden w-full max-w-2xl animate-fade-up shadow-2xl border border-slate-200/50" style={{ maxHeight: "85vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-            <div style={{ height: 4, background: "linear-gradient(90deg, #FCD34D, #F59E0B, #D97706)" }} />
-            <div style={{ padding: "18px 24px", borderBottom: "1px solid rgba(15,23,42,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#F8FAFC" }}>
-              <div className="flex items-center gap-3">
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(245,158,11,0.1)", display: "grid", placeItems: "center", border: "1px solid rgba(245,158,11,0.2)" }}>
-                  <Icon d={Icons.activity} size={18} color="#D97706" />
-                </div>
-                <div>
-                  <h2 className="text-base font-extrabold text-slate-900 leading-tight">Event Details</h2>
-                  <p className="text-xs font-semibold text-slate-500">{fmtTime(selectedEvent.event_time)}</p>
-                </div>
-              </div>
-              <button onClick={() => setSelectedEvent(null)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors">
-                <Icon d={Icons.close} size={18} />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-6 bg-white">
-              <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                <DetailRow icon={Icons.hash} label="Event ID" value={selectedEvent.id} mono />
-                <DetailRow icon={Icons.activity} label="Type" value={<EventBadge type={selectedEvent.event_type} />} />
-                <DetailRow icon={Icons.server} label="Node ID" value={selectedEvent.node_id} />
-                <DetailRow icon={Icons.honeycomb} label="Pot ID" value={selectedEvent.pot_id} mono />
-                <DetailRow icon={Icons.honeypot} label="Honeypot Type" value={selectedEvent.honeypot_type} />
-              </div>
-
-              <div className="p-4 rounded-xl border border-orange-100 bg-orange-50/50 space-y-3">
-                <h3 className="text-xs font-bold text-orange-800 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <Icon d={Icons.globe} size={14} color="#C2410C" /> Network Context
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <DetailRow label="Source IP" value={selectedEvent.source_ip} mono color="#9A3412" />
-                  <DetailRow label="Destination IP" value={selectedEvent.dest_ip || "—"} mono />
-                  <DetailRow label="Source Port" value={selectedEvent.source_port} mono />
-                  <DetailRow label="Destination Port" value={selectedEvent.dest_port} mono />
-                </div>
-              </div>
-
-              {selectedEvent.data && (
-                <div className="mt-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon d={Icons.server} size={14} color="#64748B" />
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Raw Telemetry Data</h3>
-                  </div>
-                  <div className="relative">
-                    <pre className="p-4 rounded-xl text-xs font-mono overflow-auto border border-slate-200" style={{ background: "#0F172A", color: "#E2E8F0", maxHeight: 280, lineHeight: 1.5 }}>
-                      {typeof selectedEvent.data === "string"
-                        ? JSON.stringify(JSON.parse(selectedEvent.data), null, 2)
-                        : JSON.stringify(selectedEvent.data, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-function DetailRow({ icon, label, value, mono, color }: { icon?: string; label: string; value: any; mono?: boolean; color?: string }) {
+// ── Main page ─────────────────────────────────────────────────────────────────
+const TYPE_PILLS = ["login", "ssh.login", "connect", "disconnect", "command", "error", "scan"];
+
+export default function EventsPage() {
+  const [typeFilter, setTypeFilter]     = useState("");
+  const [ipFilter, setIpFilter]         = useState("");
+  const [potFilter, setPotFilter]       = useState("");
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [refreshInterval, setRefreshInterval] = useState(5000);
+  const [displayCount, setDisplayCount] = useState(20);
+
+  // build server-side query string (type only – others are client-filtered for snappiness)
+  const serverQuery = typeFilter ? `event_type=${encodeURIComponent(typeFilter)}` : "";
+
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ["events", serverQuery],
+    queryFn: async () => (await api.get(`/events?limit=300${serverQuery ? "&" + serverQuery : ""}`)).data,
+    refetchInterval: refreshInterval > 0 ? refreshInterval : false,
+    refetchOnWindowFocus: refreshInterval > 0,
+  });
+
+  const raw: any[] = data ?? [];
+
+  // client-side filtering for ip / pot
+  const list = useMemo(() => {
+    let r = raw;
+    if (ipFilter.trim())  r = r.filter((e) => e.source_ip?.includes(ipFilter.trim()));
+    if (potFilter.trim()) r = r.filter((e) => e.pot_id?.includes(potFilter.trim()));
+    return r;
+  }, [raw, ipFilter, potFilter]);
+
+  // stats
+  const uniqueIPs   = useMemo(() => new Set(list.map((e) => e.source_ip)).size, [list]);
+  const topType     = useMemo(() => {
+    const counts: Record<string, number> = {};
+    list.forEach((e) => { counts[e.event_type] = (counts[e.event_type] ?? 0) + 1; });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+  }, [list]);
+
+  const hasFilters = typeFilter || ipFilter || potFilter;
+
+  const clearFilters = useCallback(() => {
+    setTypeFilter(""); setIpFilter(""); setPotFilter("");
+  }, []);
+
+  const handleExportCSV = () => {
+    if (!list.length) return;
+    const hdr = ["Time","Node","Pot","Type","Source IP","Src Port","Dst Port"];
+    const rows = list.map((e: any) =>
+      [e.event_time, e.node_id, e.pot_id, e.event_type, e.source_ip, e.source_port, e.dest_port].join(",")
+    );
+    const blob = new Blob([[hdr.join(","), ...rows].join("\n")], { type: "text/csv" });
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(blob),
+      download: `honeybee-events-${new Date().toISOString().slice(0,10)}.csv`,
+    });
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-        {icon && <Icon d={icon} size={12} color="currentColor" />}
-        {label}
-      </span>
-      <span className={`text-sm ${mono ? "font-mono" : "font-medium"}`} style={{ color: color || "#0F172A", wordBreak: "break-all" }}>
-        {value ?? "—"}
-      </span>
+    <>
+    <div className="space-y-6 animate-fade-up">
+
+      {/* ── Header ── */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <p className="page-label">Live feed</p>
+          <h1 className="page-title" style={{ marginBottom: 2 }}>Events Explorer</h1>
+          <p style={{ fontSize: 12, color: "#94A3B8", display: "flex", alignItems: "center", gap: 6 }}>
+            {refreshInterval > 0 && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981", display: "inline-block",
+                               boxShadow: "0 0 0 3px rgba(16,185,129,0.15)", animation: "pulse 2s infinite" }} />
+                Live
+              </span>
+            )}
+            {list.length.toLocaleString()} events
+            {hasFilters && <span style={{ color: "#F59E0B", fontWeight: 600 }}> · filtered</span>}
+          </p>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {/* refresh interval */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "0 4px 0 12px", height: 36,
+            background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10,
+          }}>
+            <Icon d={Icons.clock} size={13} color="#94A3B8" />
+            <select
+              value={refreshInterval}
+              onChange={(e) => setRefreshInterval(Number(e.target.value))}
+              style={{ fontSize: 12, fontWeight: 600, color: "#475569", background: "transparent", border: "none", outline: "none", paddingRight: 20, cursor: "pointer" }}
+            >
+              <option value={0}>Manual</option>
+              <option value={1000}>1 s</option>
+              <option value={5000}>5 s</option>
+              <option value={15000}>15 s</option>
+              <option value={60000}>1 min</option>
+            </select>
+          </div>
+
+          <button onClick={() => refetch()} disabled={isFetching}
+            style={{
+              height: 36, padding: "0 14px", borderRadius: 10, border: "1px solid #E2E8F0",
+              background: "#fff", fontSize: 12, fontWeight: 700, color: isFetching ? "#94A3B8" : "#0F172A",
+              cursor: isFetching ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6,
+            }}>
+            <span style={{ display: "inline-flex", animation: isFetching ? "spin 1s linear infinite" : "none" }}>
+              <Icon d={Icons.restart} size={13} color={isFetching ? "#94A3B8" : "#D97706"} />
+            </span>
+            {isFetching ? "Loading…" : "Refresh"}
+          </button>
+
+          <button onClick={handleExportCSV}
+            style={{
+              height: 36, padding: "0 14px", borderRadius: 10, border: "1px solid #E2E8F0",
+              background: "#fff", fontSize: 12, fontWeight: 700, color: "#475569",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+            }}>
+            <Icon d={Icons.arrowDown} size={13} color="#94A3B8" /> Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* ── Stats row ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12 }}>
+        <StatCard label="Total events"  value={list.length.toLocaleString()} icon={Icons.activity} color="#F59E0B" />
+        <StatCard label="Unique IPs"    value={uniqueIPs}                     icon={Icons.globe}    color="#3B82F6" />
+        <StatCard label="Top type"      value={topType}                       icon={Icons.bolt}     color="#8B5CF6" />
+        <StatCard label="Active pots"   value={new Set(list.map((e: any) => e.pot_id)).size} icon={Icons.honeypot} color="#10B981" />
+      </div>
+
+      {/* ── Filters ── */}
+      <div style={{
+        background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14,
+        padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12,
+        boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+      }}>
+        {/* type pills */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.07em", marginRight: 4 }}>Type</span>
+          <button
+            onClick={() => setTypeFilter("")}
+            style={{
+              padding: "4px 12px", borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              border: `1px solid ${!typeFilter ? "#F59E0B" : "#E2E8F0"}`,
+              background: !typeFilter ? "#FFFBEB" : "#F8FAFC",
+              color: !typeFilter ? "#B45309" : "#64748B",
+            }}>All</button>
+          {TYPE_PILLS.map((t) => {
+            const m = typeMeta(t);
+            const active = typeFilter === t;
+            return (
+              <button key={t} onClick={() => setTypeFilter(active ? "" : t)}
+                style={{
+                  padding: "4px 12px", borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  border: `1px solid ${active ? m.border : "#E2E8F0"}`,
+                  background: active ? m.bg : "#F8FAFC",
+                  color: active ? m.fg : "#64748B",
+                  transition: "all 0.12s",
+                }}>{m.label}</button>
+            );
+          })}
+        </div>
+
+        {/* text filters */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ position: "relative", flex: "1 1 160px", maxWidth: 240 }}>
+            <Icon d={Icons.globe} size={13} color="#CBD5E1" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+            <input value={ipFilter} onChange={(e) => setIpFilter(e.target.value)}
+              placeholder="Filter by source IP…"
+              className="input w-full"
+              style={{ fontSize: 12, padding: "8px 12px 8px 30px", borderRadius: 9 }} />
+          </div>
+          <div style={{ position: "relative", flex: "1 1 160px", maxWidth: 240 }}>
+            <Icon d={Icons.honeycomb} size={13} color="#CBD5E1" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+            <input value={potFilter} onChange={(e) => setPotFilter(e.target.value)}
+              placeholder="Filter by pot ID…"
+              className="input w-full"
+              style={{ fontSize: 12, padding: "8px 12px 8px 30px", borderRadius: 9 }} />
+          </div>
+          {hasFilters && (
+            <button onClick={clearFilters}
+              style={{
+                padding: "7px 14px", borderRadius: 9, fontSize: 12, fontWeight: 600,
+                background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
+              }}>
+              <Icon d={Icons.close} size={11} color="#DC2626" /> Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Event feed ── */}
+      <div style={{
+        background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14,
+        overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+      }}>
+        {/* column header */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "140px 1fr 1fr 110px 160px 100px 40px",
+          padding: "10px 20px",
+          borderBottom: "1px solid #F1F5F9",
+          background: "#F8FAFC",
+          fontSize: 11, fontWeight: 700, color: "#94A3B8",
+          textTransform: "uppercase", letterSpacing: "0.07em",
+          gap: 8,
+        }}>
+          <span>Time</span>
+          <span>Node</span>
+          <span>Pot</span>
+          <span>Type</span>
+          <span>Source IP</span>
+          <span>Ports</span>
+          <span />
+        </div>
+
+        {/* empty state */}
+        {list.length === 0 && (
+          <div style={{ padding: "64px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: "#F8FAFC", display: "grid", placeItems: "center", border: "1px solid #E2E8F0" }}>
+              <Icon d={Icons.activity} size={24} color="#CBD5E1" />
+            </div>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "#94A3B8" }}>No events found</p>
+            <p style={{ fontSize: 12, color: "#CBD5E1" }}>
+              {hasFilters ? "Try adjusting your filters" : "Events will appear here as honeypots receive traffic"}
+            </p>
+            {hasFilters && (
+              <button onClick={clearFilters}
+                style={{ marginTop: 4, padding: "7px 18px", borderRadius: 9, fontSize: 12, fontWeight: 600,
+                         background: "#FFFBEB", border: "1px solid #FDE68A", color: "#B45309", cursor: "pointer" }}>
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* rows */}
+        {list.slice(0, displayCount).map((e: any, i: number) => {
+          const m = typeMeta(e.event_type);
+          return (
+            <div
+              key={e.id}
+              onClick={() => setSelectedEvent(e)}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "140px 1fr 1fr 110px 160px 100px 40px",
+                padding: "12px 20px",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
+                borderBottom: i < displayCount - 1 && i < list.length - 1 ? "1px solid #F8FAFC" : "none",
+                borderLeft: `3px solid ${m.bar}`,
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={(ev) => (ev.currentTarget.style.background = "#FAFAFA")}
+              onMouseLeave={(ev) => (ev.currentTarget.style.background = "transparent")}
+            >
+              {/* time */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#334155", fontVariantNumeric: "tabular-nums" }}>
+                  {fmtRelative(e.event_time)}
+                </span>
+                <span style={{ fontSize: 10.5, color: "#94A3B8" }}>
+                  {new Date(e.event_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </span>
+              </div>
+
+              {/* node */}
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {e.node_id ?? "—"}
+                </span>
+                {e.honeypot_type && (
+                  <span style={{ fontSize: 10.5, color: "#94A3B8" }}>{e.honeypot_type}</span>
+                )}
+              </div>
+
+              {/* pot */}
+              <span style={{ fontSize: 11.5, fontFamily: "monospace", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {e.pot_id ?? "—"}
+              </span>
+
+              {/* type badge */}
+              <TypeBadge type={e.event_type} />
+
+              {/* source ip */}
+              <span style={{
+                fontSize: 11.5, fontFamily: "monospace", fontWeight: 600,
+                color: "#9A3412", background: "#FFF7ED", border: "1px solid #FED7AA",
+                padding: "2px 8px", borderRadius: 6, display: "inline-block",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {e.source_ip ?? "—"}
+              </span>
+
+              {/* ports */}
+              <span style={{ fontSize: 11.5, fontFamily: "monospace", color: "#64748B", display: "flex", alignItems: "center", gap: 4 }}>
+                {e.source_port > 0 ? <>{e.source_port}<span style={{ color: "#CBD5E1" }}>→</span>{e.dest_port}</> : "—"}
+              </span>
+
+              {/* chevron */}
+              <span style={{ color: "#CBD5E1", display: "flex", justifyContent: "flex-end" }}>
+                <Icon d={Icons.arrow} size={14} />
+              </span>
+            </div>
+          );
+        })}
+
+        {/* Load More button */}
+        {displayCount < list.length && (
+          <div style={{ padding: "16px 20px", borderTop: "1px solid #F1F5F9", display: "flex", justifyContent: "center" }}>
+            <button onClick={() => setDisplayCount((c) => c + 20)}
+              style={{
+                padding: "8px 24px", borderRadius: 9, fontSize: 12, fontWeight: 600,
+                background: "#FFFBEB", border: "1px solid #FDE68A", color: "#B45309",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                transition: "all 0.15s",
+              }}>
+              <Icon d={Icons.plus} size={13} color="#B45309" /> Load {Math.min(20, list.length - displayCount)} More
+            </button>
+          </div>
+        )}
+      </div>
+
+    </div>
+    {selectedEvent && createPortal(
+      <EventDetailModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />,
+      document.body
+    )}
+    </>
+  );
+}
+
+// ── Event detail modal ────────────────────────────────────────────────────────
+function EventDetailModal({ event: ev, onClose }: { event: any; onClose: () => void }) {
+  const m = typeMeta(ev.event_type);
+  const [copied, setCopied] = useState(false);
+
+  const rawJson = useMemo(() => {
+    if (!ev.data) return null;
+    try {
+      return JSON.stringify(typeof ev.data === "string" ? JSON.parse(ev.data) : ev.data, null, 2);
+    } catch {
+      return String(ev.data);
+    }
+  }, [ev.data]);
+
+  const copyJson = () => {
+    if (!rawJson) return;
+    navigator.clipboard.writeText(rawJson).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  };
+
+  return (
+    /* backdrop — click outside to close */
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(15,23,42,0.18)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "24px 16px",
+      }}
+    >
+      {/* card */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 600,
+          maxHeight: "calc(100vh - 48px)",
+          background: "#fff", borderRadius: 18,
+          boxShadow: "0 8px 48px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.05)",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+          animation: "slideUp 0.22s ease-out",
+        }}
+      >
+        {/* type-coloured top stripe */}
+        <div style={{ height: 4, flexShrink: 0, background: `linear-gradient(90deg, ${m.bar} 0%, ${m.bar}66 100%)` }} />
+
+        {/* header */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "16px 22px", borderBottom: "1px solid #F1F5F9",
+          background: "#FAFAFA", flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+              background: m.bg, border: `1px solid ${m.border}`,
+              display: "grid", placeItems: "center",
+            }}>
+              <Icon d={Icons.activity} size={19} color={m.fg} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Event Details</span>
+                <TypeBadge type={ev.event_type} />
+              </div>
+              <span style={{ fontSize: 11.5, color: "#94A3B8" }}>{fmtTime(ev.event_time)}</span>
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            width: 34, height: 34, borderRadius: 9, border: "1px solid #E2E8F0", flexShrink: 0,
+            background: "#fff", display: "grid", placeItems: "center", cursor: "pointer", marginLeft: 12,
+            transition: "background 0.12s",
+          }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#F1F5F9")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+          >
+            <Icon d={Icons.close} size={15} color="#64748B" />
+          </button>
+        </div>
+
+        {/* scrollable body */}
+        <div style={{ overflowY: "auto", padding: "22px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* identity grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 28px" }}>
+            <Field label="Event ID"      value={ev.id}            mono />
+            <Field label="Node"          value={ev.node_id} />
+            <Field label="Pot ID"        value={ev.pot_id}        mono />
+            <Field label="Honeypot Type" value={ev.honeypot_type} />
+          </div>
+
+          {/* divider */}
+          <div style={{ height: 1, background: "#F1F5F9" }} />
+
+          {/* network card */}
+          <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, color: "#C2410C",
+              textTransform: "uppercase", letterSpacing: "0.07em",
+              marginBottom: 12, display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <Icon d={Icons.globe} size={13} color="#C2410C" /> Network Context
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 28px" }}>
+              <Field label="Source IP"        value={ev.source_ip}      mono accent />
+              <Field label="Destination IP"   value={ev.dest_ip || "—"} mono />
+              <Field label="Source Port"      value={ev.source_port}    mono />
+              <Field label="Destination Port" value={ev.dest_port}      mono />
+            </div>
+          </div>
+
+          {/* raw telemetry */}
+          {rawJson && (
+            <div>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10,
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                  Raw Telemetry
+                </span>
+                <button onClick={copyJson} style={{
+                  padding: "5px 11px", borderRadius: 7, border: "1px solid #E2E8F0",
+                  background: copied ? "#ECFDF5" : "#F8FAFC", fontSize: 11.5, fontWeight: 600,
+                  color: copied ? "#065F46" : "#64748B", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s",
+                }}>
+                  <Icon d={copied ? Icons.check : Icons.copy} size={12} color={copied ? "#10B981" : "#94A3B8"} />
+                  {copied ? "Copied!" : "Copy JSON"}
+                </button>
+              </div>
+              <pre style={{
+                background: "#0F172A", color: "#94A3B8",
+                borderRadius: 10, padding: "14px 16px", margin: 0,
+                fontSize: 11.5, fontFamily: "monospace", lineHeight: 1.7,
+                overflowX: "auto", maxHeight: 240,
+              }}>
+                <span style={{ color: "#E2E8F0" }}>{rawJson}</span>
+              </pre>
+            </div>
+          )}
+
+          {/* bottom padding so content isn't flush against edge */}
+          <div style={{ height: 4 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, mono, accent }: { label: string; value: any; mono?: boolean; accent?: boolean }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <span style={{ fontSize: 10.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</span>
+      <span style={{
+        fontSize: 13, fontFamily: mono ? "monospace" : undefined,
+        fontWeight: mono ? 600 : 500,
+        color: accent ? "#9A3412" : "#0F172A",
+        wordBreak: "break-all",
+      }}>{value ?? "—"}</span>
     </div>
   );
 }
