@@ -39,6 +39,7 @@ const (
 	CmdGetPotMetrics    = "get_pot_metrics"
 	CmdRestartNode      = "restart_node"
 	CmdUninstallNode    = "uninstall_node"
+	CmdRequestHeartbeat = "request_heartbeat"
 )
 
 // Task result status.

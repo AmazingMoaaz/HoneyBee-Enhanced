@@ -360,9 +360,9 @@ export default function NodeDetailPage() {
               <h1 style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", margin: "0 0 8px", letterSpacing: "-0.02em" }}>
                 {node.name}
               </h1>
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
                 {/* Online badge */}
-                <div style={{
+                <div title="Node Status" style={{
                   display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 99,
                   background: online ? "rgba(34,197,94,0.1)" : "rgba(100,116,139,0.1)",
                   border: `1px solid ${online ? "rgba(34,197,94,0.3)" : "rgba(100,116,139,0.2)"}`,
@@ -377,25 +377,55 @@ export default function NodeDetailPage() {
                     {online ? "Online" : "Offline"}
                   </span>
                 </div>
-                <span style={{ fontSize: 12, fontFamily: "monospace", color: "#94A3B8" }}>ID #{node.display_order}</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94A3B8" }}>
-                  <Ico d={I.clock} size={12} color="#CBD5E1" />
+                
+                <div title="Unique Node ID" style={{
+                  display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99,
+                  background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)",
+                  fontSize: 11.5, color: "#475569", fontWeight: 600, fontFamily: "ui-monospace, monospace"
+                }}>
+                  ID: {node.id}
+                </div>
+
+                <div title="Last Heartbeat" style={{
+                  display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99,
+                  background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)",
+                  fontSize: 11.5, color: "#475569", fontWeight: 600
+                }}>
+                  <Ico d={I.clock} size={12} color="#94A3B8" />
                   {relTime(node.last_heartbeat)}
-                </span>
+                </div>
+
                 {node.ip_address && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94A3B8", fontFamily: "monospace" }}>
+                  <div title="IP Address" style={{
+                    display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99,
+                    background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.15)",
+                    fontSize: 11.5, color: "#1D4ED8", fontWeight: 600, fontFamily: "ui-monospace, monospace"
+                  }}>
                     {node.ip_address}
-                  </span>
+                  </div>
                 )}
+
                 {node.os && (
-                  <span style={{ fontSize: 12, color: "#94A3B8" }}>
-                    {node.os}/{node.arch}
-                  </span>
+                  <div title="OS / Architecture" style={{
+                    display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 99,
+                    background: "rgba(245,158,11,0.05)", border: "1px solid rgba(245,158,11,0.15)",
+                    fontSize: 11.5, color: "#B45309", fontWeight: 600
+                  }}>
+                    <Ico d={node.os.toLowerCase() === "windows" ? I.windows : I.linux} size={12} color="#B45309" />
+                    <span style={{ textTransform: "capitalize" }}>{node.os}</span>
+                    <span style={{ color: "rgba(180,83,9,0.5)" }}>/</span>
+                    <span>{node.arch}</span>
+                  </div>
                 )}
+
                 {node.hostname && (
-                  <span style={{ fontSize: 12, color: "#94A3B8" }}>
+                  <div title="Hostname" style={{
+                    display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99,
+                    background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.15)",
+                    fontSize: 11.5, color: "#6D28D9", fontWeight: 600
+                  }}>
                     {node.hostname}
-                  </span>
+                  </div>
                 )}
               </div>
             </div>
@@ -850,11 +880,33 @@ export default function NodeDetailPage() {
 /* ── Node Metrics Panel ───────────────────────────── */
 function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean }) {
   const [hours, setHours] = useState(1);
-  const { data, isLoading } = useQuery({
+  const [refreshInterval, setRefreshInterval] = useState(0); // 0 = manual
+
+  const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["node-metrics", nodeId, hours],
     queryFn: async () => (await api.get(`/nodes/${nodeId}/metrics?hours=${hours}`)).data,
-    refetchInterval: online ? 15000 : false,
+    refetchInterval: refreshInterval > 0 && online ? refreshInterval : false,
+    refetchOnWindowFocus: refreshInterval > 0, // only auto-pull on focus if an interval is set
   });
+
+  const [isCommandPending, setIsCommandPending] = useState(false);
+
+  const handleManualRefresh = async () => {
+    if (!online) {
+      refetch();
+      return;
+    }
+    setIsCommandPending(true);
+    try {
+      await api.post(`/nodes/${nodeId}/command`, { command: "request_heartbeat", payload: {} });
+      // Give the node a short moment to reply, then pull the new metrics from the DB
+      setTimeout(() => {
+        refetch().finally(() => setIsCommandPending(false));
+      }, 800);
+    } catch (err) {
+      refetch().finally(() => setIsCommandPending(false));
+    }
+  };
 
   const history: any[] = data?.history ?? [];
   const latest = data?.latest;
@@ -879,17 +931,66 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
               </p>
             </div>
           </div>
-          <select
-            className="input"
-            value={hours}
-            onChange={(e) => setHours(Number(e.target.value))}
-            style={{ width: 160 }}
-          >
-            <option value={1}>Last 1 hour</option>
-            <option value={6}>Last 6 hours</option>
-            <option value={24}>Last 24 hours</option>
-            <option value={168}>Last 7 days</option>
-          </select>
+          <div style={{
+            display: "inline-flex", alignItems: "center", padding: 4,
+            background: "#F8FAFC", border: "1px solid #E2E8F0",
+            borderRadius: 12, gap: 4,
+            boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)"
+          }}>
+            <select
+              className="input"
+              value={refreshInterval}
+              onChange={(e) => setRefreshInterval(Number(e.target.value))}
+              style={{ 
+                padding: "6px 26px 6px 12px", fontSize: 12.5, minWidth: 120, height: 30, 
+                background: "transparent", border: "none", boxShadow: "none", color: "#475569", fontWeight: 600
+              }}
+            >
+              <option value={0}>Manual Refresh</option>
+              <option value={60000}>Every 1 min</option>
+              <option value={300000}>Every 5 mins</option>
+              <option value={900000}>Every 15 mins</option>
+            </select>
+            
+            <div style={{ width: 1, height: 16, background: "#CBD5E1", margin: "0 2px" }} />
+            
+            <select
+              className="input"
+              value={hours}
+              onChange={(e) => setHours(Number(e.target.value))}
+              style={{ 
+                padding: "6px 26px 6px 12px", fontSize: 12.5, minWidth: 110, height: 30, 
+                background: "transparent", border: "none", boxShadow: "none", color: "#475569", fontWeight: 600
+              }}
+            >
+              <option value={1}>Last 1 hour</option>
+              <option value={6}>Last 6 hours</option>
+              <option value={24}>Last 24 hours</option>
+              <option value={168}>Last 7 days</option>
+            </select>
+            
+            <button
+              onClick={handleManualRefresh}
+              disabled={isFetching || isCommandPending}
+              style={{
+                padding: "0 14px", height: 30, borderRadius: 8, fontSize: 12.5, fontWeight: 700,
+                background: "#FFFFFF", border: "1px solid #E2E8F0",
+                color: (isFetching || isCommandPending) ? "#94A3B8" : "#0F172A",
+                cursor: (isFetching || isCommandPending) ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", gap: 6,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <span style={{ 
+                animation: (isFetching || isCommandPending) ? "spin 1s linear infinite" : "none",
+                display: "inline-flex"
+              }}>
+                <Ico d={I.restart} size={13} color={(isFetching || isCommandPending) ? "#94A3B8" : "#B45309"} />
+              </span>
+              {(isFetching || isCommandPending) ? "..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
         {/* Current values */}

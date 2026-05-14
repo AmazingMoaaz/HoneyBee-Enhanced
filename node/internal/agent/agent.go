@@ -356,6 +356,9 @@ func (a *Agent) handleTask(ctx context.Context, ta protocol.TaskAssign) {
 		})
 		go a.selfUninstall()
 		return
+	case protocol.CmdRequestHeartbeat:
+		a.sendHeartbeat()
+		status = protocol.TaskStatusCompleted
 	default:
 		status, msg = protocol.TaskStatusFailed, "unknown command"
 	}
