@@ -10,7 +10,8 @@ services:
     volumes: ["mysql_data:/var/lib/mysql"]
     # host port binding removed — core reaches mysql via internal network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpw"]
+      test:
+        ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpw"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -24,19 +25,19 @@ services:
     environment:
       DB_DSN: "honeybee:honeybeepw@tcp(mysql:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4"
       JWT_SECRET: "dev-secret-change-me"
-      HTTP_ADDR: "0.0.0.0:5100"
+      HTTP_ADDR: "0.0.0.0:5400"
       NODE_ADDR: "0.0.0.0:9001"
       LOG_LEVEL: "info"
     ports:
-      - "5100:5100"   # HTTP API
-      - "9001:9001"   # Node TCP
+      - "5400:5400" # HTTP API
+      - "9001:9001" # Node TCP
     restart: unless-stopped
 
   dashboard:
     build:
       context: ./dashboard
     depends_on: [core]
-    ports: ["5173:80"]
+    ports: ["5300:80"]
     restart: unless-stopped
 
 volumes:

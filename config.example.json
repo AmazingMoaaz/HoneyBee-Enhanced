@@ -1,6 +1,6 @@
 {
   "server": {
-    "http_addr": "0.0.0.0:5100",
+    "http_addr": "0.0.0.0:5400",
     "node_addr": "0.0.0.0:9001",
     "node_public_addr": "",
     "public_http_addr": "",

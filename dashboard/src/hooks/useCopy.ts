@@ -3,7 +3,7 @@
  * (plain HTTP LAN) contexts.
  *
  * navigator.clipboard.writeText is only available in secure contexts.  When
- * it is not available (e.g. http://10.10.10.2:5173) we fall back to the
+ * it is not available (e.g. http://10.10.10.2:5300) we fall back to the
  * legacy execCommand("copy") approach using a temporary textarea.
  */
 export async function copyToClipboard(text: string): Promise<void> {

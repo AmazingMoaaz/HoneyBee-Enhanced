@@ -99,6 +99,14 @@ type LogConfig struct {
 
 // Load reads configs/config.json (or YAML) and returns the config.
 // JSON is selected when the path ends in .json, otherwise YAML is assumed.
+// After parsing the file, the following environment variables are applied as
+// overrides (matching the names used in docker-compose):
+//
+//	HTTP_ADDR   → server.http_addr
+//	NODE_ADDR   → server.node_addr
+//	DB_DSN      → database.dsn
+//	JWT_SECRET  → jwt.secret
+//	LOG_LEVEL   → log.level
 func Load(path string) (*Config, error) {
 	cfg := defaultConfig()
 	if path != "" {
@@ -116,13 +124,35 @@ func Load(path string) (*Config, error) {
 			}
 		}
 	}
+	applyEnvOverrides(cfg)
 	return cfg, nil
+}
+
+// applyEnvOverrides overlays environment variables on top of the file-based
+// config. Only non-empty env values are applied so that unset vars leave the
+// file-based (or default) values intact.
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("HTTP_ADDR"); v != "" {
+		cfg.Server.HTTPAddr = v
+	}
+	if v := os.Getenv("NODE_ADDR"); v != "" {
+		cfg.Server.NodeAddr = v
+	}
+	if v := os.Getenv("DB_DSN"); v != "" {
+		cfg.Database.DSN = v
+	}
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		cfg.JWT.Secret = v
+	}
+	if v := os.Getenv("LOG_LEVEL"); v != "" {
+		cfg.Log.Level = v
+	}
 }
 
 func defaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
-			HTTPAddr:       "0.0.0.0:5100",
+			HTTPAddr:       "0.0.0.0:5400",
 			NodeAddr:       "0.0.0.0:9001",
 			AllowedOrigins: nil, // nil = auto-allow loopback + RFC1918 LAN origins
 		},

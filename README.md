@@ -59,7 +59,7 @@ durable task queue / WebSocket / multi-org architecture of [HoneyPots].
 
 ```bash
 docker compose up -d --build
-# Dashboard: http://localhost:5173
+# Dashboard: http://localhost:5300
 # API:       http://localhost:5100/api/v1/health
 ```
 
@@ -79,7 +79,7 @@ HB_SERVER_ADDR=127.0.0.1:9001 HB_NODE_TOKEN=<token> \
 make core node cli
 
 # 2) dashboard
-cd dashboard && npm install && npm run dev    # http://localhost:5173
+cd dashboard && npm install && npm run dev    # http://localhost:5300
 ```
 
 `vite.config.ts` proxies `/api` → `http://localhost:5100` so login works
