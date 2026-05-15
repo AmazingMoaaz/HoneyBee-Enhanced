@@ -3,7 +3,9 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -13,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/honeybee-enhanced/core/internal/api/middleware"
 	"github.com/honeybee-enhanced/core/internal/config"
+	"github.com/honeybee-enhanced/core/internal/loganalyzer"
 	"github.com/honeybee-enhanced/core/internal/nodeserver"
 	"github.com/honeybee-enhanced/core/internal/store"
 	"golang.org/x/crypto/bcrypt"
@@ -23,11 +26,12 @@ type NodesHandler struct {
 	Store      *store.Store
 	NodeServer *nodeserver.Server
 	Cfg        *config.Config
+	LAClient   *loganalyzer.Client
 }
 
 // NewNodesHandler constructs.
-func NewNodesHandler(s *store.Store, ns *nodeserver.Server, c *config.Config) *NodesHandler {
-	return &NodesHandler{Store: s, NodeServer: ns, Cfg: c}
+func NewNodesHandler(s *store.Store, ns *nodeserver.Server, c *config.Config, la *loganalyzer.Client) *NodesHandler {
+	return &NodesHandler{Store: s, NodeServer: ns, Cfg: c, LAClient: la}
 }
 
 // List returns nodes for the current org.
@@ -38,19 +42,53 @@ func (h *NodesHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "list nodes")
 		return
 	}
+	out := make([]map[string]any, 0, len(nodes))
 	for i := range nodes {
 		nodes[i].Online = h.NodeServer.IsOnline(nodes[i].ID)
+		out = append(out, nodeView(&nodes[i], h.LAClient))
 	}
-	writeJSON(w, http.StatusOK, nodes)
+	writeJSON(w, http.StatusOK, out)
+}
+
+// LogAnalyzerInfo exposes the LA integration's public state so the dashboard
+// can build deep links and decide whether to show the opt-in toggle.
+func (h *NodesHandler) LogAnalyzerInfo(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"enabled":    h.LAClient.Enabled(),
+		"public_url": h.LAClient.PublicURL(),
+	})
+}
+
+// nodeView decorates a Node with a derived LA workspace URL.
+func nodeView(n any, la *loganalyzer.Client) map[string]any {
+	m := map[string]any{}
+	b, _ := json.Marshal(n)
+	_ = json.Unmarshal(b, &m)
+	if id, _ := m["la_workspace_id"].(string); id != "" {
+		m["la_workspace_url"] = la.WorkspaceURL(id)
+	}
+	return m
 }
 
 type createNodeReq struct {
 	Name string `json:"name"`
+	// RecordLogs opts the node into LogAnalyzer forwarding at creation time.
+	RecordLogs bool `json:"record_logs"`
+	// LAWorkspaceName overrides the workspace name (defaults to node name).
+	LAWorkspaceName string `json:"la_workspace_name"`
 }
 type createNodeResp struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Token string `json:"token"`
+
+	// LogAnalyzer integration response (only populated when record_logs=true
+	// succeeded). The workspace URL is a browser deep-link.
+	LAEnabled       bool   `json:"la_enabled,omitempty"`
+	LAWorkspaceID   string `json:"la_workspace_id,omitempty"`
+	LAWorkspaceName string `json:"la_workspace_name,omitempty"`
+	LAWorkspaceURL  string `json:"la_workspace_url,omitempty"`
+	LAError         string `json:"la_error,omitempty"`
 }
 
 // Create generates a new node + token (returned once).
@@ -79,7 +117,102 @@ func (h *NodesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	uid := middleware.UserID(r.Context())
 	rid := strconv.FormatInt(id, 10)
 	_ = h.Store.LogAudit(r.Context(), orgID, &uid, "create", "node", &rid, req.Name)
-	writeJSON(w, http.StatusCreated, createNodeResp{ID: id, Name: req.Name, Token: token})
+
+	resp := createNodeResp{ID: id, Name: req.Name, Token: token}
+
+	// Best-effort LogAnalyzer provisioning. Failure here must NOT undo the
+	// node creation — we just surface the error so the UI can show a notice.
+	if req.RecordLogs && h.LAClient.Enabled() {
+		wsName := strings.TrimSpace(req.LAWorkspaceName)
+		if wsName == "" {
+			wsName = req.Name
+		}
+		wsID, wsToken, laErr := h.LAClient.CreateWorkspace(r.Context(), wsName)
+		if laErr != nil {
+			resp.LAError = laErr.Error()
+		} else if err := h.Store.EnableNodeLogAnalyzer(r.Context(), orgID, id, wsID, wsName, wsToken); err != nil {
+			resp.LAError = "persist workspace: " + err.Error()
+		} else {
+			resp.LAEnabled = true
+			resp.LAWorkspaceID = wsID
+			resp.LAWorkspaceName = wsName
+			resp.LAWorkspaceURL = h.LAClient.WorkspaceURL(wsID)
+			_ = h.Store.LogAudit(r.Context(), orgID, &uid, "loganalyzer-enable", "node", &rid, wsID)
+		}
+	}
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+// EnableLogAnalyzer turns on LA forwarding for an existing node, creating a
+// workspace on demand. Request body: { "workspace_name": "optional" }.
+func (h *NodesHandler) EnableLogAnalyzer(w http.ResponseWriter, r *http.Request) {
+	if !h.LAClient.Enabled() {
+		writeError(w, http.StatusServiceUnavailable, "LogAnalyzer integration disabled")
+		return
+	}
+	orgID := middleware.OrgID(r.Context())
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	node, err := h.Store.GetNode(r.Context(), orgID, id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "node")
+		return
+	}
+	if node.LAEnabled {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"la_enabled":        true,
+			"la_workspace_id":   node.LAWorkspaceID,
+			"la_workspace_name": node.LAWorkspaceName,
+			"la_workspace_url":  h.LAClient.WorkspaceURL(node.LAWorkspaceID),
+		})
+		return
+	}
+	var body struct {
+		WorkspaceName string `json:"workspace_name"`
+	}
+	_ = readJSON(r, &body)
+	wsName := strings.TrimSpace(body.WorkspaceName)
+	if wsName == "" {
+		wsName = node.Name
+	}
+	wsID, wsToken, err := h.LAClient.CreateWorkspace(r.Context(), wsName)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "loganalyzer: "+err.Error())
+		return
+	}
+	if err := h.Store.EnableNodeLogAnalyzer(r.Context(), orgID, id, wsID, wsName, wsToken); err != nil {
+		writeError(w, http.StatusInternalServerError, "persist workspace")
+		return
+	}
+	h.NodeServer.RefreshNodeLA(id)
+	uid := middleware.UserID(r.Context())
+	rid := strconv.FormatInt(id, 10)
+	_ = h.Store.LogAudit(r.Context(), orgID, &uid, "loganalyzer-enable", "node", &rid, wsID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"la_enabled":        true,
+		"la_workspace_id":   wsID,
+		"la_workspace_name": wsName,
+		"la_workspace_url":  h.LAClient.WorkspaceURL(wsID),
+	})
+}
+
+// DisableLogAnalyzer stops forwarding and forgets the token. The workspace
+// itself is left intact in LogAnalyzer for historical inspection.
+func (h *NodesHandler) DisableLogAnalyzer(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgID(r.Context())
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if _, err := h.Store.GetNode(r.Context(), orgID, id); err != nil {
+		writeError(w, http.StatusNotFound, "node")
+		return
+	}
+	if err := h.Store.DisableNodeLogAnalyzer(r.Context(), orgID, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "disable")
+		return
+	}
+	h.NodeServer.RefreshNodeLA(id)
+	uid := middleware.UserID(r.Context())
+	rid := strconv.FormatInt(id, 10)
+	_ = h.Store.LogAudit(r.Context(), orgID, &uid, "loganalyzer-disable", "node", &rid, "")
+	writeJSON(w, http.StatusOK, map[string]any{"la_enabled": false})
 }
 
 // Get returns a single node.
@@ -94,16 +227,19 @@ func (h *NodesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	n.Online = h.NodeServer.IsOnline(n.ID)
 	deps, _ := h.Store.ListDeployments(r.Context(), orgID, id, "")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"node":        n,
+		"node":        nodeView(n, h.LAClient),
 		"deployments": deps,
 	})
 }
 
 // Delete soft-deletes a node and disconnects it.
+// Optional query param: ?delete_workspace=true — when the node had a
+// LogAnalyzer workspace provisioned, also deletes that workspace.
 func (h *NodesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgID(r.Context())
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if _, err := h.Store.GetNode(r.Context(), orgID, id); err != nil {
+	node, err := h.Store.GetNode(r.Context(), orgID, id)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "node")
 		return
 	}
@@ -115,6 +251,19 @@ func (h *NodesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	uid := middleware.UserID(r.Context())
 	rid := strconv.FormatInt(id, 10)
 	_ = h.Store.LogAudit(r.Context(), orgID, &uid, "delete", "node", &rid, "")
+
+	// Best-effort: delete the LogAnalyzer workspace when the caller requests it
+	// and the node had one provisioned.
+	if r.URL.Query().Get("delete_workspace") == "true" &&
+		h.LAClient.Enabled() && node.LAWorkspaceID != "" {
+		if err := h.LAClient.DeleteWorkspace(r.Context(), node.LAWorkspaceID); err != nil {
+			slog.Default().Warn("failed to delete LA workspace on node delete",
+				slog.String("workspace_id", node.LAWorkspaceID),
+				slog.String("err", err.Error()),
+			)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

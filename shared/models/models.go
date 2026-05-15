@@ -65,6 +65,13 @@ type Node struct {
 	MemPct       float64 `json:"mem_pct,omitempty" db:"-"`
 	DiskPct      float64 `json:"disk_pct,omitempty" db:"-"`
 	UptimeSecs   int64   `json:"uptime_secs,omitempty" db:"-"`
+
+	// LogAnalyzer integration (per-node opt-in).
+	// The raw ingest token is never serialized to the dashboard.
+	LAEnabled       bool   `json:"la_enabled" db:"la_enabled"`
+	LAWorkspaceID   string `json:"la_workspace_id,omitempty" db:"la_workspace_id"`
+	LAWorkspaceName string `json:"la_workspace_name,omitempty" db:"la_workspace_name"`
+	LAIngestToken   string `json:"-" db:"la_ingest_token"`
 }
 
 // NodeMetric is a single performance snapshot from a node heartbeat.
@@ -202,15 +209,15 @@ type Alert struct {
 
 // AlertRule defines an alerting rule that generates alerts.
 type AlertRule struct {
-	ID          int64     `json:"id" db:"id"`
-	OrgID       int64     `json:"org_id" db:"org_id"`
-	Name        string    `json:"name" db:"name"`
-	Description string    `json:"description" db:"description"`
-	EventType   string    `json:"event_type" db:"event_type"`
-	Condition   string    `json:"condition" db:"condition"` // JSON condition
-	Severity    string    `json:"severity" db:"severity"`
-	Enabled     bool      `json:"enabled" db:"enabled"`
-	Cooldown    int       `json:"cooldown_secs" db:"cooldown_secs"`
+	ID          int64      `json:"id" db:"id"`
+	OrgID       int64      `json:"org_id" db:"org_id"`
+	Name        string     `json:"name" db:"name"`
+	Description string     `json:"description" db:"description"`
+	EventType   string     `json:"event_type" db:"event_type"`
+	Condition   string     `json:"condition" db:"condition"` // JSON condition
+	Severity    string     `json:"severity" db:"severity"`
+	Enabled     bool       `json:"enabled" db:"enabled"`
+	Cooldown    int        `json:"cooldown_secs" db:"cooldown_secs"`
 	LastFired   *time.Time `json:"last_fired" db:"last_fired"`
 	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`

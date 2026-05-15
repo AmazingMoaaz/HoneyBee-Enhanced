@@ -14,8 +14,24 @@ import { copyToClipboard } from "../hooks/useCopy";
    - Rich, animated empty + loading states
 ───────────────────────────────────────────────────────────────────── */
 
-type CreatedNode = { id: number; name: string; token: string };
-type Node        = { id: number; name: string; online: boolean; last_heartbeat: string | null; display_order: number; ip_address?: string; os?: string; arch?: string; hostname?: string; cpu_pct?: number; mem_pct?: number; disk_pct?: number; uptime_secs?: number };
+type CreatedNode = {
+  id: number; name: string; token: string;
+  la_enabled?: boolean;
+  la_workspace_id?: string;
+  la_workspace_name?: string;
+  la_workspace_url?: string;
+  la_error?: string;
+};
+type Node = {
+  id: number; name: string; online: boolean; last_heartbeat: string | null; display_order: number;
+  ip_address?: string; os?: string; arch?: string; hostname?: string;
+  cpu_pct?: number; mem_pct?: number; disk_pct?: number; uptime_secs?: number;
+  la_enabled?: boolean;
+  la_workspace_id?: string;
+  la_workspace_name?: string;
+  la_workspace_url?: string;
+};
+type LAInfo = { enabled: boolean; public_url: string };
 
 function relTime(iso: string | null): string {
   if (!iso) return "Never seen";
@@ -133,6 +149,49 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
             </code>
           </div>
         </div>
+
+        {/* LogAnalyzer integration callout — only when LA was provisioned at creation */}
+        {created.la_enabled && created.la_workspace_url && (
+          <div style={{
+            marginTop: 16, padding: "12px 14px", borderRadius: 12,
+            background: "linear-gradient(135deg, rgba(59,130,246,0.10), rgba(59,130,246,0.04))",
+            border: "1px solid rgba(59,130,246,0.30)",
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+          }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+              display: "grid", placeItems: "center",
+              background: "linear-gradient(135deg, #60A5FA, #2563EB)",
+            }}>
+              <Icon d={Icons.search} size={16} color="#FFFFFF" sw={2.2} />
+            </div>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <p style={{ fontWeight: 800, fontSize: 13, color: "#1E3A8A", marginBottom: 2 }}>
+                Log Analyzer workspace ready
+              </p>
+              <p style={{ fontSize: 11.5, color: "#475569" }}>
+                Every event & log from <strong>{created.name}</strong> now streams into
+                workspace <code style={{ fontFamily: "monospace", color: "#1E40AF" }}>{created.la_workspace_name}</code>.
+              </p>
+            </div>
+            <a href={created.la_workspace_url} target="_blank" rel="noreferrer" style={{
+              padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700,
+              background: "#2563EB", color: "#FFFFFF", textDecoration: "none",
+              display: "inline-flex", alignItems: "center", gap: 5,
+            }}>
+              Open <Icon d={Icons.arrow} size={12} color="#FFFFFF" />
+            </a>
+          </div>
+        )}
+        {created.la_error && (
+          <div style={{
+            marginTop: 16, padding: "10px 14px", borderRadius: 10,
+            background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.25)",
+            fontSize: 12, color: "#991B1B",
+          }}>
+            <strong>Log Analyzer integration failed:</strong> {created.la_error}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -141,10 +200,11 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
 /* ──────────────────────────────────────────────────────────────────
    Modern Node Card — interactive, with mouse-tracked sheen
 ────────────────────────────────────────────────────────────────── */
-function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => void }) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [menuOpen,      setMenuOpen]      = useState(false);
-  const [copiedId,      setCopiedId]      = useState(false);
+function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number, deleteWorkspace: boolean) => void }) {
+  const [confirmDelete,    setConfirmDelete]    = useState(false);
+  const [deleteWorkspace,  setDeleteWorkspace]  = useState(false);
+  const [menuOpen,         setMenuOpen]         = useState(false);
+  const [copiedId,         setCopiedId]         = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const online  = node.online;
@@ -214,6 +274,25 @@ function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => vo
               <span className="chip" style={{ fontFamily: "ui-monospace, monospace", fontWeight: 700 }}>
                 #{node.display_order}
               </span>
+              {node.la_enabled && (
+                <a
+                  href={node.la_workspace_url || undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`Streaming logs to "${node.la_workspace_name || "workspace"}" in Log Analyzer`}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "2px 8px", borderRadius: 99, fontSize: 10.5, fontWeight: 800,
+                    background: "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(37,99,235,0.10))",
+                    color: "#1E40AF", border: "1px solid rgba(37,99,235,0.30)",
+                    textDecoration: "none", letterSpacing: "0.04em",
+                  }}
+                >
+                  <Icon d={Icons.search} size={10} color="#1E40AF" sw={2.4} />
+                  LA
+                </a>
+              )}
             </div>
           </div>
 
@@ -304,18 +383,47 @@ function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number) => vo
         background: "rgba(248,250,252,0.7)",
       }}>
         {confirmDelete ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-            <span style={{ fontSize: 12.5, color: "#DC2626", fontWeight: 600, flex: 1 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+            <span style={{ fontSize: 12.5, color: "#DC2626", fontWeight: 600 }}>
               Delete <strong>{node.name}</strong>?
             </span>
-            <button onClick={() => onDelete(node.id)} style={{
-              padding: "5px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-              background: "#DC2626", border: "none", color: "#FFFFFF",
-            }}>Delete</button>
-            <button onClick={() => setConfirmDelete(false)} style={{
-              padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-              background: "#EEF2F6", border: "1px solid rgba(15,23,42,0.12)", color: "#64748B",
-            }}>Cancel</button>
+
+            {/* LogAnalyzer workspace opt-out — only shown when the node has one */}
+            {node.la_enabled && node.la_workspace_id && (
+              <label style={{
+                display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+                padding: "7px 10px", borderRadius: 8, fontSize: 11.5,
+                background: deleteWorkspace
+                  ? "rgba(220,38,38,0.06)"
+                  : "rgba(59,130,246,0.05)",
+                border: `1px solid ${deleteWorkspace ? "rgba(220,38,38,0.25)" : "rgba(59,130,246,0.2)"}`,
+                transition: "background 0.15s, border-color 0.15s",
+              }}>
+                <input
+                  type="checkbox"
+                  checked={deleteWorkspace}
+                  onChange={e => setDeleteWorkspace(e.target.checked)}
+                  style={{ accentColor: "#DC2626", width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
+                />
+                <span style={{ color: deleteWorkspace ? "#991B1B" : "#1E40AF", fontWeight: 700 }}>
+                  Also delete LogAnalyzer workspace
+                </span>
+                <span style={{ color: "#64748B", fontSize: 10.5, marginLeft: 2 }}>
+                  ({node.la_workspace_name || node.la_workspace_id})
+                </span>
+              </label>
+            )}
+
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => onDelete(node.id, deleteWorkspace)} style={{
+                padding: "5px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                background: "#DC2626", border: "none", color: "#FFFFFF",
+              }}>Delete</button>
+              <button onClick={() => { setConfirmDelete(false); setDeleteWorkspace(false); }} style={{
+                padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                background: "#EEF2F6", border: "1px solid rgba(15,23,42,0.12)", color: "#64748B",
+              }}>Cancel</button>
+            </div>
           </div>
         ) : (
           <>
@@ -384,32 +492,55 @@ type Sort   = "recent" | "name" | "status";
 
 export default function NodesPage() {
   const qc = useQueryClient();
-  const [name,    setName]    = useState("");
-  const [created, setCreated] = useState<CreatedNode | null>(null);
-  const [filter,  setFilter]  = useState<Filter>("all");
-  const [sort,    setSort]    = useState<Sort>("recent");
-  const [query,   setQuery]   = useState("");
-  const [adding,  setAdding]  = useState(false);
+  const [name,       setName]       = useState("");
+  const [created,    setCreated]    = useState<CreatedNode | null>(null);
+  const [filter,     setFilter]     = useState<Filter>("all");
+  const [sort,       setSort]       = useState<Sort>("recent");
+  const [query,      setQuery]      = useState("");
+  const [adding,     setAdding]     = useState(false);
+  const [recordLogs, setRecordLogs] = useState(true);
 
   const { data: nodes, isLoading } = useQuery({
     queryKey: ["nodes"],
     queryFn: async () => (await api.get("/nodes")).data,
     refetchInterval: 5000,
   });
+  // Discover whether the LogAnalyzer integration is wired up on the server.
+  // We hide the toggle (and the badge link) entirely when it's disabled so
+  // users aren't shown an option that would silently no-op.
+  const { data: laInfo } = useQuery<LAInfo>({
+    queryKey: ["integrations", "log-analyzer"],
+    queryFn: async () => (await api.get("/integrations/log-analyzer")).data,
+    staleTime: 60_000,
+  });
+  const laEnabled = laInfo?.enabled === true;
+
   const create = useMutation({
-    mutationFn: async (n: string) => (await api.post("/nodes", { name: n })).data as CreatedNode,
+    mutationFn: async (n: string) => (await api.post("/nodes", {
+      name: n,
+      record_logs: laEnabled && recordLogs,
+      la_workspace_name: n,
+    })).data as CreatedNode,
     onSuccess: (data) => {
       setCreated(data); setName(""); setAdding(false);
       // Optimistically append the new node without disturbing existing entries.
       // The running refetchInterval will sync authoritative data within 5 s.
       qc.setQueryData<Node[]>(["nodes"], (old) => [
         ...(old ?? []),
-        { id: data.id, name: data.name, online: false, last_heartbeat: null, display_order: (old?.length ?? 0) + 1 },
+        {
+          id: data.id, name: data.name, online: false, last_heartbeat: null,
+          display_order: (old?.length ?? 0) + 1,
+          la_enabled: data.la_enabled,
+          la_workspace_id: data.la_workspace_id,
+          la_workspace_name: data.la_workspace_name,
+          la_workspace_url: data.la_workspace_url,
+        },
       ]);
     },
   });
   const del = useMutation({
-    mutationFn: async (id: number) => api.delete(`/nodes/${id}`),
+    mutationFn: async ({ id, deleteWorkspace }: { id: number; deleteWorkspace: boolean }) =>
+      api.delete(`/nodes/${id}${deleteWorkspace ? "?delete_workspace=true" : ""}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["nodes"] }),
   });
 
@@ -565,6 +696,58 @@ export default function NodesPage() {
                   {create.isPending ? "Creating…" : <>Create <Icon d={Icons.arrow} size={13} color="#1C0A00" /></>}
                 </button>
               </div>
+
+              {/* LogAnalyzer opt-in — only rendered when the integration is configured on the server. */}
+              {laEnabled && (
+                <label
+                  style={{
+                    marginTop: 12, padding: "12px 14px", borderRadius: 12,
+                    border: `1.5px solid ${recordLogs ? "rgba(37,99,235,0.35)" : "rgba(15,23,42,0.08)"}`,
+                    background: recordLogs
+                      ? "linear-gradient(135deg, rgba(59,130,246,0.10), rgba(59,130,246,0.03))"
+                      : "rgba(248,250,252,0.7)",
+                    display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
+                    transition: "border-color 0.15s, background 0.15s",
+                  }}
+                >
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                    display: "grid", placeItems: "center",
+                    background: recordLogs ? "linear-gradient(135deg, #60A5FA, #2563EB)" : "#E2E8F0",
+                    transition: "background 0.15s",
+                  }}>
+                    <Icon d={Icons.search} size={16} color={recordLogs ? "#FFFFFF" : "#94A3B8"} sw={2.2} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontWeight: 800, fontSize: 13.5, color: "#0F172A" }}>
+                      Record logs in Log Analyzer
+                    </p>
+                    <p style={{ fontSize: 11.5, color: "#64748B", marginTop: 2, lineHeight: 1.5 }}>
+                      Auto-creates a workspace named <strong>{name || "<node name>"}</strong> and streams
+                      every event from this node for search, filters & alerts.
+                    </p>
+                  </div>
+                  {/* Custom toggle */}
+                  <span style={{
+                    position: "relative", width: 40, height: 22, borderRadius: 99,
+                    background: recordLogs ? "#2563EB" : "#CBD5E1",
+                    transition: "background 0.15s", flexShrink: 0,
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={recordLogs}
+                      onChange={e => setRecordLogs(e.target.checked)}
+                      style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
+                    />
+                    <span style={{
+                      position: "absolute", top: 2, left: recordLogs ? 20 : 2,
+                      width: 18, height: 18, borderRadius: "50%", background: "#FFFFFF",
+                      boxShadow: "0 1px 3px rgba(15,23,42,0.25)", transition: "left 0.18s",
+                    }} />
+                  </span>
+                </label>
+              )}
+
               {create.isError && (
                 <p style={{ fontSize: 12, color: "#DC2626", marginTop: 8, display: "flex", alignItems: "center", gap: 5 }}>
                   <Icon d={Icons.warn} size={12} color="#DC2626" /> {(create.error as any)?.response?.data?.error ?? "Failed to create node."}
@@ -623,7 +806,7 @@ export default function NodesPage() {
           gap: 16,
         }}>
           {visible.map(n => (
-            <NodeCard key={n.id} node={n} onDelete={id => del.mutate(id)} />
+            <NodeCard key={n.id} node={n} onDelete={(id, deleteWs) => del.mutate({ id, deleteWorkspace: deleteWs })} />
           ))}
         </div>
       )}

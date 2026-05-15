@@ -40,13 +40,24 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 
 // Config is the root configuration.
 type Config struct {
-	Server   ServerConfig   `yaml:"server"   json:"server"`
-	Database DatabaseConfig `yaml:"database" json:"database"`
-	TLS      TLSConfig      `yaml:"tls"      json:"tls"`
-	JWT      JWTConfig      `yaml:"jwt"      json:"jwt"`
-	PotStore PotStoreConfig `yaml:"potstore" json:"potstore"`
-	Node     NodeRelease    `yaml:"node"     json:"node"`
-	Log      LogConfig      `yaml:"log"      json:"log"`
+	Server      ServerConfig      `yaml:"server"        json:"server"`
+	Database    DatabaseConfig    `yaml:"database"      json:"database"`
+	TLS         TLSConfig         `yaml:"tls"           json:"tls"`
+	JWT         JWTConfig         `yaml:"jwt"           json:"jwt"`
+	PotStore    PotStoreConfig    `yaml:"potstore"      json:"potstore"`
+	Node        NodeRelease       `yaml:"node"          json:"node"`
+	Log         LogConfig         `yaml:"log"           json:"log"`
+	LogAnalyzer LogAnalyzerConfig `yaml:"log_analyzer"  json:"log_analyzer"`
+}
+
+// LogAnalyzerConfig wires the optional LogAnalyzer integration. When Enabled,
+// nodes can opt-in (per-node) to forward events + pot_logs to a workspace in
+// LogAnalyzer. The dashboard hides the toggle entirely when Enabled is false.
+type LogAnalyzerConfig struct {
+	Enabled       bool   `yaml:"enabled"        json:"enabled"`
+	URL           string `yaml:"url"            json:"url"`            // e.g. http://localhost:8080
+	PublicURL     string `yaml:"public_url"     json:"public_url"`     // browser-facing UI URL (defaults to URL)
+	RetentionDays int    `yaml:"retention_days" json:"retention_days"` // workspace retention when created (default 30)
 }
 
 // ServerConfig holds HTTP + node TCP listener settings.
@@ -147,6 +158,18 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}
+	if v := os.Getenv("LOGANALYZER_URL"); v != "" {
+		cfg.LogAnalyzer.URL = v
+		if !cfg.LogAnalyzer.Enabled {
+			cfg.LogAnalyzer.Enabled = true
+		}
+	}
+	if v := os.Getenv("LOGANALYZER_PUBLIC_URL"); v != "" {
+		cfg.LogAnalyzer.PublicURL = v
+	}
+	if v := os.Getenv("LOGANALYZER_ENABLED"); v != "" {
+		cfg.LogAnalyzer.Enabled = v == "1" || strings.EqualFold(v, "true")
+	}
 }
 
 func defaultConfig() *Config {
@@ -175,5 +198,11 @@ func defaultConfig() *Config {
 			GitHubReleaseTag: "latest",
 		},
 		Log: LogConfig{Level: "info"},
+		LogAnalyzer: LogAnalyzerConfig{
+			Enabled:       false,
+			URL:           "http://localhost:8080",
+			PublicURL:     "",
+			RetentionDays: 30,
+		},
 	}
 }

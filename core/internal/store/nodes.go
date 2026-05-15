@@ -46,10 +46,12 @@ func (s *Store) GetNode(ctx context.Context, orgID, id int64) (*models.Node, err
 	var n models.Node
 	err := s.DB.GetContext(ctx, &n, `
 		SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
-		       last_heartbeat, created_at, updated_at, display_order
+		       last_heartbeat, created_at, updated_at, display_order,
+		       la_enabled, la_workspace_id, la_workspace_name, la_ingest_token
 		FROM (
 		  SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
 		         last_heartbeat, created_at, updated_at,
+		         la_enabled, la_workspace_id, la_workspace_name, la_ingest_token,
 		         ROW_NUMBER() OVER (PARTITION BY org_id ORDER BY created_at ASC) AS display_order
 		  FROM nodes
 		  WHERE org_id = ?
@@ -66,10 +68,12 @@ func (s *Store) GetNodeByID(ctx context.Context, id int64) (*models.Node, error)
 	var n models.Node
 	err := s.DB.GetContext(ctx, &n, `
 		SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
-		       last_heartbeat, created_at, updated_at, display_order
+		       last_heartbeat, created_at, updated_at, display_order,
+		       la_enabled, la_workspace_id, la_workspace_name, la_ingest_token
 		FROM (
 		  SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
 		         last_heartbeat, created_at, updated_at,
+		         la_enabled, la_workspace_id, la_workspace_name, la_ingest_token,
 		         ROW_NUMBER() OVER (PARTITION BY org_id ORDER BY created_at ASC) AS display_order
 		  FROM nodes
 		) ranked
@@ -85,7 +89,8 @@ func (s *Store) ListAllNodes(ctx context.Context) ([]models.Node, error) {
 	var out []models.Node
 	err := s.DB.SelectContext(ctx, &out,
 		`SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
-		        last_heartbeat, created_at, updated_at
+		        last_heartbeat, created_at, updated_at,
+		        la_enabled, la_workspace_id, la_workspace_name, la_ingest_token
 		 FROM nodes`)
 	return out, err
 }
@@ -98,6 +103,7 @@ func (s *Store) ListNodes(ctx context.Context, orgID int64) ([]models.Node, erro
 	err := s.DB.SelectContext(ctx, &out, `
 		SELECT id, org_id, name, token_hash, ip_address, os, arch, hostname, status,
 		       last_heartbeat, created_at, updated_at,
+		       la_enabled, la_workspace_id, la_workspace_name, la_ingest_token,
 		       ROW_NUMBER() OVER (PARTITION BY org_id ORDER BY created_at ASC) AS display_order
 		FROM nodes
 		WHERE org_id = ?
@@ -152,5 +158,31 @@ func (s *Store) CountNodes(ctx context.Context, orgID int64) (int64, error) {
 // MarkAllNodesOffline is run at server startup to reset stale state.
 func (s *Store) MarkAllNodesOffline(ctx context.Context) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE nodes SET status = 'offline'`)
+	return err
+}
+
+// EnableNodeLogAnalyzer attaches a LogAnalyzer workspace to a node.
+func (s *Store) EnableNodeLogAnalyzer(ctx context.Context, orgID, id int64, wsID, wsName, token string) error {
+	_, err := s.DB.ExecContext(ctx,
+		`UPDATE nodes
+		   SET la_enabled = TRUE,
+		       la_workspace_id   = ?,
+		       la_workspace_name = ?,
+		       la_ingest_token   = ?
+		 WHERE id = ? AND org_id = ?`,
+		wsID, wsName, token, id, orgID)
+	return err
+}
+
+// DisableNodeLogAnalyzer clears the LogAnalyzer attachment for a node.
+func (s *Store) DisableNodeLogAnalyzer(ctx context.Context, orgID, id int64) error {
+	_, err := s.DB.ExecContext(ctx,
+		`UPDATE nodes
+		   SET la_enabled = FALSE,
+		       la_workspace_id   = '',
+		       la_workspace_name = '',
+		       la_ingest_token   = ''
+		 WHERE id = ? AND org_id = ?`,
+		id, orgID)
 	return err
 }

@@ -7,7 +7,7 @@
     "allowed_origins": []
   },
   "database": {
-    "dsn": "DB_USER:DB_PASSWORD@tcp(localhost:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4",
+    "dsn": "root:438023231@tcp(localhost:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4",
     "max_open": 25,
     "max_idle": 5
   },
@@ -17,7 +17,7 @@
     "key_file": ""
   },
   "jwt": {
-    "secret": "change-me-to-a-random-secret",
+    "secret": "change-me-in-prod-please",
     "access_ttl": "15m",
     "refresh_ttl": "168h"
   },

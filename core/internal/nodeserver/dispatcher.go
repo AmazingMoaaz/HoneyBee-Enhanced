@@ -14,11 +14,33 @@ import (
 	"github.com/honeybee-enhanced/shared/protocol"
 )
 
+// LogAnalyzerForwarder is the minimal contract used by the dispatcher to push
+// events/logs into the LogAnalyzer service. The real implementation lives in
+// internal/loganalyzer.Client; tests can satisfy the interface with a stub.
+type LogAnalyzerForwarder interface {
+	Enabled() bool
+	FireAndForget(token string, entries []map[string]any)
+}
+
+// loganalyzerEntry builds the canonical entry shape we ship to LogAnalyzer.
+// Keys are kept lower_snake_case so they line up with the rest of our schema
+// and with what the LogAnalyzer frontend's auto-column derivation expects.
+func loganalyzerEntry(kind string, m map[string]any) map[string]any {
+	if m == nil {
+		m = map[string]any{}
+	}
+	if _, ok := m["kind"]; !ok {
+		m["kind"] = kind
+	}
+	return m
+}
+
 // Dispatcher routes incoming node messages to the store + WS hub.
 type Dispatcher struct {
 	store       *store.Store
 	server      *Server
 	broadcaster ws.Broadcaster
+	la          LogAnalyzerForwarder
 	logger      *slog.Logger
 }
 
@@ -163,6 +185,25 @@ func (d *Dispatcher) handlePotEvent(ctx context.Context, sess *Session, env *pro
 		d.broadcaster.Broadcast(sess.orgID, "pot_events", "event_new", ev)
 		d.broadcaster.BroadcastToTopic(sess.orgID, "pot_events."+pe.PotID, "event_new", ev)
 	}
+	// Best-effort forward to LogAnalyzer (per-node opt-in, async, never blocks).
+	if d.la != nil && d.la.Enabled() {
+		if laEnabled, token, _ := sess.LAState(); laEnabled && token != "" {
+			var parsed map[string]any
+			_ = json.Unmarshal([]byte(dataStr), &parsed)
+			entry := loganalyzerEntry("event", map[string]any{
+				"timestamp":     pe.EventTime.UTC().Format(time.RFC3339Nano),
+				"node_id":       sess.nodeID,
+				"pot_id":        pe.PotID,
+				"honeypot_type": pe.PotType,
+				"event_type":    pe.EventType,
+				"source_ip":     pe.SourceIP,
+				"source_port":   pe.SourcePort,
+				"dest_port":     pe.DestPort,
+				"data":          parsed,
+			})
+			d.la.FireAndForget(token, []map[string]any{entry})
+		}
+	}
 }
 
 func (d *Dispatcher) handlePotLog(ctx context.Context, sess *Session, env *protocol.Envelope) {
@@ -193,6 +234,19 @@ func (d *Dispatcher) handlePotLog(ctx context.Context, sess *Session, env *proto
 	}
 	if d.broadcaster != nil {
 		d.broadcaster.Broadcast(sess.orgID, "pot_logs", "pot_log", entry)
+	}
+	if d.la != nil && d.la.Enabled() {
+		if laEnabled, token, _ := sess.LAState(); laEnabled && token != "" {
+			laEntry := loganalyzerEntry("pot_log", map[string]any{
+				"timestamp":     entry.LoggedAt.UTC().Format(time.RFC3339Nano),
+				"node_id":       sess.nodeID,
+				"pot_id":        pl.PotID,
+				"honeypot_type": pl.PotType,
+				"log_type":      pl.LogType,
+				"data":          pl.Data,
+			})
+			d.la.FireAndForget(token, []map[string]any{laEntry})
+		}
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/honeybee-enhanced/core/internal/api"
 	"github.com/honeybee-enhanced/core/internal/api/ws"
 	"github.com/honeybee-enhanced/core/internal/config"
+	"github.com/honeybee-enhanced/core/internal/loganalyzer"
 	"github.com/honeybee-enhanced/core/internal/nodeserver"
 	"github.com/honeybee-enhanced/core/internal/potstore"
 	"github.com/honeybee-enhanced/core/internal/store"
@@ -83,11 +84,18 @@ func main() {
 	}
 
 	hub := ws.NewHub(logger, cfg.Server.AllowedOrigins)
+	laClient := loganalyzer.New(cfg.LogAnalyzer, logger)
+	if laClient.Enabled() {
+		logger.Info("loganalyzer integration enabled",
+			slog.String("url", cfg.LogAnalyzer.URL),
+			slog.Int("retention_days", cfg.LogAnalyzer.RetentionDays))
+	}
 	ns := nodeserver.NewServer(nodeserver.Config{
 		Addr:      cfg.Server.NodeAddr,
 		TLSConfig: tlsCfg,
 	}, st, logger)
 	ns.SetBroadcaster(hub)
+	ns.SetLogAnalyzer(laClient)
 
 	go func() {
 		if err := ns.Start(rootCtx); err != nil {
@@ -95,7 +103,7 @@ func main() {
 		}
 	}()
 
-	router := api.Build(cfg, st, ns, psClient, hub, logger)
+	router := api.Build(cfg, st, ns, psClient, hub, laClient, logger)
 	srv := &http.Server{
 		Addr:              cfg.Server.HTTPAddr,
 		Handler:           router,

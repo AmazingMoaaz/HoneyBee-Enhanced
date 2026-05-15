@@ -221,3 +221,11 @@ CREATE TABLE IF NOT EXISTS alerts (
     CONSTRAINT fk_alerts_rule FOREIGN KEY (rule_id) REFERENCES alert_rules(id)   ON DELETE SET NULL,
     CONSTRAINT fk_alerts_user FOREIGN KEY (acknowledged_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── LogAnalyzer integration (per-node opt-in) ──────────────────────────────
+-- When enabled, the core forwards every event and pot_log from this node
+-- to a LogAnalyzer workspace via its /api/ingest webhook endpoint.
+ALTER TABLE nodes ADD COLUMN la_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE nodes ADD COLUMN la_workspace_id VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE nodes ADD COLUMN la_workspace_name VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE nodes ADD COLUMN la_ingest_token VARCHAR(255) NOT NULL DEFAULT '';

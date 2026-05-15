@@ -59,6 +59,27 @@ func (s *Server) SetBroadcaster(b ws.Broadcaster) {
 	s.dispatcher.broadcaster = b
 }
 
+// SetLogAnalyzer wires the LogAnalyzer client used for best-effort forwarding
+// of pot events/logs on the dispatch hot-path.
+func (s *Server) SetLogAnalyzer(la LogAnalyzerForwarder) {
+	s.dispatcher.la = la
+}
+
+// RefreshNodeLA reloads the LogAnalyzer attachment from the DB into the live
+// session cache. Called by API handlers when LA is enabled/disabled for an
+// already-online node so changes take effect without a reconnect.
+func (s *Server) RefreshNodeLA(nodeID int64) {
+	sess, ok := s.Session(nodeID)
+	if !ok {
+		return
+	}
+	n, err := s.store.GetNodeByID(context.Background(), nodeID)
+	if err != nil {
+		return
+	}
+	sess.SetLA(n.LAEnabled, n.LAIngestToken, n.LAWorkspaceID)
+}
+
 // Sessions returns a snapshot of currently online node IDs.
 func (s *Server) Sessions() []int64 {
 	s.mu.RLock()
@@ -182,6 +203,7 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 		orgID:   node.OrgID,
 		writeMu: &sync.Mutex{},
 	}
+	sess.SetLA(node.LAEnabled, node.LAIngestToken, node.LAWorkspaceID)
 	s.sessions[node.ID] = sess
 	s.mu.Unlock()
 
@@ -265,15 +287,24 @@ func (s *Server) authenticateToken(ctx context.Context, token string) (*nodeRef,
 	for i := range nodes {
 		n := &nodes[i]
 		if err := bcrypt.CompareHashAndPassword([]byte(n.TokenHash), []byte(token)); err == nil {
-			return &nodeRef{ID: n.ID, OrgID: n.OrgID}, nil
+			return &nodeRef{
+				ID:            n.ID,
+				OrgID:         n.OrgID,
+				LAEnabled:     n.LAEnabled,
+				LAIngestToken: n.LAIngestToken,
+				LAWorkspaceID: n.LAWorkspaceID,
+			}, nil
 		}
 	}
 	return nil, errors.New("no matching token")
 }
 
 type nodeRef struct {
-	ID    int64
-	OrgID int64
+	ID            int64
+	OrgID         int64
+	LAEnabled     bool
+	LAIngestToken string
+	LAWorkspaceID string
 }
 
 // DisconnectNode forcibly closes the active session for a node (used on delete/regenerate-token).

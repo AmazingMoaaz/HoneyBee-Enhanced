@@ -17,6 +17,7 @@ import (
 	"github.com/honeybee-enhanced/core/internal/api/middleware"
 	"github.com/honeybee-enhanced/core/internal/api/ws"
 	"github.com/honeybee-enhanced/core/internal/config"
+	"github.com/honeybee-enhanced/core/internal/loganalyzer"
 	"github.com/honeybee-enhanced/core/internal/nodeserver"
 	"github.com/honeybee-enhanced/core/internal/potstore"
 	"github.com/honeybee-enhanced/core/internal/store"
@@ -29,6 +30,7 @@ func Build(
 	ns *nodeserver.Server,
 	ps *potstore.Client,
 	hub *ws.Hub,
+	la *loganalyzer.Client,
 	logger *slog.Logger,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -49,7 +51,7 @@ func Build(
 	rl := middleware.NewRateLimiter(20, time.Minute)
 
 	authH := handlers.NewAuthHandler(st, jwtMid, cfg)
-	nodesH := handlers.NewNodesHandler(st, ns, cfg)
+	nodesH := handlers.NewNodesHandler(st, ns, cfg, la)
 	depsH := handlers.NewDeploymentsHandler(st, ns, ps)
 	evtsH := handlers.NewEventsHandler(st)
 	sessH := handlers.NewSessionsHandler(st)
@@ -160,6 +162,7 @@ func Build(
 			// Nodes
 			r.Get("/nodes", nodesH.List)
 			r.Get("/nodes/{id}", nodesH.Get)
+			r.Get("/integrations/log-analyzer", nodesH.LogAnalyzerInfo)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireOperator)
 				r.Post("/nodes", nodesH.Create)
@@ -168,6 +171,8 @@ func Build(
 				r.Post("/nodes/{id}/regenerate-token", nodesH.RegenerateToken)
 				r.Post("/nodes/{id}/command", cmdH.SendNodeCommand)
 				r.Post("/nodes/{id}/deployments", depsH.CreateForNode)
+				r.Put("/nodes/{id}/log-analyzer", nodesH.EnableLogAnalyzer)
+				r.Delete("/nodes/{id}/log-analyzer", nodesH.DisableLogAnalyzer)
 			})
 
 			// Node Metrics
