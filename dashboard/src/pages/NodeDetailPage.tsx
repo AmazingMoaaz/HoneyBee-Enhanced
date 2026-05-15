@@ -230,6 +230,7 @@ export default function NodeDetailPage() {
   const [confirmUninstall, setConfirmUninstall] = useState(false);
   const [copied,           setCopied]           = useState<string | null>(null);
   const [pendingAction,    setPendingAction]    = useState<string | null>(null);
+  const [actionToast,      setActionToast]      = useState<{ kind: "queued" | "sent" | "error"; msg: string } | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery({
@@ -277,6 +278,20 @@ export default function NodeDetailPage() {
       }
     },
     onSettled: () => { setPendingAction(null); qc.invalidateQueries({ queryKey: ["node", id] }); },
+    onSuccess: (res: any, vars) => {
+      const verb = { start: "Start", stop: "Stop", restart: "Restart", remove: "Remove" }[vars.act] || vars.act;
+      if (res?.delivered) {
+        setActionToast({ kind: "sent", msg: `${verb} command sent to node.` });
+      } else {
+        setActionToast({ kind: "queued", msg: `${verb} queued — node is offline. It will run when the agent reconnects.` });
+      }
+      window.setTimeout(() => setActionToast(null), 5000);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || "Action failed.";
+      setActionToast({ kind: "error", msg });
+      window.setTimeout(() => setActionToast(null), 6000);
+    },
   });
   const uninstall = useMutation({
     mutationFn: async () => (await api.post(`/nodes/${id}/uninstall`)).data,
@@ -304,10 +319,98 @@ export default function NodeDetailPage() {
   const base    = window.location.origin;
 
   const runningCount = deps.filter((d: any) => d.status === "running").length;
+  // Node agent is offline but some honeypots are still running independently
+  const agentOfflineButPotsRunning = !online && runningCount > 0;
   const activeCount  = deps.filter((d: any) => d.status !== "removed").length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }} className="animate-fade-up">
+
+      {actionToast && (
+        <div
+          role="status"
+          style={{
+            position: "fixed", top: 20, right: 20, zIndex: 9999,
+            minWidth: 300, maxWidth: 420,
+            padding: "14px 16px 14px 16px",
+            borderRadius: 14,
+            background: actionToast.kind === "error"
+              ? "linear-gradient(135deg, rgba(30,8,8,0.97) 0%, rgba(60,10,10,0.97) 100%)"
+              : actionToast.kind === "queued"
+              ? "linear-gradient(135deg, rgba(30,22,5,0.97) 0%, rgba(60,38,5,0.97) 100%)"
+              : "linear-gradient(135deg, rgba(5,25,18,0.97) 0%, rgba(8,42,28,0.97) 100%)",
+            border: `1px solid ${
+              actionToast.kind === "error" ? "rgba(239,68,68,0.45)"
+              : actionToast.kind === "queued" ? "rgba(245,158,11,0.45)"
+              : "rgba(16,185,129,0.45)"}`,
+            boxShadow: `0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px ${
+              actionToast.kind === "error" ? "rgba(239,68,68,0.1)"
+              : actionToast.kind === "queued" ? "rgba(245,158,11,0.1)"
+              : "rgba(16,185,129,0.1)"}`,
+            backdropFilter: "blur(16px)",
+            display: "flex", alignItems: "flex-start", gap: 12,
+            animation: "toast-slide-in 0.25s cubic-bezier(0.34,1.56,0.64,1)",
+          }}
+        >
+          {/* Left accent bar */}
+          <div style={{
+            position: "absolute", left: 0, top: 0, bottom: 0, width: 4,
+            borderRadius: "14px 0 0 14px",
+            background: actionToast.kind === "error" ? "#EF4444"
+              : actionToast.kind === "queued" ? "#F59E0B"
+              : "#10B981",
+          }} />
+
+          {/* Icon */}
+          <div style={{
+            flexShrink: 0, width: 32, height: 32, borderRadius: 8,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginLeft: 8,
+            background: actionToast.kind === "error" ? "rgba(239,68,68,0.18)"
+              : actionToast.kind === "queued" ? "rgba(245,158,11,0.18)"
+              : "rgba(16,185,129,0.18)",
+          }}>
+            <Ico
+              d={actionToast.kind === "error" ? I.close : actionToast.kind === "queued" ? I.clock : I.check}
+              size={16}
+              color={actionToast.kind === "error" ? "#EF4444" : actionToast.kind === "queued" ? "#F59E0B" : "#10B981"}
+              sw={2.5}
+            />
+          </div>
+
+          {/* Text */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+              color: actionToast.kind === "error" ? "#EF4444"
+                : actionToast.kind === "queued" ? "#F59E0B"
+                : "#10B981",
+              marginBottom: 3,
+            }}>
+              {actionToast.kind === "error" ? "Error" : actionToast.kind === "queued" ? "Queued" : "Success"}
+            </div>
+            <div style={{ color: "#E2E8F0", fontSize: 13, fontWeight: 500, lineHeight: 1.45 }}>
+              {actionToast.msg}
+            </div>
+          </div>
+
+          {/* X close button */}
+          <button
+            onClick={() => setActionToast(null)}
+            style={{
+              flexShrink: 0, background: "none", border: "none", cursor: "pointer",
+              padding: 4, borderRadius: 6, color: "#64748B",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "color 0.15s, background 0.15s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#F8FAFC"; (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.08)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#64748B"; (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+            aria-label="Dismiss"
+          >
+            <Ico d={I.close} size={14} color="currentColor" sw={2.5} />
+          </button>
+        </div>
+      )}
 
       {showDeployModal && (
         <DeployModal
@@ -344,7 +447,7 @@ export default function NodeDetailPage() {
         <div style={{ padding: "22px 26px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
 
           {/* Left: avatar + info */}
-          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 20, flex: 1, minWidth: 0 }}>
             <div style={{
               width: 64, height: 64, borderRadius: 18, display: "grid", placeItems: "center",
               fontWeight: 900, fontSize: 26, flexShrink: 0,
@@ -356,75 +459,129 @@ export default function NodeDetailPage() {
             }}>
               {(node.name ?? "?").charAt(0).toUpperCase()}
             </div>
-            <div>
-              <h1 style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", margin: "0 0 8px", letterSpacing: "-0.02em" }}>
-                {node.name}
-              </h1>
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Name + status row */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+                <h1 style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", margin: 0, letterSpacing: "-0.02em" }}>
+                  {node.name}
+                </h1>
                 {/* Online badge */}
-                <div title="Node Status" style={{
-                  display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 99,
-                  background: online ? "rgba(34,197,94,0.1)" : "rgba(100,116,139,0.1)",
-                  border: `1px solid ${online ? "rgba(34,197,94,0.3)" : "rgba(100,116,139,0.2)"}`,
+                <div title={agentOfflineButPotsRunning ? "Agent disconnected — honeypots still running" : online ? "Node agent connected" : "Node agent disconnected"} style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 99,
+                  background: online ? "rgba(34,197,94,0.12)" : agentOfflineButPotsRunning ? "rgba(245,158,11,0.14)" : "rgba(100,116,139,0.1)",
+                  border: `1.5px solid ${online ? "rgba(34,197,94,0.35)" : agentOfflineButPotsRunning ? "rgba(245,158,11,0.4)" : "rgba(100,116,139,0.22)"}`,
                 }}>
                   <span style={{
-                    width: 6, height: 6, borderRadius: "50%",
-                    background: online ? "#22C55E" : "#94A3B8",
+                    width: 7, height: 7, borderRadius: "50%",
+                    background: online ? "#22C55E" : agentOfflineButPotsRunning ? "#F59E0B" : "#94A3B8",
                     animation: online ? "pulse-green 2s infinite" : "none",
                     boxShadow: online ? "0 0 0 2px rgba(34,197,94,0.2)" : "none",
+                    display: "inline-block", flexShrink: 0,
                   }} />
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: online ? "#16A34A" : "#64748B" }}>
-                    {online ? "Online" : "Offline"}
+                  <span style={{ fontSize: 12, fontWeight: 800, color: online ? "#16A34A" : agentOfflineButPotsRunning ? "#B45309" : "#64748B" }}>
+                    {online ? "Online" : agentOfflineButPotsRunning ? "Agent Offline" : "Offline"}
                   </span>
                 </div>
-                
-                <div title="Unique Node ID" style={{
-                  display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99,
-                  background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)",
-                  fontSize: 11.5, color: "#475569", fontWeight: 600, fontFamily: "ui-monospace, monospace"
+                {agentOfflineButPotsRunning && (
+                  <div style={{
+                    display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 99,
+                    background: "rgba(34,197,94,0.08)", border: "1.5px solid rgba(34,197,94,0.28)",
+                    fontSize: 12, fontWeight: 700, color: "#16A34A",
+                  }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22C55E", animation: "pulse-green 2s infinite", display: "inline-block" }} />
+                    {runningCount} honeypot{runningCount !== 1 ? "s" : ""} running
+                  </div>
+                )}
+              </div>
+
+              {/* Info grid */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(148px, 1fr))",
+                gap: 8,
+              }}>
+                {/* Node ID */}
+                <div style={{
+                  padding: "9px 13px", borderRadius: 10,
+                  background: "rgba(15,23,42,0.03)", border: "1px solid rgba(15,23,42,0.08)",
                 }}>
-                  ID: {node.id}
+                  <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 4px" }}>
+                    Node ID
+                  </p>
+                  <p style={{ fontFamily: "ui-monospace, monospace", fontSize: 13.5, fontWeight: 800, color: "#0F172A", margin: 0 }}>
+                    {node.id}
+                  </p>
                 </div>
 
-                <div title="Last Heartbeat" style={{
-                  display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99,
-                  background: "rgba(15,23,42,0.04)", border: "1px solid rgba(15,23,42,0.08)",
-                  fontSize: 11.5, color: "#475569", fontWeight: 600
+                {/* Last Heartbeat */}
+                <div style={{
+                  padding: "9px 13px", borderRadius: 10,
+                  background: online ? "rgba(239,68,68,0.04)" : "rgba(15,23,42,0.03)",
+                  border: `1px solid ${online ? "rgba(239,68,68,0.15)" : "rgba(15,23,42,0.08)"}`,
                 }}>
-                  <Ico d={I.clock} size={12} color="#94A3B8" />
-                  {relTime(node.last_heartbeat)}
+                  <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 5px" }}>
+                    Last Heartbeat
+                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                      background: online ? "#EF4444" : "#94A3B8",
+                      display: "inline-block",
+                      animation: online ? "heartbeat 1.4s ease-in-out infinite" : "hb-offline 2s ease-in-out infinite",
+                    }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: online ? "#DC2626" : "#64748B" }}>
+                      {relTime(node.last_heartbeat)}
+                    </span>
+                  </div>
                 </div>
 
+                {/* IP Address */}
                 {node.ip_address && (
-                  <div title="IP Address" style={{
-                    display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99,
-                    background: "rgba(59,130,246,0.05)", border: "1px solid rgba(59,130,246,0.15)",
-                    fontSize: 11.5, color: "#1D4ED8", fontWeight: 600, fontFamily: "ui-monospace, monospace"
+                  <div style={{
+                    padding: "9px 13px", borderRadius: 10,
+                    background: "rgba(59,130,246,0.04)", border: "1px solid rgba(59,130,246,0.14)",
                   }}>
-                    {node.ip_address}
+                    <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 4px" }}>
+                      IP Address
+                    </p>
+                    <p style={{ fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 800, color: "#1D4ED8", margin: 0 }}>
+                      {node.ip_address}
+                    </p>
                   </div>
                 )}
 
+                {/* OS / Architecture */}
                 {node.os && (
-                  <div title="OS / Architecture" style={{
-                    display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 99,
-                    background: "rgba(245,158,11,0.05)", border: "1px solid rgba(245,158,11,0.15)",
-                    fontSize: 11.5, color: "#B45309", fontWeight: 600
+                  <div style={{
+                    padding: "9px 13px", borderRadius: 10,
+                    background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.14)",
                   }}>
-                    <Ico d={node.os.toLowerCase() === "windows" ? I.windows : I.linux} size={12} color="#B45309" />
-                    <span style={{ textTransform: "capitalize" }}>{node.os}</span>
-                    <span style={{ color: "rgba(180,83,9,0.5)" }}>/</span>
-                    <span>{node.arch}</span>
+                    <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 5px" }}>
+                      Platform
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Ico d={node.os.toLowerCase() === "windows" ? I.windows : I.linux} size={13} color="#D97706" />
+                      <span style={{ fontSize: 12.5, fontWeight: 800, color: "#92400E" }}>
+                        <span style={{ textTransform: "capitalize" }}>{node.os}</span>
+                        <span style={{ color: "#D97706", margin: "0 3px" }}>·</span>
+                        <span style={{ fontFamily: "ui-monospace, monospace" }}>{node.arch}</span>
+                      </span>
+                    </div>
                   </div>
                 )}
 
+                {/* Hostname */}
                 {node.hostname && (
-                  <div title="Hostname" style={{
-                    display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99,
-                    background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.15)",
-                    fontSize: 11.5, color: "#6D28D9", fontWeight: 600
+                  <div style={{
+                    padding: "9px 13px", borderRadius: 10,
+                    background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.14)",
                   }}>
-                    {node.hostname}
+                    <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 4px" }}>
+                      Hostname
+                    </p>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: "#5B21B6", margin: 0 }}>
+                      {node.hostname}
+                    </p>
                   </div>
                 )}
               </div>
@@ -605,96 +762,117 @@ export default function NodeDetailPage() {
 
                 {/* Actions */}
                 {(() => {
-                  const busy = pendingAction?.startsWith(`${d.id}:`);
-                  const act  = pendingAction?.split(":")[1];
-                  const label = act === "start" ? "Starting" : act === "stop" ? "Stopping" : act === "restart" ? "Restarting" : act === "remove" ? "Removing" : "Working";
-                  return (
-                    <div style={{
-                      padding: "10px 18px", display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center",
-                      opacity: busy ? 0.6 : 1, pointerEvents: busy ? "none" : "auto",
-                      transition: "opacity 0.15s",
-                    }}>
-                      {busy && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 700, color: "#64748B" }}>
-                          <span style={{
-                            width: 13, height: 13, borderRadius: "50%",
-                            border: "2px solid #94A3B8", borderTopColor: "#475569",
-                            animation: "spin 0.7s linear infinite", display: "inline-block", flexShrink: 0,
-                          }} />
-                          {label}…
-                        </div>
-                      )}
+                  const busy    = pendingAction?.startsWith(`${d.id}:`);
+                  const busyAct = pendingAction?.split(":")[1];
 
-                      {!busy && (
-                        <>
-                          {/* Logs */}
+                  const Spinner = ({ color }: { color: string }) => (
+                    <span style={{
+                      width: 11, height: 11, borderRadius: "50%", flexShrink: 0,
+                      border: `2px solid ${color}44`, borderTopColor: color,
+                      animation: "spin 0.65s linear infinite", display: "inline-block",
+                    }} />
+                  );
+
+                  return (
+                    <div style={{ padding: "10px 18px", display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                      {/* Logs */}
+                      <button
+                        onClick={() => setActiveDeployID(isActive ? null : d.id)}
+                        style={{
+                          padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                          background: isActive ? "rgba(245,158,11,0.15)" : "#EEF2F6",
+                          border: `1.5px solid ${isActive ? "rgba(245,158,11,0.4)" : "rgba(15,23,42,0.12)"}`,
+                          color: isActive ? "#B45309" : "#64748B",
+                          display: "flex", alignItems: "center", gap: 5,
+                        }}
+                      >
+                        <Ico d={I.logs} size={12} color="currentColor" /> {isActive ? "Hide Logs" : "Logs"}
+                      </button>
+
+                      <div style={{ flex: 1 }} />
+
+                      {d.status !== "running" && d.status !== "removed" && (() => {
+                        const isThis = busy && busyAct === "start";
+                        return (
                           <button
-                            onClick={() => setActiveDeployID(isActive ? null : d.id)}
+                            onClick={() => action.mutate({ depID: d.id, act: "start" })}
+                            disabled={!!busy}
                             style={{
-                              padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                              background: isActive ? "rgba(245,158,11,0.15)" : "#EEF2F6",
-                              border: `1.5px solid ${isActive ? "rgba(245,158,11,0.4)" : "rgba(15,23,42,0.12)"}`,
-                              color: isActive ? "#B45309" : "#64748B",
+                              padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700,
+                              cursor: busy ? "default" : "pointer",
+                              background: isThis ? "rgba(34,197,94,0.14)" : busy ? "rgba(15,23,42,0.03)" : "rgba(34,197,94,0.08)",
+                              border: `1.5px solid ${isThis ? "rgba(34,197,94,0.4)" : busy ? "rgba(15,23,42,0.07)" : "rgba(34,197,94,0.25)"}`,
+                              color: isThis ? "#16A34A" : busy ? "#CBD5E1" : "#16A34A",
                               display: "flex", alignItems: "center", gap: 5,
+                              opacity: busy && !isThis ? 0.4 : 1, transition: "opacity 0.2s",
                             }}
                           >
-                            <Ico d={I.logs} size={12} color="currentColor" /> {isActive ? "Hide Logs" : "Logs"}
+                            {isThis ? <><Spinner color="#16A34A" /> Starting…</> : <><Ico d={I.play} size={11} color="currentColor" /> Start</>}
                           </button>
+                        );
+                      })()}
 
-                          <div style={{ flex: 1 }} />
-
-                          {d.status !== "running" && d.status !== "removed" && (
+                      {d.status === "running" && (() => {
+                        const isStop    = busy && busyAct === "stop";
+                        const isRestart = busy && busyAct === "restart";
+                        return (
+                          <>
                             <button
-                              onClick={() => action.mutate({ depID: d.id, act: "start" })}
+                              onClick={() => action.mutate({ depID: d.id, act: "stop" })}
+                              disabled={!!busy}
                               style={{
-                                padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                                background: "rgba(34,197,94,0.08)", border: "1.5px solid rgba(34,197,94,0.25)", color: "#16A34A",
+                                padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700,
+                                cursor: busy ? "default" : "pointer",
+                                background: isStop ? "rgba(100,116,139,0.14)" : busy ? "rgba(15,23,42,0.03)" : "rgba(100,116,139,0.08)",
+                                border: `1.5px solid ${isStop ? "rgba(100,116,139,0.35)" : busy ? "rgba(15,23,42,0.07)" : "rgba(100,116,139,0.2)"}`,
+                                color: isStop ? "#475569" : busy ? "#CBD5E1" : "#64748B",
                                 display: "flex", alignItems: "center", gap: 5,
+                                opacity: busy && !isStop ? 0.4 : 1, transition: "opacity 0.2s",
                               }}
                             >
-                              <Ico d={I.play} size={11} color="#16A34A" /> Start
+                              {isStop ? <><Spinner color="#64748B" /> Stopping…</> : <><Ico d={I.stop} size={11} color="currentColor" /> Stop</>}
                             </button>
-                          )}
-                          {d.status === "running" && (
-                            <>
-                              <button
-                                onClick={() => action.mutate({ depID: d.id, act: "stop" })}
-                                style={{
-                                  padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                                  background: "rgba(100,116,139,0.08)", border: "1.5px solid rgba(100,116,139,0.2)", color: "#64748B",
-                                  display: "flex", alignItems: "center", gap: 5,
-                                }}
-                              >
-                                <Ico d={I.stop} size={11} color="#64748B" /> Stop
-                              </button>
-                              <button
-                                onClick={() => action.mutate({ depID: d.id, act: "restart" })}
-                                style={{
-                                  padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                                  background: "rgba(245,158,11,0.08)", border: "1.5px solid rgba(245,158,11,0.25)", color: "#B45309",
-                                  display: "flex", alignItems: "center", gap: 5,
-                                }}
-                              >
-                                <Ico d={I.restart} size={11} color="#B45309" /> Restart
-                              </button>
-                            </>
-                          )}
-                          {d.status !== "removed" && (
                             <button
-                              onClick={() => action.mutate({ depID: d.id, act: "remove" })}
+                              onClick={() => action.mutate({ depID: d.id, act: "restart" })}
+                              disabled={!!busy}
                               style={{
-                                padding: "5px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                                background: "rgba(254,242,242,0.8)", border: "1.5px solid rgba(239,68,68,0.2)", color: "#EF4444",
+                                padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700,
+                                cursor: busy ? "default" : "pointer",
+                                background: isRestart ? "rgba(245,158,11,0.14)" : busy ? "rgba(15,23,42,0.03)" : "rgba(245,158,11,0.08)",
+                                border: `1.5px solid ${isRestart ? "rgba(245,158,11,0.4)" : busy ? "rgba(15,23,42,0.07)" : "rgba(245,158,11,0.25)"}`,
+                                color: isRestart ? "#B45309" : busy ? "#CBD5E1" : "#B45309",
                                 display: "flex", alignItems: "center", gap: 5,
+                                opacity: busy && !isRestart ? 0.4 : 1, transition: "opacity 0.2s",
                               }}
-                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.12)"}
-                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "rgba(254,242,242,0.8)"}
                             >
-                              <Ico d={I.trash} size={11} color="#EF4444" /> Remove
+                              {isRestart ? <><Spinner color="#B45309" /> Restarting…</> : <><Ico d={I.restart} size={11} color="currentColor" /> Restart</>}
                             </button>
-                          )}
-                        </>
-                      )}
+                          </>
+                        );
+                      })()}
+
+                      {d.status !== "removed" && (() => {
+                        const isThis = busy && busyAct === "remove";
+                        return (
+                          <button
+                            onClick={() => action.mutate({ depID: d.id, act: "remove" })}
+                            disabled={!!busy}
+                            style={{
+                              padding: "5px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700,
+                              cursor: busy ? "default" : "pointer",
+                              background: isThis ? "rgba(239,68,68,0.14)" : busy ? "rgba(15,23,42,0.03)" : "rgba(254,242,242,0.8)",
+                              border: `1.5px solid ${isThis ? "rgba(239,68,68,0.4)" : busy ? "rgba(15,23,42,0.07)" : "rgba(239,68,68,0.2)"}`,
+                              color: isThis ? "#EF4444" : busy ? "#CBD5E1" : "#EF4444",
+                              display: "flex", alignItems: "center", gap: 5,
+                              opacity: busy && !isThis ? 0.4 : 1, transition: "opacity 0.2s",
+                            }}
+                            onMouseEnter={e => { if (!busy) (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.12)"; }}
+                            onMouseLeave={e => { if (!busy) (e.currentTarget as HTMLElement).style.background = "rgba(254,242,242,0.8)"; }}
+                          >
+                            {isThis ? <><Spinner color="#EF4444" /> Removing…</> : <><Ico d={I.trash} size={11} color="currentColor" /> Remove</>}
+                          </button>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
@@ -840,9 +1018,33 @@ export default function NodeDetailPage() {
             </div>
             <h3 style={{ fontSize: 15, fontWeight: 800, color: "#DC2626" }}>Danger Zone</h3>
           </div>
-          <p style={{ fontSize: 13, color: "#64748B", marginBottom: 20, lineHeight: 1.65 }}>
-            This sends a remote uninstall command to the agent and <strong>permanently deletes</strong> this node and all its deployments. Cannot be undone.
-          </p>
+
+          {/* What will happen — always visible */}
+          <div style={{
+            padding: "16px 18px", borderRadius: 12, marginBottom: 20,
+            background: "rgba(254,242,242,0.6)", border: "1px solid rgba(239,68,68,0.2)",
+          }}>
+            <p style={{ fontSize: 12.5, fontWeight: 800, color: "#991B1B", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              What will happen when you delete this node:
+            </p>
+            <ul style={{ margin: 0, padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: 6, fontSize: 13, color: "#7F1D1D", lineHeight: 1.55 }}>
+              <li>A <strong>remote uninstall command</strong> is sent to the agent on the machine — it will stop the service and remove itself.</li>
+              <li>All <strong>{runningCount > 0 ? `${runningCount} running honeypot${runningCount !== 1 ? "s" : ""}` : "running honeypots"}</strong> on this node will be <strong>stopped</strong> and their containers removed.</li>
+              <li>The node record and all <strong>{deps.length} deployment{deps.length !== 1 ? "s" : ""}</strong> will be <strong>permanently deleted</strong> from the dashboard.</li>
+              <li>Captured <strong>event logs and audit history</strong> for this node will be deleted.</li>
+              <li>This action <strong>cannot be undone</strong>. To re-use the machine, you would need to register a new node and re-deploy honeypots.</li>
+            </ul>
+            {!online && (
+              <div style={{
+                marginTop: 12, padding: "10px 12px", borderRadius: 8,
+                background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
+                fontSize: 12.5, color: "#92400E", display: "flex", alignItems: "flex-start", gap: 8,
+              }}>
+                <Ico d={I.warn} size={14} color="#D97706" />
+                <span><strong>Node is currently offline.</strong> The remote uninstall command may not be delivered. The agent and any honeypots on the machine will continue running until the machine is reachable or manually cleaned up.</span>
+              </div>
+            )}
+          </div>
 
           {!confirmUninstall ? (
             <button onClick={() => setConfirmUninstall(true)} className="btn btn-danger" style={{ display: "inline-flex", gap: 7 }}>
@@ -885,25 +1087,27 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["node-metrics", nodeId, hours],
     queryFn: async () => (await api.get(`/nodes/${nodeId}/metrics?hours=${hours}`)).data,
-    refetchInterval: refreshInterval > 0 && online ? refreshInterval : false,
-    refetchOnWindowFocus: refreshInterval > 0, // only auto-pull on focus if an interval is set
+    // Auto-refresh always reads from the DB — works whether the node is online or not
+    refetchInterval: refreshInterval > 0 ? refreshInterval : false,
+    refetchOnWindowFocus: false,
   });
 
   const [isCommandPending, setIsCommandPending] = useState(false);
 
   const handleManualRefresh = async () => {
     if (!online) {
+      // Node is offline — just pull latest DB records
       refetch();
       return;
     }
     setIsCommandPending(true);
     try {
       await api.post(`/nodes/${nodeId}/command`, { command: "request_heartbeat", payload: {} });
-      // Give the node a short moment to reply, then pull the new metrics from the DB
+      // Wait 1.5 s so the node has time to push metrics back before we pull from DB
       setTimeout(() => {
         refetch().finally(() => setIsCommandPending(false));
-      }, 800);
-    } catch (err) {
+      }, 1500);
+    } catch {
       refetch().finally(() => setIsCommandPending(false));
     }
   };
@@ -988,8 +1192,18 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
               }}>
                 <Ico d={I.restart} size={13} color={(isFetching || isCommandPending) ? "#94A3B8" : "#B45309"} />
               </span>
-              {(isFetching || isCommandPending) ? "..." : "Refresh"}
+              {(isFetching || isCommandPending) ? "Refreshing…" : "Refresh"}
             </button>
+            {refreshInterval > 0 && (
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 5, padding: "0 10px", height: 30,
+                borderRadius: 8, background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)",
+                fontSize: 11.5, fontWeight: 700, color: "#16A34A",
+              }}>
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22C55E", animation: "pulse-green 2s infinite" }} />
+                Auto
+              </div>
+            )}
           </div>
         </div>
 
@@ -1015,7 +1229,16 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
             No metrics data available yet. Metrics are recorded with each heartbeat.
           </div>
         ) : (
-          <div style={{ height: 280 }}>
+          <div style={{ height: 280, position: "relative" }}>
+            {isFetching && (
+              <div style={{
+                position: "absolute", inset: 0, zIndex: 10,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "rgba(255,255,255,0.55)", borderRadius: 8,
+              }}>
+                <div style={{ width: 20, height: 20, borderRadius: "50%", border: "3px solid #F59E0B", borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
+              </div>
+            )}
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={history}>
                 <defs>

@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -99,11 +100,16 @@ func (h *DeploymentsHandler) CreateForNode(w http.ResponseWriter, r *http.Reques
 		Config:       req.Config,
 		AutoStart:    req.AutoStart,
 	}
-	if err := h.queueAndSend(r, orgID, nodeID, &depID, protocol.CmdInstallPot, payload); err != nil {
-		writeError(w, http.StatusInternalServerError, "queue task")
+	delivered, err := h.queueAndSend(r, orgID, nodeID, &depID, protocol.CmdInstallPot, payload)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "queue install task")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"deployment_id": depID, "pot_id": req.PotID})
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"deployment_id": depID,
+		"pot_id":        req.PotID,
+		"delivered":     delivered,
+	})
 }
 
 // Action covers start/stop/restart/remove on a deployment.
@@ -123,11 +129,19 @@ func (h *DeploymentsHandler) Action(action string) http.HandlerFunc {
 			return
 		}
 		payload := protocol.PotControlPayload{PotID: dep.PotID}
-		if err := h.queueAndSend(r, orgID, dep.NodeID, &dep.ID, cmd, payload); err != nil {
-			writeError(w, http.StatusInternalServerError, "queue task")
+		delivered, err := h.queueAndSend(r, orgID, dep.NodeID, &dep.ID, cmd, payload)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "queue "+action+" task")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "queued"})
+		status := "queued"
+		if delivered {
+			status = "sent"
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status":    status,
+			"delivered": delivered,
+		})
 	}
 }
 
@@ -155,11 +169,15 @@ func (h *DeploymentsHandler) UpdateConfig(w http.ResponseWriter, r *http.Request
 		return
 	}
 	payload := protocol.UpdateConfigPayload{PotID: dep.PotID, Config: cfg}
-	if err := h.queueAndSend(r, orgID, dep.NodeID, &dep.ID, protocol.CmdUpdateConfig, payload); err != nil {
-		writeError(w, http.StatusInternalServerError, "queue task")
+	delivered, err := h.queueAndSend(r, orgID, dep.NodeID, &dep.ID, protocol.CmdUpdateConfig, payload)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "queue update_config task")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":    "ok",
+		"delivered": delivered,
+	})
 }
 
 // Delete removes a deployment record from the DB without sending any node command.
@@ -223,32 +241,49 @@ func (h *DeploymentsHandler) RequestMetrics(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	payload := protocol.PotControlPayload{PotID: dep.PotID}
-	taskID, err := h.queueAndSendReturnID(r, orgID, dep.NodeID, &dep.ID, protocol.CmdGetPotMetrics, payload)
+	taskID, delivered, err := h.queueAndSendReturnID(r, orgID, dep.NodeID, &dep.ID, protocol.CmdGetPotMetrics, payload)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "queue task")
+		writeError(w, http.StatusInternalServerError, "queue get_pot_metrics task")
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]any{"task_id": taskID})
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"task_id":   taskID,
+		"delivered": delivered,
+	})
 }
 
-func (h *DeploymentsHandler) queueAndSend(r *http.Request, orgID, nodeID int64, depID *int64, cmd string, payload any) error {
-	_, err := h.queueAndSendReturnID(r, orgID, nodeID, depID, cmd, payload)
-	return err
+// queueAndSend persists a task and attempts immediate live delivery.
+// Returns delivered=true only when the task was successfully written to the
+// node's TCP session; otherwise the task stays in 'pending' state and is
+// flushed by Dispatcher.FlushPending on the next successful reconnect.
+func (h *DeploymentsHandler) queueAndSend(r *http.Request, orgID, nodeID int64, depID *int64, cmd string, payload any) (delivered bool, err error) {
+	_, delivered, err = h.queueAndSendReturnID(r, orgID, nodeID, depID, cmd, payload)
+	return delivered, err
 }
 
-func (h *DeploymentsHandler) queueAndSendReturnID(r *http.Request, orgID, nodeID int64, depID *int64, cmd string, payload any) (int64, error) {
+func (h *DeploymentsHandler) queueAndSendReturnID(r *http.Request, orgID, nodeID int64, depID *int64, cmd string, payload any) (taskID int64, delivered bool, err error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	taskID, err := h.Store.CreateTask(r.Context(), orgID, nodeID, depID, cmd, string(body))
+	taskID, err = h.Store.CreateTask(r.Context(), orgID, nodeID, depID, cmd, string(body))
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	if h.NodeServer.IsOnline(nodeID) {
-		if err := h.NodeServer.SendToNode(nodeID, taskID, cmd, payload); err == nil {
-			_ = h.Store.MarkTaskSent(r.Context(), taskID)
-		}
+	if !h.NodeServer.IsOnline(nodeID) {
+		return taskID, false, nil
 	}
-	return taskID, nil
+	if sendErr := h.NodeServer.SendToNode(nodeID, taskID, cmd, payload); sendErr != nil {
+		slog.Warn("queueAndSend: live delivery failed; task remains pending",
+			slog.Int64("task_id", taskID),
+			slog.Int64("node_id", nodeID),
+			slog.String("cmd", cmd),
+			slog.Any("err", sendErr))
+		return taskID, false, nil
+	}
+	if markErr := h.Store.MarkTaskSent(r.Context(), taskID); markErr != nil {
+		slog.Warn("queueAndSend: mark task sent",
+			slog.Int64("task_id", taskID), slog.Any("err", markErr))
+	}
+	return taskID, true, nil
 }

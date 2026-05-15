@@ -115,6 +115,64 @@ func (s *Store) ListDeploymentsByNode(ctx context.Context, nodeID int64) ([]mode
 	return out, err
 }
 
+// ReconcileNodeDeployments updates each (node_id, pot_id) row with the agent's
+// authoritative status, then marks any in-DB deployment that is currently in
+// an "active" lifecycle state (pending/installing/running) but no longer
+// present on the agent as 'failed' with a "missing on node" message. This is
+// the source-of-truth sync invoked on reconnect and via the agent's periodic
+// installed-list push. Each update is performed inside a single transaction so
+// observers (UI / WS) see a consistent post-reconciliation snapshot.
+func (s *Store) ReconcileNodeDeployments(ctx context.Context, nodeID int64, pots map[string]string) error {
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Upsert each known pot's status.
+	for potID, status := range pots {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE deployments SET status = ?, status_message = ''
+			 WHERE node_id = ? AND pot_id = ?`,
+			status, nodeID, potID); err != nil {
+			return fmt.Errorf("update %s: %w", potID, err)
+		}
+	}
+
+	// Mark anything still "active" (installing/running) but absent on the agent
+	// as failed. We intentionally skip 'pending' because those deployments have
+	// a queued install task that hasn't been sent/executed yet — marking them
+	// failed here would race with FlushPending and wrongly kill a new deploy.
+	if len(pots) == 0 {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE deployments
+			 SET status = 'failed', status_message = 'missing on node after reconnect'
+			 WHERE node_id = ?
+			   AND status IN ('installing','running')`,
+			nodeID); err != nil {
+			return fmt.Errorf("mark missing: %w", err)
+		}
+	} else {
+		args := []any{nodeID}
+		placeholders := make([]string, 0, len(pots))
+		for potID := range pots {
+			placeholders = append(placeholders, "?")
+			args = append(args, potID)
+		}
+		q := fmt.Sprintf(
+			`UPDATE deployments
+			 SET status = 'failed', status_message = 'missing on node after reconnect'
+			 WHERE node_id = ?
+			   AND status IN ('installing','running')
+			   AND pot_id NOT IN (%s)`,
+			strings.Join(placeholders, ","))
+		if _, err := tx.ExecContext(ctx, q, args...); err != nil {
+			return fmt.Errorf("mark missing: %w", err)
+		}
+	}
+	return tx.Commit()
+}
+
 // UpdateDeploymentStatus updates status + message.
 func (s *Store) UpdateDeploymentStatus(ctx context.Context, nodeID int64, potID, status, message string) error {
 	_, err := s.DB.ExecContext(ctx,

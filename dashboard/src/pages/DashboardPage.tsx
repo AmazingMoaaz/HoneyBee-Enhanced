@@ -35,6 +35,7 @@ interface GNode {
   ip?: string;
   os?: string;
   potCount?: number;
+  runningPots?: number;
   // honeypot-specific
   potType?: string;
   potId?: string;
@@ -77,6 +78,7 @@ function buildGraph(
     gnodes.push({
       id: nid, label: n.name, kind: "node", online: !!n.online,
       hostname: n.hostname, ip: n.ip_address, os: n.os, potCount: pots.length,
+      runningPots: pots.filter((p) => p.status === "running").length,
       x: nx, y: ny, vx: 0, vy: 0,
     });
     edges.push({ source: "user", target: nid });
@@ -506,10 +508,17 @@ function AssetTopologyGraph({ nodes, deployments, email }: {
                     strokeDasharray={isActive ? "0" : "5 4"}
                     style={{ transition: "stroke-width .15s" }}
                   />
-                  {/* Animated flow dot on active edges */}
+                  {/* Animated flow dot on active edges — direction: honeypot → node → user */}
                   {isActive && (
                     <circle r="3" fill="#F59E0B">
-                      <animateMotion dur="1.6s" repeatCount="indefinite" path={path} />
+                      <animateMotion
+                        dur="1.6s"
+                        repeatCount="indefinite"
+                        path={path}
+                        keyPoints="1;0"
+                        keyTimes="0;1"
+                        calcMode="linear"
+                      />
                     </circle>
                   )}
                 </g>
@@ -521,6 +530,7 @@ function AssetTopologyGraph({ nodes, deployments, email }: {
               if (!visibleIds.has(gn.id)) return null;
               const s = KIND_STYLE[gn.kind];
               const isOffline = gn.online === false;
+              const agentOfflinePotsRunning = gn.kind === "node" && isOffline && (gn.runningPots ?? 0) > 0;
               const isActive = !!activeSet && activeSet.has(gn.id);
               const dim_ = !!activeSet && !isActive;
               const opacity = dim_ ? 0.25 : 1;
@@ -584,7 +594,7 @@ function AssetTopologyGraph({ nodes, deployments, email }: {
                   {/* Status dot (top-right, except user) */}
                   {gn.kind !== "user" && (
                     <circle cx={gn.x + s.r * 0.7} cy={gn.y - s.r * 0.7} r="4"
-                      fill={gn.online ? "#22C55E" : "#94A3B8"}
+                      fill={gn.online ? "#22C55E" : agentOfflinePotsRunning ? "#F59E0B" : "#94A3B8"}
                       stroke="#fff" strokeWidth="1.5" />
                   )}
 
@@ -662,10 +672,14 @@ function AssetTopologyGraph({ nodes, deployments, email }: {
                   {tooltipNode.ip && (<><span style={{ color: "#64748B" }}>ip</span><span style={{ fontFamily: "monospace" }}>{tooltipNode.ip}</span></>)}
                   {tooltipNode.os && (<><span style={{ color: "#64748B" }}>os</span><span>{tooltipNode.os}</span></>)}
                   <span style={{ color: "#64748B" }}>pots</span><span>{tooltipNode.potCount ?? 0}</span>
-                  <span style={{ color: "#64748B" }}>status</span>
-                  <span style={{ color: tooltipNode.online ? "#4ADE80" : "#94A3B8" }}>
+                  <span style={{ color: "#64748B" }}>agent</span>
+                  <span style={{ color: tooltipNode.online ? "#4ADE80" : "#F87171" }}>
                     {tooltipNode.online ? "online" : "offline"}
                   </span>
+                  {!tooltipNode.online && (tooltipNode.runningPots ?? 0) > 0 && (
+                    <><span style={{ color: "#64748B" }}>pots</span>
+                    <span style={{ color: "#34D399" }}>{tooltipNode.runningPots} running</span></>
+                  )}
                 </div>
               )}
               {tooltipNode.kind === "honeypot" && (
@@ -697,12 +711,14 @@ function AssetTopologyGraph({ nodes, deployments, email }: {
             { color: "#F59E0B", label: "User" },
             { color: "#3B82F6", label: "Node" },
             { color: "#10B981", label: "Honeypot" },
+            { color: "#F59E0B", label: "Agent offline + pots active", dot: true },
             { color: "#94A3B8", label: "Offline" },
-          ].map(({ color, label }) => (
+          ].map(({ color, label, dot }) => (
             <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
               <span style={{
                 width: 9, height: 9, borderRadius: "50%", background: color, display: "inline-block",
                 boxShadow: `0 0 6px ${color}66`,
+                border: dot ? "1.5px dashed #92400E" : undefined,
               }} />
               {label}
             </span>

@@ -196,13 +196,28 @@ func (d *Dispatcher) handlePotLog(ctx context.Context, sess *Session, env *proto
 	}
 }
 
-func (d *Dispatcher) handlePotInstalledList(_ context.Context, sess *Session, env *protocol.Envelope) {
+func (d *Dispatcher) handlePotInstalledList(ctx context.Context, sess *Session, env *protocol.Envelope) {
 	var lst protocol.PotInstalledList
 	if err := protocol.DecodePayload(env, &lst); err != nil {
+		d.logger.Warn("decode pot_installed_list", slog.Any("err", err))
 		return
+	}
+	// Reconcile DB against the agent's authoritative installed-pot list:
+	// updates each known pot's status and marks any DB-only "active" rows as failed.
+	pots := make(map[string]string, len(lst.Pots))
+	for _, p := range lst.Pots {
+		pots[p.PotID] = p.Status
+	}
+	if err := d.store.ReconcileNodeDeployments(ctx, sess.nodeID, pots); err != nil {
+		d.logger.Warn("reconcile deployments", slog.Any("err", err), slog.Int64("node_id", sess.nodeID))
 	}
 	if d.broadcaster != nil {
 		d.broadcaster.Broadcast(sess.orgID, "tasks", "pot_installed_list", lst)
+		// Trigger UI refresh of deployment list since statuses changed.
+		d.broadcaster.Broadcast(sess.orgID, "deployments", "reconciled", map[string]any{
+			"node_id": sess.nodeID,
+			"count":   len(lst.Pots),
+		})
 	}
 }
 
