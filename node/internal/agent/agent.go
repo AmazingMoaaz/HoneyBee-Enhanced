@@ -34,6 +34,8 @@ type Agent struct {
 	conn   net.Conn
 	nodeID int64
 	connOK bool
+
+	writeMu sync.Mutex // serialises all writes to conn; held only during SendMessage
 }
 
 // New constructs an Agent.
@@ -147,6 +149,8 @@ func (a *Agent) send(msgType string, payload any) error {
 	if !ok || conn == nil {
 		return errors.New("not connected")
 	}
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
 	return protocol.SendMessage(conn, msgType, payload)
 }
 

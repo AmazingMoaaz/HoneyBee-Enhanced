@@ -219,6 +219,160 @@ function DeployModal({
   );
 }
 
+/* ── Offline Banner ───────────────────────────── */
+function OfflineBanner({
+  node, onInstallTab, copied, onCopy,
+}: {
+  node: any;
+  onInstallTab: () => void;
+  copied: string | null;
+  onCopy: (text: string, key: string) => void;
+}) {
+  const wasConnected = !!node.hostname;
+  const rows: { plat: string; label: string; restart: string; status: string }[] = [
+    {
+      plat: "linux",
+      label: "Linux / macOS (root)",
+      restart: "sudo systemctl restart honeybee-node",
+      status:  "sudo systemctl status honeybee-node",
+    },
+    {
+      plat: "linux-user",
+      label: "Linux (non-root user)",
+      restart: "systemctl --user restart honeybee-node",
+      status:  "systemctl --user status honeybee-node",
+    },
+    {
+      plat: "windows",
+      label: "Windows (PowerShell Admin)",
+      restart: `Stop-ScheduledTask "HoneyBeeNode"; Start-ScheduledTask "HoneyBeeNode"`,
+      status:  `Get-ScheduledTask -TaskName "HoneyBeeNode"`,
+    },
+  ];
+  return (
+    <div className="card animate-fade-up" style={{
+      padding: 0, overflow: "hidden",
+      border: "1.5px solid rgba(239,68,68,0.28)",
+    }}>
+      {/* Red top bar */}
+      <div style={{ height: 4, background: "linear-gradient(90deg,#EF4444,#DC2626)" }} />
+
+      {/* Header */}
+      <div style={{
+        padding: "14px 20px",
+        background: "linear-gradient(135deg,rgba(254,242,242,0.9),rgba(255,255,255,0.95))",
+        borderBottom: "1px solid rgba(239,68,68,0.12)",
+        display: "flex", alignItems: "center", gap: 12,
+      }}>
+        <div style={{
+          width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
+          background: "rgba(239,68,68,0.1)", border: "1.5px solid rgba(239,68,68,0.28)",
+        }}>
+          <Ico d={I.warn} size={17} color="#DC2626" />
+        </div>
+        <div>
+          <p style={{ fontWeight: 800, fontSize: 14, color: "#991B1B", margin: 0 }}>
+            Agent Disconnected
+          </p>
+          <p style={{ fontSize: 12, color: "#B45309", margin: "2px 0 0", lineHeight: 1.4 }}>
+            {wasConnected
+              ? <>Last connected from <strong style={{ color: "#0F172A" }}>{node.hostname}</strong> · {relTime(node.last_heartbeat)}</>
+              : "This node has never connected to the server."}
+          </p>
+        </div>
+      </div>
+
+      <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        {wasConnected ? (
+          <>
+            <p style={{ fontSize: 13, color: "#475569", margin: 0, lineHeight: 1.6 }}>
+              The agent process may have stopped or the machine lost network. Run one of these commands <strong>on {node.hostname}</strong> to restart it:
+            </p>
+
+            {/* Restart command cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 12 }}>
+              {rows.map(({ plat, label, restart, status }) => (
+                <div key={plat} style={{
+                  padding: "13px 14px", borderRadius: 10,
+                  background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.09)",
+                }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+                    <Ico d={plat === "windows" ? I.windows : I.linux} size={12} color="#64748B" />
+                    {label}
+                    const k = `offline-${plat}-${l}`;
+                    return (
+                      <div key={l} style={{ display: "flex", gap: 6, marginBottom: 7, alignItems: "center" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, flex: 1 }}>
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.07em" }}>{l}</span>
+                          <code style={{
+                            fontSize: 11.5, fontFamily: "ui-monospace,'Cascadia Code',monospace",
+                            color: "#1E293B", background: "rgba(15,23,42,0.05)",
+                            padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(15,23,42,0.07)",
+                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block",
+                          }}>{cmd}</code>
+                        </div>
+                        <button
+                          onClick={() => onCopy(cmd, k)}
+                          title="Copy"
+                          style={{
+                            flexShrink: 0, padding: "5px 9px", borderRadius: 7,
+                            border: "1.5px solid rgba(15,23,42,0.12)",
+                            background: copied === k ? "#F59E0B" : "#FFFFFF",
+                            cursor: "pointer", color: copied === k ? "#1C0A00" : "#64748B",
+                            fontSize: 11, fontWeight: 700,
+                            display: "flex", alignItems: "center", gap: 4,
+                          }}
+                        >
+                          {copied === k
+                            ? <><Ico d={I.check} size={11} color="#1C0A00" /> Copied</>
+                            : <><Ico d={I.copy}  size={11} color="#64748B" /> Copy</>}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            {/* Hint — if service was removed */}
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: 8,
+              padding: "10px 14px", borderRadius: 9,
+              background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)",
+              fontSize: 12.5, color: "#92400E", lineHeight: 1.6,
+            }}>
+              <Ico d={I.warn} size={13} color="#D97706" />
+              <span>
+                If the service was uninstalled from the machine, go to{" "}
+                <button
+                  onClick={onInstallTab}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    color: "#B45309", fontWeight: 800, padding: 0,
+                    textDecoration: "underline", fontSize: 12.5,
+                  }}
+                >
+                  Agent Setup
+                </button>{" "}
+                to reinstall it.
+              </span>
+            </div>
+          </>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "8px 0 4px" }}>
+            <p style={{ fontSize: 13, color: "#64748B", margin: 0, textAlign: "center", lineHeight: 1.6 }}>
+              Install the agent on the target machine to bring this node online.
+            </p>
+            <button onClick={onInstallTab} className="btn btn-primary" style={{ display: "inline-flex", gap: 8 }}>
+              <Ico d={I.install} size={14} color="#1C0A00" /> Go to Agent Setup
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Page ──────────────────────────────────────── */
 export default function NodeDetailPage() {
   const { id }   = useParams();
@@ -615,6 +769,16 @@ export default function NodeDetailPage() {
         </div>
       </div>
 
+      {/* ── Offline Banner ── */}
+      {!online && (
+        <OfflineBanner
+          node={node}
+          onInstallTab={() => { setTab("install"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          copied={copied}
+          onCopy={copyText}
+        />
+      )}
+
       {/* ── Live log (shown after deploy) ── */}
       {activeDeployID && (
         <div className="card animate-fade-up" style={{ overflow: "hidden" }}>
@@ -684,7 +848,7 @@ export default function NodeDetailPage() {
         {([
           { key: "deployments", label: `Deployments`, count: deps.length },
           { key: "metrics",     label: "Performance",          count: null },
-          { key: "install",     label: "Install / Reinstall",  count: null },
+          { key: "install",     label: "Agent Setup",          count: null },
           { key: "uninstall",   label: "Uninstall Agent",      count: null },
           { key: "danger",      label: "Danger Zone",          count: null },
         ] as const).map(t => (
@@ -887,14 +1051,69 @@ export default function NodeDetailPage() {
 
       {/* ── INSTALL tab ── */}
       {tab === "install" && (
-        <div className="card" style={{ padding: "24px 26px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+        <div className="card" style={{ padding: "24px 26px", display: "flex", flexDirection: "column", gap: 22 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(245,158,11,0.1)", display: "grid", placeItems: "center", border: "1.5px solid rgba(245,158,11,0.25)" }}>
               <Ico d={I.install} size={18} color="#F59E0B" />
             </div>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Install Agent</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Agent Setup</h3>
           </div>
-          <p style={{ fontSize: 13, color: "#64748B", marginBottom: 22, lineHeight: 1.6 }}>
+
+          {/* ── Reconnect section (already installed) ── */}
+          {node.hostname && (
+            <div style={{
+              padding: "16px 18px", borderRadius: 12,
+              background: "linear-gradient(135deg,rgba(59,130,246,0.06),rgba(99,102,241,0.04))",
+              border: "1px solid rgba(59,130,246,0.2)",
+            }}>
+              <p style={{ fontSize: 12.5, fontWeight: 800, color: "#1D4ED8", marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+                <Ico d={I.restart} size={13} color="#1D4ED8" />
+                Already installed on <code style={{ fontFamily: "monospace", background: "rgba(59,130,246,0.1)", padding: "1px 6px", borderRadius: 4 }}>{node.hostname}</code> — just restart the service:
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 10 }}>
+                {([
+                  { plat: "linux",   label: "Linux / macOS (root)",       cmd: "sudo systemctl restart honeybee-node" },
+                  { plat: "linux-user", label: "Linux (non-root)",          cmd: "systemctl --user restart honeybee-node" },
+                  { plat: "windows", label: "Windows (Admin PS)",          cmd: `Stop-ScheduledTask "HoneyBeeNode"; Start-ScheduledTask "HoneyBeeNode"` },
+                ] as const).map(({ plat, label, cmd }) => {
+                  const k = `reconnect-${plat}`;
+                  return (
+                    <div key={plat}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
+                        <Ico d={plat === "windows" ? I.windows : I.linux} size={12} color="#64748B" />{label}
+                      </p>
+                      <div style={{ display: "flex", gap: 7 }}>
+                        <code style={{
+                          flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 12,
+                          fontFamily: "ui-monospace,monospace", background: "#E2E8F0",
+                          color: "#1E293B", border: "1px solid rgba(15,23,42,0.08)",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>{cmd}</code>
+                        <button onClick={() => copyText(cmd, k)} style={{
+                          padding: "8px 13px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                          background: copied === k ? "#F59E0B" : "#EEF2F6",
+                          border: "1.5px solid rgba(15,23,42,0.12)",
+                          color: copied === k ? "#1C0A00" : "#64748B",
+                          display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                        }}>
+                          {copied === k ? <><Ico d={I.check} size={12} color="#1C0A00" /> Copied</> : <><Ico d={I.copy} size={12} color="#64748B" /> Copy</>}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Divider ── */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1, height: 1, background: "rgba(15,23,42,0.07)" }} />
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "#94A3B8", whiteSpace: "nowrap" }}>{node.hostname ? "OR — FRESH INSTALL" : "INSTALL THE AGENT"}</span>
+            <div style={{ flex: 1, height: 1, background: "rgba(15,23,42,0.07)" }} />
+          </div>
+
+          <p style={{ fontSize: 13, color: "#64748B", margin: 0, lineHeight: 1.6 }}>
             Run one of these commands as <strong>root / admin</strong> on the target machine. The agent will connect back and appear online within seconds.
           </p>
 

@@ -139,16 +139,19 @@ func (s *Store) ReconcileNodeDeployments(ctx context.Context, nodeID int64, pots
 		}
 	}
 
-	// Mark anything still "active" (installing/running) but absent on the agent
-	// as failed. We intentionally skip 'pending' because those deployments have
-	// a queued install task that hasn't been sent/executed yet — marking them
-	// failed here would race with FlushPending and wrongly kill a new deploy.
+	// Mark deployments that are 'running' but absent from the agent's installed list
+	// as failed — those pots are genuinely gone. We intentionally skip both 'pending'
+	// AND 'installing' because:
+	//   • 'pending'    — the install task hasn't been sent/executed yet (races with FlushPending)
+	//   • 'installing' — the install task is actively running on the node right now; the pot
+	//                    won't appear in the installed list until the manifest is written at the
+	//                    end of a successful install, so marking it failed here is a false alarm.
 	if len(pots) == 0 {
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE deployments
 			 SET status = 'failed', status_message = 'missing on node after reconnect'
 			 WHERE node_id = ?
-			   AND status IN ('installing','running')`,
+			   AND status = 'running'`,
 			nodeID); err != nil {
 			return fmt.Errorf("mark missing: %w", err)
 		}
@@ -163,7 +166,7 @@ func (s *Store) ReconcileNodeDeployments(ctx context.Context, nodeID int64, pots
 			`UPDATE deployments
 			 SET status = 'failed', status_message = 'missing on node after reconnect'
 			 WHERE node_id = ?
-			   AND status IN ('installing','running')
+			   AND status = 'running'
 			   AND pot_id NOT IN (%s)`,
 			strings.Join(placeholders, ","))
 		if _, err := tx.ExecContext(ctx, q, args...); err != nil {

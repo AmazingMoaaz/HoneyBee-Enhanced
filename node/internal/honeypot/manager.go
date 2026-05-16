@@ -134,7 +134,18 @@ func (m *Manager) Install(ctx context.Context, potID, hpType, gitURL, branch str
 	}
 	dir := filepath.Join(m.root, potID)
 	if _, err := os.Stat(dir); err == nil {
-		return nil, errors.New("already installed")
+		// Directory exists — check whether installation completed (manifest present).
+		// If the manifest is missing the previous attempt was interrupted mid-install;
+		// clean it up so this attempt can start fresh instead of failing silently.
+		manifestPath := filepath.Join(dir, "pot_manifest.json")
+		if _, merr := os.Stat(manifestPath); os.IsNotExist(merr) {
+			m.emitLog(potID, hpType, "install.progress", "cleaning up incomplete previous install")
+			if rerr := os.RemoveAll(dir); rerr != nil {
+				return nil, fmt.Errorf("cleanup partial install: %w", rerr)
+			}
+		} else {
+			return nil, errors.New("already installed")
+		}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
