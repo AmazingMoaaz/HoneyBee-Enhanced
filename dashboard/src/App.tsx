@@ -12,6 +12,7 @@ import AuditLogPage from "./pages/AuditLogPage";
 import PotStorePage from "./pages/PotStorePage";
 import UsersPage from "./pages/UsersPage";
 import SystemCheckPage from "./pages/SystemCheckPage";
+import TopologyPage from "./pages/TopologyPage";
 import Layout from "./components/Layout";
 
 function Protected({ children }: { children: JSX.Element }) {
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/audit-log" element={<AuditLogPage />} />
         <Route path="/potstore" element={<PotStorePage />} />
         <Route path="/system" element={<SystemCheckPage />} />
+        <Route path="/topology" element={<TopologyPage />} />
         <Route path="/users" element={<UsersPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

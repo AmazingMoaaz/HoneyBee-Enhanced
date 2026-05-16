@@ -25,6 +25,7 @@ const NAV = [
   { to: "/potstore",   label: "HoneyBee Store", icon: Icons.honeypot },
   { to: "/audit-log",  label: "Audit Log",      icon: Icons.clipboard },
   { to: "/system",     label: "System Check",   icon: Icons.shield },
+  { to: "/topology",   label: "Draft Topology", icon: Icons.network },
 ];
 
 function getPageTitle(pathname: string): string {
@@ -36,6 +37,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/audit-log")) return "Audit Log";
   if (pathname.startsWith("/potstore"))  return "HoneyBee Store";
   if (pathname.startsWith("/system"))    return "System Check";
+  if (pathname.startsWith("/topology"))  return "Draft Topology";
   if (pathname.startsWith("/users"))     return "User Management";
   return "HoneyBee";
 }
@@ -49,8 +51,7 @@ function getPageBreadcrumb(pathname: string): string[] {
   if (pathname.startsWith("/alerts"))     return ["Security"];
   if (pathname.startsWith("/audit-log"))  return ["Security"];
   if (pathname.startsWith("/potstore"))   return ["Catalog"];
-  if (pathname.startsWith("/system"))     return ["Diagnostics"];
-  if (pathname.startsWith("/users"))      return ["Admin"];
+  if (pathname.startsWith("/system"))     return ["Diagnostics"];  if (pathname.startsWith("/topology"))    return ["Design"];  if (pathname.startsWith("/users"))      return ["Admin"];
   return [];
 }
 

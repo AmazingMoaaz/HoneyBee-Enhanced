@@ -290,7 +290,7 @@ function NodeCard({ node, onDelete }: { node: Node; onDelete: (id: number, delet
                   }}
                 >
                   <Icon d={Icons.search} size={10} color="#1E40AF" sw={2.4} />
-                  LA
+                  Log Analyzer
                 </a>
               )}
             </div>
