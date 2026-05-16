@@ -264,6 +264,13 @@ func (s *Server) removeSession(ctx context.Context, nodeID int64, sess *Session)
 		return
 	}
 	_ = s.store.MarkNodeOffline(ctx, nodeID)
+	// Mark all running/installing honeypots as stopped — they cannot be active
+	// if the node is offline. Statuses are restored by ReconcileNodeDeployments
+	// when the node reconnects and sends its installed-pot list.
+	stoppedPotIDs, err := s.store.MarkNodeDeploymentsOffline(ctx, nodeID)
+	if err != nil {
+		s.logger.Warn("mark deployments offline", slog.Int64("node_id", nodeID), slog.Any("err", err))
+	}
 	_ = s.store.ResetSentTasksForNode(ctx, nodeID)
 	if s.broadcaster != nil {
 		s.broadcaster.Broadcast(sess.orgID, "node_events", "node_status", map[string]any{
@@ -271,6 +278,15 @@ func (s *Server) removeSession(ctx context.Context, nodeID int64, sess *Session)
 			"status":  "offline",
 			"online":  false,
 		})
+		// Notify the UI that each previously-running honeypot is now stopped.
+		for _, potID := range stoppedPotIDs {
+			s.broadcaster.Broadcast(sess.orgID, "deployments", "deployment_status", map[string]any{
+				"node_id": nodeID,
+				"pot_id":  potID,
+				"status":  "stopped",
+				"message": "node offline",
+			})
+		}
 	}
 	s.logger.Info("node offline", slog.Int64("node_id", nodeID))
 }

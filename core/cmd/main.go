@@ -57,6 +57,9 @@ func main() {
 	if err := st.MarkAllNodesOffline(rootCtx); err != nil {
 		logger.Warn("mark nodes offline", slog.Any("err", err))
 	}
+	if err := st.MarkAllDeploymentsOffline(rootCtx); err != nil {
+		logger.Warn("mark deployments offline", slog.Any("err", err))
+	}
 	if err := st.ResetAllSentTasks(rootCtx); err != nil {
 		logger.Warn("reset sent tasks", slog.Any("err", err))
 	}

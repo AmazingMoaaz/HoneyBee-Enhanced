@@ -214,6 +214,51 @@ func (s *Store) DeleteDeployment(ctx context.Context, orgID, id int64) error {
 	return err
 }
 
+// MarkNodeDeploymentsOffline transitions all running/installing deployments for a
+// node to 'stopped' when the node disconnects. It returns the pot IDs that were
+// affected so callers can broadcast individual status-change events. The real
+// statuses are restored by ReconcileNodeDeployments when the node reconnects.
+func (s *Store) MarkNodeDeploymentsOffline(ctx context.Context, nodeID int64) ([]string, error) {
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT pot_id FROM deployments WHERE node_id = ? AND status IN ('running','installing')`,
+		nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("query active deployments: %w", err)
+	}
+	defer rows.Close()
+	var potIDs []string
+	for rows.Next() {
+		var pid string
+		if err := rows.Scan(&pid); err != nil {
+			return nil, err
+		}
+		potIDs = append(potIDs, pid)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(potIDs) == 0 {
+		return nil, nil
+	}
+	_, err = s.DB.ExecContext(ctx,
+		`UPDATE deployments SET status = 'stopped', status_message = 'node offline'
+		 WHERE node_id = ? AND status IN ('running','installing')`,
+		nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("mark deployments stopped: %w", err)
+	}
+	return potIDs, nil
+}
+
+// MarkAllDeploymentsOffline resets every running/installing deployment to 'stopped'.
+// Called at server startup to clear stale state left from a previous run.
+func (s *Store) MarkAllDeploymentsOffline(ctx context.Context) error {
+	_, err := s.DB.ExecContext(ctx,
+		`UPDATE deployments SET status = 'stopped', status_message = 'server restarted'
+		 WHERE status IN ('running','installing')`)
+	return err
+}
+
 // DeleteDeploymentByNodePot removes a deployment by (node_id, pot_id). Used when
 // the node confirms a remove command so the row vanishes from the UI.
 func (s *Store) DeleteDeploymentByNodePot(ctx context.Context, nodeID int64, potID string) error {
