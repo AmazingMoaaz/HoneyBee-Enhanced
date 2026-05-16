@@ -134,6 +134,13 @@ func (h *DeploymentsHandler) Action(action string) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "queue "+action+" task")
 			return
 		}
+		// For start/restart, immediately mark the deployment as "installing" so
+		// the next API poll reflects the in-progress state rather than the stale
+		// previous status. stop/remove are left alone — the node updates those
+		// statuses itself via PotStatus messages.
+		if action == "start" || action == "restart" {
+			_ = h.Store.UpdateDeploymentStatusByID(r.Context(), dep.ID, "installing", "")
+		}
 		status := "queued"
 		if delivered {
 			status = "sent"

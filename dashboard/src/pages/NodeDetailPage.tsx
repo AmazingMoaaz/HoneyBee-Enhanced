@@ -299,6 +299,8 @@ function OfflineBanner({
                   <p style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
                     <Ico d={plat === "windows" ? I.windows : I.linux} size={12} color="#64748B" />
                     {label}
+                  </p>
+                  {[{ l: "Restart agent", cmd: restart }, { l: "Check status", cmd: status }].map(({ l, cmd }) => {
                     const k = `offline-${plat}-${l}`;
                     return (
                       <div key={l} style={{ display: "flex", gap: 6, marginBottom: 7, alignItems: "center" }}>
@@ -956,11 +958,11 @@ export default function NodeDetailPage() {
                       <div style={{ flex: 1 }} />
 
                       {d.status !== "running" && d.status !== "removed" && (() => {
-                        const isThis = busy && busyAct === "start";
+                        const isThis = (busy && busyAct === "start") || d.status === "installing";
                         return (
                           <button
-                            onClick={() => action.mutate({ depID: d.id, act: "start" })}
-                            disabled={!!busy}
+                            onClick={() => !isThis && action.mutate({ depID: d.id, act: "start" })}
+                            disabled={!!busy || isThis}
                             style={{
                               padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700,
                               cursor: busy ? "default" : "pointer",
