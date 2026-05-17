@@ -130,6 +130,16 @@ export default function EventsPage() {
     setTypeFilter(""); setIpFilter(""); setPotFilter("");
   }, []);
 
+  const [exportOpen, setExportOpen] = useState(false);
+
+  // close export dropdown on outside click
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = () => setExportOpen(false);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [exportOpen]);
+
   const handleExportCSV = () => {
     if (!list.length) return;
     const hdr = ["Time","Node","Pot","Type","Source IP","Src Port","Dst Port"];
@@ -142,6 +152,51 @@ export default function EventsPage() {
       download: `honeybee-events-${new Date().toISOString().slice(0,10)}.csv`,
     });
     a.click(); URL.revokeObjectURL(a.href);
+    setExportOpen(false);
+  };
+
+  const handleExportExcel = () => {
+    if (!list.length) return;
+    // Build a simple XML-based Excel (SpreadsheetML) workbook
+    const hdr = ["Time","Node","Pot","Type","Source IP","Src Port","Dst Port"];
+    const escape = (v: any) => String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    const headerRow = hdr.map((h) => `<Cell><Data ss:Type="String">${escape(h)}</Data></Cell>`).join("");
+    const dataRows = list.map((e: any) => {
+      const cells = [e.event_time, e.node_id, e.pot_id, e.event_type, e.source_ip, e.source_port, e.dest_port]
+        .map((v) => `<Cell><Data ss:Type="String">${escape(v)}</Data></Cell>`).join("");
+      return `<Row>${cells}</Row>`;
+    }).join("\n");
+    const xml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Events">
+  <Table>
+   <Row>${headerRow}</Row>
+   ${dataRows}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(blob),
+      download: `honeybee-events-${new Date().toISOString().slice(0,10)}.xls`,
+    });
+    a.click(); URL.revokeObjectURL(a.href);
+    setExportOpen(false);
+  };
+
+  const handleExportLog = () => {
+    if (!list.length) return;
+    const lines = list.map((e: any) =>
+      `[${e.event_time}] type=${e.event_type} node=${e.node_id} pot=${e.pot_id} src=${e.source_ip}:${e.source_port ?? "-"} dst_port=${e.dest_port ?? "-"}`
+    );
+    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(blob),
+      download: `honeybee-events-${new Date().toISOString().slice(0,10)}.log`,
+    });
+    a.click(); URL.revokeObjectURL(a.href);
+    setExportOpen(false);
   };
 
   return (
@@ -198,14 +253,47 @@ export default function EventsPage() {
             {isFetching ? "Loading…" : "Refresh"}
           </button>
 
-          <button onClick={handleExportCSV}
-            style={{
-              height: 36, padding: "0 14px", borderRadius: 10, border: "1px solid #E2E8F0",
-              background: "#fff", fontSize: 12, fontWeight: 700, color: "#475569",
-              cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-            }}>
-            <Icon d={Icons.arrowDown} size={13} color="#94A3B8" /> Export CSV
-          </button>
+          {/* Export dropdown */}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setExportOpen((o) => !o); }}
+              style={{
+                height: 36, padding: "0 14px", borderRadius: 10, border: "1px solid #E2E8F0",
+                background: "#fff", fontSize: 12, fontWeight: 700, color: "#475569",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              }}>
+              <Icon d={Icons.arrowDown} size={13} color="#94A3B8" /> Export
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }}>
+                <path d="M2 4l3 3 3-3" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            {exportOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 200,
+                background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.10)", minWidth: 150, overflow: "hidden",
+              }}>
+                {[
+                  { label: "CSV (.csv)",   action: handleExportCSV   },
+                  { label: "Excel (.xls)", action: handleExportExcel  },
+                  { label: "Log (.log)",   action: handleExportLog    },
+                ].map((item) => (
+                  <button key={item.label} onClick={item.action}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "10px 16px", fontSize: 13, fontWeight: 600,
+                      color: "#334155", background: "transparent", border: "none",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

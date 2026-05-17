@@ -2,7 +2,7 @@
   "server": {
     "http_addr": "0.0.0.0:5400",
     "node_addr": "0.0.0.0:9001",
-    "node_public_addr": "",
+    "node_public_addr": "127.0.0.1:9001",
     "public_http_addr": "",
     "allowed_origins": []
   },

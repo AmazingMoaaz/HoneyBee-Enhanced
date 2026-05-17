@@ -383,10 +383,11 @@ export default function NodeDetailPage() {
   const [tab,              setTab]              = useState<"deployments" | "metrics" | "install" | "uninstall" | "danger">("deployments");
   const [activeDeployID,   setActiveDeployID]   = useState<number | null>(null);
   const [showDeployModal,  setShowDeployModal]  = useState(false);
-  const [confirmUninstall, setConfirmUninstall] = useState(false);
-  const [copied,           setCopied]           = useState<string | null>(null);
-  const [pendingAction,    setPendingAction]    = useState<string | null>(null);
-  const [actionToast,      setActionToast]      = useState<{ kind: "queued" | "sent" | "error"; msg: string } | null>(null);
+  const [confirmUninstall,    setConfirmUninstall]    = useState(false);
+
+  const [copied,              setCopied]              = useState<string | null>(null);
+  const [pendingAction,       setPendingAction]       = useState<string | null>(null);
+  const [actionToast,         setActionToast]         = useState<{ kind: "queued" | "sent" | "error"; msg: string } | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery({
@@ -578,6 +579,8 @@ export default function NodeDetailPage() {
         />
       )}
 
+
+
       {/* ── Breadcrumb ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#94A3B8" }}>
         <Link
@@ -744,7 +747,7 @@ export default function NodeDetailPage() {
             </div>
           </div>
 
-          {/* Right: stats + deploy button */}
+          {/* Right: stats + action buttons */}
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             {/* Mini stats */}
             <div style={{ display: "flex", gap: 12 }}>

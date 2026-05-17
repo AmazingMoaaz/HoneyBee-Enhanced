@@ -352,7 +352,7 @@ func (a *Agent) handleTask(ctx context.Context, ta protocol.TaskAssign) {
 		_ = a.send(protocol.MsgTaskResult, protocol.TaskResult{
 			TaskID: ta.TaskID, NodeID: a.nodeID, Status: protocol.TaskStatusCompleted,
 		})
-		go func() { time.Sleep(time.Second); os.Exit(0) }()
+		go func() { time.Sleep(time.Second); a.doRestart() }()
 		return
 	case protocol.CmdUninstallNode:
 		_ = a.send(protocol.MsgTaskResult, protocol.TaskResult{

@@ -77,16 +77,35 @@ function UserAvatar({ userId }: { userId: any }) {
 }
 
 /* ─── Stat chip ─────────────────────────────────────────── */
-function StatChip({ label, value, meta }: { label: string; value: number; meta: ActionMeta }) {
+function StatChip({ label, value, meta, active }: { label: string; value: number; meta: ActionMeta; active?: boolean }) {
   return (
     <div className="card card-hover" style={{
       padding: "12px 16px", display: "flex", alignItems: "center", gap: 10,
+      background: active ? meta.bg : undefined,
+      border: active ? `2px solid ${meta.border}` : undefined,
+      boxShadow: active ? `0 0 0 3px ${meta.border}55, 0 2px 8px ${meta.border}44` : undefined,
+      transform: active ? "translateY(-1px)" : undefined,
+      transition: "all 0.18s",
+      position: "relative",
     }}>
+      {active && (
+        <div style={{
+          position: "absolute", top: 6, right: 8,
+          width: 16, height: 16, borderRadius: "50%",
+          background: meta.fg, display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <svg viewBox="0 0 12 12" width="8" height="8" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="2,6 5,9 10,3" />
+          </svg>
+        </div>
+      )}
       <div style={{
         width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-        background: meta.bg, border: `1px solid ${meta.border}`,
+        background: active ? meta.fg : meta.bg,
+        border: `1px solid ${meta.border}`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 15, color: meta.fg,
+        fontSize: 15, color: active ? "#fff" : meta.fg,
+        transition: "all 0.18s",
       }}>
         {meta.icon}
       </div>
@@ -94,7 +113,7 @@ function StatChip({ label, value, meta }: { label: string; value: number; meta: 
         <p style={{ fontSize: 18, fontWeight: 800, color: meta.fg, lineHeight: 1, letterSpacing: "-0.02em" }}>
           {value.toLocaleString()}
         </p>
-        <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#94A3B8", marginTop: 2 }}>
+        <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: active ? meta.fg : "#94A3B8", marginTop: 2 }}>
           {label}
         </p>
       </div>
@@ -372,59 +391,99 @@ export default function AuditLogPage() {
         </div>
       </div>
 
-      {/* ── Stat Chips ──────────────────────────────────────── */}
-      {topActions.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 12 }}>
-          {topActions.map(([action, count]) => (
-            <div
-              key={action}
-              onClick={() => { setFilter(f => f === action ? "all" : action); setPage(1); }}
-              style={{ cursor: "pointer" }}
-            >
-              <StatChip label={action} value={count} meta={getActionMeta(action)} />
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* ── Filters ─────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {/* Search */}
-        <div style={{ flex: "1 1 220px", position: "relative" }}>
-          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#94A3B8" strokeWidth="2"
-            style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-            <circle cx="8" cy="8" r="5" /><path d="M17 17l-4-4" />
-          </svg>
-          <input
-            className="input"
-            placeholder="Search user, action, resource, details…"
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            style={{ paddingLeft: 30, fontSize: 13 }}
-          />
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Search row */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 220px", position: "relative" }}>
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#94A3B8" strokeWidth="2"
+              style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+              <circle cx="8" cy="8" r="5" /><path d="M17 17l-4-4" />
+            </svg>
+            <input
+              className="input"
+              placeholder="Search user, action, resource, details…"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              style={{ paddingLeft: 30, fontSize: 13 }}
+            />
+          </div>
+          {(search || filterAction !== "all") && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => { setSearch(""); setFilter("all"); setPage(1); }}
+              style={{ alignSelf: "center" }}
+            >
+              ✕ Clear filters
+            </button>
+          )}
         </div>
 
-        {/* Action filter */}
-        <select
-          className="input"
-          value={filterAction}
-          onChange={e => { setFilter(e.target.value); setPage(1); }}
-          style={{ flex: "0 0 160px", fontSize: 12, fontWeight: 600 }}
-        >
-          <option value="all">All actions</option>
-          {allActions.map(a => (
-            <option key={a} value={a}>{a} ({actionCounts[a] ?? 0})</option>
-          ))}
-        </select>
-
-        {/* Clear filters */}
-        {(search || filterAction !== "all") && (
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => { setSearch(""); setFilter("all"); setPage(1); }}
-          >
-            ✕ Clear
-          </button>
+        {/* Action filter pills */}
+        {allActions.length > 0 && (
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: 6,
+            padding: "10px 14px",
+            background: "#F8FAFC",
+            borderRadius: 12,
+            border: "1px solid rgba(15,23,42,0.07)",
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94A3B8", alignSelf: "center", marginRight: 4 }}>Filter:</span>
+            {/* All button */}
+            <button
+              onClick={() => { setFilter("all"); setPage(1); }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "4px 11px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                cursor: "pointer", border: "1.5px solid",
+                transition: "all 0.15s",
+                background: filterAction === "all" ? "#0F172A" : "#1E293B",
+                color: "#fff",
+                borderColor: filterAction === "all" ? "#0F172A" : "#334155",
+                boxShadow: filterAction === "all" ? "0 2px 6px rgba(15,23,42,0.35)" : "0 1px 3px rgba(15,23,42,0.25)",
+                opacity: filterAction === "all" ? 1 : 0.72,
+              }}
+            >
+              <span style={{ fontSize: 10, opacity: 0.7 }}>⊞</span>
+              All
+              <span style={{
+                background: "rgba(255,255,255,0.18)",
+                color: "#fff",
+                padding: "1px 6px", borderRadius: 10, fontSize: 10, fontWeight: 800,
+              }}>{raw.length}</span>
+            </button>
+            {/* Per-action pill buttons */}
+            {allActions.map(a => {
+              const m = getActionMeta(a);
+              const isActive = filterAction === a;
+              return (
+                <button
+                  key={a}
+                  onClick={() => { setFilter(f => f === a ? "all" : a); setPage(1); }}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                    padding: "4px 11px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                    cursor: "pointer", border: "1.5px solid",
+                    transition: "all 0.15s",
+                    background: isActive ? m.fg : "#fff",
+                    color: isActive ? "#fff" : m.fg,
+                    borderColor: isActive ? m.fg : m.border,
+                    boxShadow: isActive ? `0 2px 8px ${m.border}88` : "none",
+                    transform: isActive ? "translateY(-1px)" : "none",
+                  }}
+                >
+                  <span style={{ fontSize: 12 }}>{m.icon}</span>
+                  {m.label}
+                  <span style={{
+                    background: isActive ? "rgba(255,255,255,0.28)" : m.bg,
+                    color: isActive ? "#fff" : m.fg,
+                    padding: "1px 6px", borderRadius: 10, fontSize: 10, fontWeight: 800,
+                    border: isActive ? "none" : `1px solid ${m.border}`,
+                  }}>{actionCounts[a] ?? 0}</span>
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
 

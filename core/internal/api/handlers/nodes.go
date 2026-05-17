@@ -18,6 +18,7 @@ import (
 	"github.com/honeybee-enhanced/core/internal/loganalyzer"
 	"github.com/honeybee-enhanced/core/internal/nodeserver"
 	"github.com/honeybee-enhanced/core/internal/store"
+	"github.com/honeybee-enhanced/shared/protocol"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -242,6 +243,11 @@ func (h *NodesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusNotFound, "node")
 		return
+	}
+	// Send the uninstall command first so the node self-destructs (stops the
+	// scheduled task / cron job) before we close the connection.
+	if h.NodeServer.IsOnline(node.ID) {
+		_ = h.NodeServer.SendCommand(node.ID, protocol.CmdUninstallNode, nil)
 	}
 	h.NodeServer.DisconnectNode(id)
 	if err := h.Store.DeleteNode(r.Context(), orgID, id); err != nil {

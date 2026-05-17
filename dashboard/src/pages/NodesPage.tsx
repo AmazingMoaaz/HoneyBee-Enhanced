@@ -62,28 +62,30 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
     copyToClipboard(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 2200); });
 
   return (
-    <div className="animate-fade-up shine" style={{
-      borderRadius: 18, overflow: "hidden", position: "relative",
-      border: "1.5px solid rgba(245,158,11,0.4)",
-      background: "linear-gradient(135deg, rgba(252,211,77,0.10) 0%, #FFFFFF 60%)",
-      boxShadow: "0 4px 24px rgba(245,158,11,0.16)",
-    }}>
-      <div style={{ height: 4, background: "linear-gradient(90deg, #FCD34D, #F59E0B, #D97706, #F59E0B, #FCD34D)",
-                   backgroundSize: "200% 100%", animation: "shimmer 4s linear infinite" }} />
+    <div className="card animate-fade-up" style={{ overflow: "hidden", position: "relative" }}>
+      {/* Accent top bar */}
+      <div style={{
+        height: 3,
+        background: "linear-gradient(90deg, #FCD34D, #F59E0B, #D97706, #F59E0B, #FCD34D)",
+        backgroundSize: "200% 100%",
+        animation: "shimmer 4s linear infinite",
+      }} />
+
       <div style={{ padding: "20px 24px" }}>
+        {/* ── Header ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
             <div className="glow-amber" style={{
-              width: 44, height: 44, borderRadius: 13, display: "grid", placeItems: "center",
-              background: "linear-gradient(135deg,#FCD34D,#D97706)",
+              width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", flexShrink: 0,
+              background: "linear-gradient(135deg, #FCD34D, #D97706)",
             }}>
-              <Icon d={Icons.spark} size={20} color="#1C0A00" sw={2.2} />
+              <Icon d={Icons.spark} size={19} color="#1C0A00" sw={2.2} />
             </div>
             <div>
-              <p style={{ fontWeight: 800, fontSize: 15.5, color: "#0F172A" }}>
-                Node <span style={{ color: "#B45309" }}>{created.name}</span> registered
+              <p style={{ fontWeight: 800, fontSize: 15, color: "#0F172A", lineHeight: 1.3 }}>
+                Node <span style={{ color: "#D97706" }}>{created.name}</span> registered
               </p>
-              <p style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>
+              <p style={{ fontSize: 12.5, color: "#64748B", marginTop: 3 }}>
                 Run the install command on your target server to bring it online.
               </p>
             </div>
@@ -93,100 +95,122 @@ function InstallBanner({ created, onClose }: { created: CreatedNode; onClose: ()
           </button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {/* ── Token + Command panels ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+
           {/* Token */}
-          <div style={{ padding: "14px 16px", borderRadius: 12, background: "#E2E8F0", border: "1px solid rgba(15,23,42,0.08)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <p style={{ fontSize: 10.5, fontWeight: 700, color: "#64748B", display: "flex", alignItems: "center", gap: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                <Icon d={Icons.key} size={11} color="#F59E0B" /> Token
-              </p>
-              <button onClick={() => copy(created.token, "token")} style={{
-                padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: copied === "token" ? "#F59E0B" : "rgba(15,23,42,0.06)",
-                border: `1px solid ${copied === "token" ? "#D97706" : "rgba(15,23,42,0.12)"}`,
-                color: copied === "token" ? "#1C0A00" : "#64748B",
-                display: "flex", alignItems: "center", gap: 4,
+          <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(15,23,42,0.1)" }}>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "9px 13px",
+              background: "#F8FAFC", borderBottom: "1px solid rgba(15,23,42,0.07)",
+            }}>
+              <span style={{
+                fontSize: 10.5, fontWeight: 700, color: "#64748B",
+                display: "flex", alignItems: "center", gap: 5,
+                textTransform: "uppercase", letterSpacing: "0.08em",
               }}>
-                {copied === "token" ? <Icon d={Icons.check} size={11} color="#1C0A00" /> : <Icon d={Icons.copy} size={11} color="#64748B" />}
-                {copied === "token" ? "Copied" : "Copy"}
+                <Icon d={Icons.key} size={11} color="#F59E0B" sw={2.2} /> Token
+              </span>
+              <button
+                onClick={() => copy(created.token, "token")}
+                className="btn btn-xs btn-secondary"
+                style={{ gap: 4 }}
+              >
+                {copied === "token"
+                  ? <><Icon d={Icons.check} size={11} color="#16A34A" /> Copied</>
+                  : <><Icon d={Icons.copy} size={11} color="#64748B" /> Copy</>}
               </button>
             </div>
-            <code style={{ fontSize: 11, color: "#92400E", fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
+            <div className="code-block" style={{ borderRadius: 0, fontSize: 10.5, lineHeight: 1.7, margin: 0, padding: "12px 13px" }}>
               {created.token}
-            </code>
-            <p style={{ fontSize: 10.5, color: "#DC2626", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
-              <Icon d={Icons.warn} size={10} color="#DC2626" /> Shown once — save it now.
-            </p>
+            </div>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 5, padding: "7px 13px",
+              background: "rgba(220,38,38,0.04)", borderTop: "1px solid rgba(220,38,38,0.12)",
+              fontSize: 11, color: "#DC2626", fontWeight: 600,
+            }}>
+              <Icon d={Icons.warn} size={11} color="#DC2626" /> Shown once — save it now.
+            </div>
           </div>
 
-          {/* Command */}
-          <div style={{ padding: "14px 16px", borderRadius: 12, background: "#E2E8F0", border: "1px solid rgba(15,23,42,0.08)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ display: "flex", gap: 6 }}>
+          {/* Install command */}
+          <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(15,23,42,0.1)" }}>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "7px 10px 7px 13px",
+              background: "#F8FAFC", borderBottom: "1px solid rgba(15,23,42,0.07)",
+            }}>
+              <div style={{ display: "flex", gap: 5 }}>
                 {(["linux", "windows"] as const).map(p => (
-                  <button key={p} onClick={() => setPlatform(p)} style={{
-                    padding: "3px 11px", borderRadius: 99, fontSize: 10.5, fontWeight: 700, cursor: "pointer",
-                    background: platform === p ? "#F59E0B" : "rgba(15,23,42,0.06)",
-                    border: `1px solid ${platform === p ? "#D97706" : "rgba(15,23,42,0.12)"}`,
-                    color: platform === p ? "#1C0A00" : "#64748B",
-                    display: "inline-flex", alignItems: "center", gap: 4, textTransform: "capitalize",
-                  }}>{p}</button>
+                  <button
+                    key={p}
+                    onClick={() => setPlatform(p)}
+                    className={`btn btn-xs ${platform === p ? "btn-primary" : "btn-secondary"}`}
+                    style={{ gap: 4, textTransform: "capitalize" }}
+                  >
+                    {p}
+                  </button>
                 ))}
               </div>
-              <button onClick={() => copy(cmd, "cmd")} style={{
-                padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: copied === "cmd" ? "#F59E0B" : "rgba(15,23,42,0.06)",
-                border: `1px solid ${copied === "cmd" ? "#D97706" : "rgba(15,23,42,0.12)"}`,
-                color: copied === "cmd" ? "#1C0A00" : "#64748B",
-                display: "flex", alignItems: "center", gap: 4,
-              }}>
-                {copied === "cmd" ? <Icon d={Icons.check} size={11} color="#1C0A00" /> : <Icon d={Icons.copy} size={11} color="#64748B" />}
-                {copied === "cmd" ? "Copied" : "Copy"}
+              <button
+                onClick={() => copy(cmd, "cmd")}
+                className="btn btn-xs btn-secondary"
+                style={{ gap: 4 }}
+              >
+                {copied === "cmd"
+                  ? <><Icon d={Icons.check} size={11} color="#16A34A" /> Copied</>
+                  : <><Icon d={Icons.copy} size={11} color="#64748B" /> Copy</>}
               </button>
             </div>
-            <code style={{ fontSize: 11, color: "#475569", fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>
-              <span style={{ color: "#B45309" }}>{cmd.split(" ")[0]}</span>{" " + cmd.slice(cmd.indexOf(" ") + 1)}
-            </code>
+            <div className="code-block" style={{ borderRadius: 0, fontSize: 10.5, lineHeight: 1.7, margin: 0, padding: "12px 13px" }}>
+              <span style={{ color: "#FCD34D", fontWeight: 700 }}>{cmd.split(" ")[0]}</span>
+              {" " + cmd.slice(cmd.indexOf(" ") + 1)}
+            </div>
           </div>
         </div>
 
-        {/* LogAnalyzer integration callout — only when LA was provisioned at creation */}
+        {/* ── Log Analyzer callout ── */}
         {created.la_enabled && created.la_workspace_url && (
           <div style={{
-            marginTop: 16, padding: "12px 14px", borderRadius: 12,
-            background: "linear-gradient(135deg, rgba(59,130,246,0.10), rgba(59,130,246,0.04))",
-            border: "1px solid rgba(59,130,246,0.30)",
+            marginTop: 14, padding: "11px 14px", borderRadius: 10,
+            background: "rgba(59,130,246,0.05)",
+            border: "1px solid rgba(59,130,246,0.2)",
             display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
           }}>
             <div style={{
-              width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
               display: "grid", placeItems: "center",
               background: "linear-gradient(135deg, #60A5FA, #2563EB)",
             }}>
-              <Icon d={Icons.search} size={16} color="#FFFFFF" sw={2.2} />
+              <Icon d={Icons.search} size={15} color="#FFFFFF" sw={2.2} />
             </div>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <p style={{ fontWeight: 800, fontSize: 13, color: "#1E3A8A", marginBottom: 2 }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <p style={{ fontWeight: 700, fontSize: 12.5, color: "#1E3A8A", marginBottom: 2 }}>
                 Log Analyzer workspace ready
               </p>
               <p style={{ fontSize: 11.5, color: "#475569" }}>
-                Every event & log from <strong>{created.name}</strong> now streams into
-                workspace <code style={{ fontFamily: "monospace", color: "#1E40AF" }}>{created.la_workspace_name}</code>.
+                Every event &amp; log from <strong>{created.name}</strong> now streams into workspace{" "}
+                <code style={{ fontFamily: "ui-monospace, monospace", color: "#1E40AF", fontSize: 11 }}>
+                  {created.la_workspace_name}
+                </code>.
               </p>
             </div>
-            <a href={created.la_workspace_url} target="_blank" rel="noreferrer" style={{
-              padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700,
-              background: "#2563EB", color: "#FFFFFF", textDecoration: "none",
-              display: "inline-flex", alignItems: "center", gap: 5,
-            }}>
-              Open <Icon d={Icons.arrow} size={12} color="#FFFFFF" />
+            <a
+              href={created.la_workspace_url}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-secondary btn-sm"
+              style={{ gap: 5 }}
+            >
+              Open <Icon d={Icons.arrow} size={12} color="#64748B" />
             </a>
           </div>
         )}
         {created.la_error && (
           <div style={{
-            marginTop: 16, padding: "10px 14px", borderRadius: 10,
-            background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.25)",
+            marginTop: 14, padding: "9px 13px", borderRadius: 10,
+            background: "rgba(220,38,38,0.05)", border: "1px solid rgba(220,38,38,0.2)",
             fontSize: 12, color: "#991B1B",
           }}>
             <strong>Log Analyzer integration failed:</strong> {created.la_error}

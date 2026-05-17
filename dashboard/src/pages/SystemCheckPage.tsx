@@ -53,13 +53,13 @@ function formatUptime(seconds: number): string {
 }
 
 /* ── Status colour for deployment counts ────────── */
-const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; icon: string }> = {
-  running:    { bg: "rgba(34,197,94,0.1)",   color: "#16A34A", border: "rgba(34,197,94,0.3)",   icon: Icons.play },
-  pending:    { bg: "rgba(245,158,11,0.1)",  color: "#B45309", border: "rgba(245,158,11,0.3)",  icon: Icons.clock },
-  installing: { bg: "rgba(59,130,246,0.1)",  color: "#1D4ED8", border: "rgba(59,130,246,0.3)",  icon: Icons.install },
-  failed:     { bg: "rgba(239,68,68,0.1)",   color: "#DC2626", border: "rgba(239,68,68,0.3)",   icon: Icons.warn },
-  stopped:    { bg: "rgba(100,116,139,0.1)", color: "#475569", border: "rgba(100,116,139,0.3)", icon: Icons.stop },
-  removed:    { bg: "rgba(100,116,139,0.06)",color: "#94A3B8", border: "rgba(100,116,139,0.2)", icon: Icons.trash },
+const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; icon: string; bar: string; desc: string }> = {
+  running:    { bg: "rgba(34,197,94,0.1)",    color: "#16A34A", border: "rgba(34,197,94,0.3)",    bar: "#22C55E", icon: Icons.play,    desc: "Honeypots actively capturing traffic" },
+  pending:    { bg: "rgba(245,158,11,0.1)",   color: "#B45309", border: "rgba(245,158,11,0.3)",   bar: "#F59E0B", icon: Icons.clock,   desc: "Awaiting node acknowledgment" },
+  installing: { bg: "rgba(59,130,246,0.1)",   color: "#1D4ED8", border: "rgba(59,130,246,0.3)",   bar: "#3B82F6", icon: Icons.install, desc: "Package installation in progress" },
+  failed:     { bg: "rgba(239,68,68,0.1)",    color: "#DC2626", border: "rgba(239,68,68,0.3)",    bar: "#EF4444", icon: Icons.warn,    desc: "Deployment encountered an error" },
+  stopped:    { bg: "rgba(100,116,139,0.1)",  color: "#475569", border: "rgba(100,116,139,0.3)",  bar: "#94A3B8", icon: Icons.stop,    desc: "Intentionally halted by operator" },
+  removed:    { bg: "rgba(100,116,139,0.06)", color: "#94A3B8", border: "rgba(100,116,139,0.2)",  bar: "#CBD5E1", icon: Icons.trash,   desc: "Uninstalled and cleaned up" },
 };
 
 export default function SystemCheckPage() {
