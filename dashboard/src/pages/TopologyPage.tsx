@@ -125,10 +125,10 @@ const LAYER_MAP: NodeKind[][] = [
 ];
 
 function autoLayout(nodes: TopoNode[]): TopoNode[] {
-  const LAYER_H  = 200;   // vertical gap between layers
-  const MIN_COL  = 160;   // minimum horizontal gap between nodes in same layer
-  const PAD_X    = 120;
-  const PAD_Y    = 80;
+  const LAYER_H  = 145;   // vertical gap between layers
+  const MIN_COL  = 130;   // minimum horizontal gap between nodes in same layer
+  const PAD_X    = 90;
+  const PAD_Y    = 50;
 
   return nodes.map(n => {
     const li = LAYER_MAP.findIndex(g => g.includes(n.kind));
@@ -148,12 +148,36 @@ function autoLayout(nodes: TopoNode[]): TopoNode[] {
   });
 }
 
-/* ── Bezier helper ────────────────────────────────────────────────── */
-function bPath(sx:number, sy:number, tx:number, ty:number) {
-  const dx = tx - sx, dy = ty - sy;
-  const cx = Math.abs(dx) * 0.45;
-  const cy = Math.abs(dy) * 0.45;
-  return `M${sx},${sy} C${sx+cx},${sy+cy} ${tx-cx},${ty-cy} ${tx},${ty}`;
+/* ── Port-based edge routing ─────────────────────────────────────── */
+type PortSide = "top" | "bottom" | "left" | "right";
+
+function nodePort(node: TopoNode, targetCX: number, targetCY: number): { x: number; y: number; side: PortSide } {
+  const cx = node.x + NW / 2, cy = node.y + NH / 2;
+  const dx = targetCX - cx,   dy = targetCY - cy;
+  // Compare slopes against card aspect ratio to pick the right port
+  if (Math.abs(dy) * NW >= Math.abs(dx) * NH) {
+    return dy > 0
+      ? { x: cx, y: node.y + NH, side: "bottom" }
+      : { x: cx, y: node.y,      side: "top"    };
+  }
+  return dx > 0
+    ? { x: node.x + NW, y: cy, side: "right" }
+    : { x: node.x,      y: cy, side: "left"  };
+}
+
+function smartPath(sx: number, sy: number, tx: number, ty: number, ss: PortSide, ts: PortSide) {
+  const dist = Math.sqrt((tx - sx) ** 2 + (ty - sy) ** 2);
+  const bend = Math.max(32, Math.min(dist * 0.42, 90));
+  let c1x = sx, c1y = sy, c2x = tx, c2y = ty;
+  if      (ss === "bottom") c1y = sy + bend;
+  else if (ss === "top")    c1y = sy - bend;
+  else if (ss === "right")  c1x = sx + bend;
+  else                      c1x = sx - bend;
+  if      (ts === "top")    c2y = ty - bend;
+  else if (ts === "bottom") c2y = ty + bend;
+  else if (ts === "left")   c2x = tx - bend;
+  else                      c2x = tx + bend;
+  return `M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${tx},${ty}`;
 }
 
 /* ── Analysis ─────────────────────────────────────────────────────── */
@@ -280,10 +304,11 @@ export default function TopologyPage() {
   const [ctxMenu,      setCtxMenu     ] = useState<CtxMenu|null>(null);
   const [imgLoaded,    setImgLoaded   ] = useState<Set<NodeKind>>(new Set());
   const [draggingKind, setDraggingKind] = useState<NodeKind|null>(null);
+  const [hoveredEdge,  setHoveredEdge  ] = useState<string|null>(null);
 
   /* pan / zoom */
   const [pan,   setPan  ] = useState({ x:80, y:40 });
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(0.9);
   const isPanning    = useRef(false);
   const panStart     = useRef({ mx:0, my:0, tx:0, ty:0 });
   const draggingNode = useRef<{ id:string; ox:number; oy:number }|null>(null);
@@ -445,9 +470,33 @@ export default function TopologyPage() {
               y:panStart.current.ty+e.clientY-panStart.current.my});
     if (draggingNode.current) {
       const {id,ox,oy}=draggingNode.current;
-      setNodes(p=>p.map(n=>n.id===id?{...n,x:snap(pt.x-ox),y:snap(pt.y-oy)}:n));
+      const newX=snap(pt.x-ox), newY=snap(pt.y-oy);
+      setNodes(prev=>{
+        const node=prev.find(n=>n.id===id);
+        if (!node) return prev;
+        const dx=newX-node.x, dy=newY-node.y;
+        if (dx===0&&dy===0) return prev;
+        // Spring pull: 1-hop neighbours follow at 60%, 2-hop at 22%
+        const hop1=new Set(
+          edges.filter(e=>e.source===id||e.target===id)
+               .map(e=>e.source===id?e.target:e.source)
+        );
+        const hop2=new Set(
+          edges
+            .filter(e=>(hop1.has(e.source)||hop1.has(e.target))&&e.source!==id&&e.target!==id)
+            .flatMap(e=>[e.source,e.target])
+            .filter(nid=>!hop1.has(nid)&&nid!==id)
+        );
+        return prev.map(n=>{
+          if (n.id===id)       return {...n,x:newX,y:newY};
+          if (n.fixed)        return n;
+          if (hop1.has(n.id)) return {...n,x:n.x+dx*0.6, y:n.y+dy*0.6};
+          if (hop2.has(n.id)) return {...n,x:n.x+dx*0.22,y:n.y+dy*0.22};
+          return n;
+        });
+      });
     }
-  }, [svgPt,snap]);
+  }, [svgPt,snap,edges]);
 
   const onMouseUp = useCallback(()=>{
     isPanning.current=false; draggingNode.current=null;
@@ -680,13 +729,35 @@ export default function TopologyPage() {
     }
   };
 
-  /* ── Export SVG ── */
+  /* ── Export SVG — full graph, not just current view ── */
   const exportSVG = async () => {
     const svg = canvasRef.current;
-    if (!svg) return;
+    if (!svg || !nodes.length) return;
+
+    // Compute bounding box of all nodes
+    const PAD = 64;
+    const xs  = nodes.map(n=>n.x), ys = nodes.map(n=>n.y);
+    const bx  = Math.min(...xs),   by = Math.min(...ys);
+    const bw  = Math.max(...xs) + NW + PAD*2 - bx;
+    const bh  = Math.max(...ys) + NH + PAD*2 - by;
+
     const clone = svg.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("xmlns",       "http://www.w3.org/2000/svg");
     clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    clone.setAttribute("width",  String(Math.round(bw)));
+    clone.setAttribute("height", String(Math.round(bh)));
+    clone.removeAttribute("viewBox");
+
+    // Add a background fill
+    const bg = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    bg.setAttribute("width",  String(Math.round(bw)));
+    bg.setAttribute("height", String(Math.round(bh)));
+    bg.setAttribute("fill",   "#F0F4F8");
+    clone.insertBefore(bg, clone.firstChild);
+
+    // Reset the pan/zoom group so all nodes are visible at natural scale
+    const mainG = clone.querySelector<SVGGElement>("g[transform]");
+    if (mainG) mainG.setAttribute("transform", `translate(${PAD-bx},${PAD-by}) scale(1)`);
 
     // Embed PNG icons as base64 so they appear in the standalone SVG file
     const imgs = Array.from(clone.querySelectorAll("image"));
@@ -960,11 +1031,11 @@ export default function TopologyPage() {
               onWheel={onWheel}
             >
               <defs>
-                <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-                  <path d="M0,0 L0,6 L8,3 z" fill="rgba(100,116,139,0.5)"/>
-                </marker>
-                <filter id="shadow">
-                  <feDropShadow dx="0" dy="4" stdDeviation="5" floodColor="rgba(15,23,42,0.13)"/>
+                <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="3" stdDeviation="6" floodColor="rgba(15,23,42,0.14)"/>
+                </filter>
+                <filter id="shadow-sel" x="-30%" y="-30%" width="160%" height="160%">
+                  <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="rgba(15,23,42,0.22)"/>
                 </filter>
               </defs>
 
@@ -978,23 +1049,35 @@ export default function TopologyPage() {
                   const s=nodes.find(n=>n.id===edge.source);
                   const t=nodes.find(n=>n.id===edge.target);
                   if (!s||!t) return null;
-                  const sx=s.x+NW/2, sy=s.y+NH/2, tx=t.x+NW/2, ty=t.y+NH/2;
-                  const mx=(sx+tx)/2, my=(sy+ty)/2;
+                  const sp=nodePort(s,t.x+NW/2,t.y+NH/2);
+                  const tp=nodePort(t,s.x+NW/2,s.y+NH/2);
+                  const mx=(sp.x+tp.x)/2, my=(sp.y+tp.y)/2;
+                  const path=smartPath(sp.x,sp.y,tp.x,tp.y,sp.side,tp.side);
+                  const isHov=hoveredEdge===edge.id;
                   return (
-                    <g key={edge.id}>
-                      <path d={bPath(sx,sy,tx,ty)} fill="none" stroke="transparent" strokeWidth={16}
+                    <g key={edge.id}
+                      onMouseEnter={()=>setHoveredEdge(edge.id)}
+                      onMouseLeave={()=>setHoveredEdge(null)}>
+                      {/* Wide transparent hit area */}
+                      <path d={path} fill="none" stroke="transparent" strokeWidth={18}
                         style={{cursor:"pointer"}} onClick={()=>deleteEdge(edge.id)}/>
-                      <path d={bPath(sx,sy,tx,ty)} fill="none"
-                        stroke="rgba(100,116,139,0.35)" strokeWidth={2}
-                        strokeDasharray="8 4" markerEnd="url(#arr)"
-                        style={{pointerEvents:"none"}}/>
-                      <g transform={`translate(${mx},${my})`}
-                        style={{cursor:"pointer"}} onClick={()=>deleteEdge(edge.id)}>
-                        <circle r={8} fill="white" stroke="#FECACA" strokeWidth={1.5}
-                          style={{filter:"drop-shadow(0 1px 4px rgba(0,0,0,0.12))"}}/>
-                        <line x1={-3.5} y1={-3.5} x2={3.5} y2={3.5} stroke="#EF4444" strokeWidth={1.8}/>
-                        <line x1={3.5}  y1={-3.5} x2={-3.5} y2={3.5} stroke="#EF4444" strokeWidth={1.8}/>
-                      </g>
+                      {/* Visible edge line — no arrows, clean rounded caps */}
+                      <path d={path} fill="none"
+                        stroke={isHov?"rgba(59,130,246,0.82)":"rgba(100,116,139,0.52)"}
+                        strokeWidth={isHov?2.8:2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{pointerEvents:"none",transition:"stroke 0.15s,stroke-width 0.15s"}}/>
+                      {/* Delete button — hover only */}
+                      {isHov&&(
+                        <g transform={`translate(${mx},${my})`}
+                          style={{cursor:"pointer"}} onClick={()=>deleteEdge(edge.id)}>
+                          <circle r={9} fill="white" stroke="#FECACA" strokeWidth={1.5}
+                            style={{filter:"drop-shadow(0 2px 8px rgba(0,0,0,0.15))"}}/>
+                          <line x1={-4} y1={-4} x2={4} y2={4} stroke="#EF4444" strokeWidth={2}/>
+                          <line x1={4}  y1={-4} x2={-4} y2={4} stroke="#EF4444" strokeWidth={2}/>
+                        </g>
+                      )}
                     </g>
                   );
                 })}
@@ -1003,10 +1086,11 @@ export default function TopologyPage() {
                 {connectMode&&connectFirst&&(()=>{
                   const s=nodes.find(n=>n.id===connectFirst);
                   if (!s) return null;
+                  const sp=nodePort(s,mousePos.x,mousePos.y);
                   return (
-                    <path d={bPath(s.x+NW/2,s.y+NH/2,mousePos.x,mousePos.y)}
+                    <path d={`M${sp.x},${sp.y} L${mousePos.x},${mousePos.y}`}
                       fill="none" stroke="#3B82F6" strokeWidth={2}
-                      strokeDasharray="6 3" opacity={0.75}
+                      strokeDasharray="6 3" opacity={0.8}
                       style={{pointerEvents:"none"}}/>
                   );
                 })()}
@@ -1039,14 +1123,19 @@ export default function TopologyPage() {
 
                       {/* Card shadow */}
                       <rect x={2} y={6} width={NW} height={NH} rx={16}
-                        fill={isSel?`${m.stroke}16`:"rgba(15,23,42,0.07)"}
+                        fill={isSel?`${m.stroke}18`:"rgba(15,23,42,0.08)"}
+                        filter={isSel?"url(#shadow-sel)":"url(#shadow)"}
                         style={{pointerEvents:"none"}}/>
 
                       {/* Card */}
                       <rect width={NW} height={NH} rx={16}
                         fill={m.fill}
-                        stroke={isSel?m.stroke:`${m.stroke}50`}
+                        stroke={isSel?m.stroke:`${m.stroke}55`}
                         strokeWidth={isSel?2.5:1.5}/>
+
+                      {/* Icon halo */}
+                      <rect x={(NW-ICON)/2-5} y={5} width={ICON+10} height={ICON+10} rx={14}
+                        fill={`${m.stroke}12`} style={{pointerEvents:"none"}}/>
 
                       {/* Top accent stripe */}
                       <rect x={18} y={0} width={NW-36} height={4} rx={2}

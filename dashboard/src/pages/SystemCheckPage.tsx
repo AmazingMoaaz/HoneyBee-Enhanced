@@ -227,35 +227,127 @@ export default function SystemCheckPage() {
       </div>
 
       {/* ── Deployment status breakdown ── */}
-      {Object.keys(data.deployment_status).length > 0 && (
-        <div>
-          <p style={{ fontSize: 11.5, fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-            <Ico d={Icons.deploy} size={13} color="#94A3B8" /> Deployment Status Breakdown
-          </p>
-          <div className="card" style={{ padding: "16px 18px" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              {Object.entries(data.deployment_status).map(([status, count]) => {
-                const cfg = STATUS_COLOR[status] ?? STATUS_COLOR.stopped;
-                return (
-                  <div key={status} style={{
-                    display: "inline-flex", alignItems: "center", gap: 8,
-                    padding: "8px 14px", borderRadius: 11,
-                    background: cfg.bg, border: `1px solid ${cfg.border}`,
-                  }}>
-                    <Ico d={cfg.icon} size={14} color={cfg.color} sw={2.2} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: cfg.color, textTransform: "capitalize" }}>
-                      {status}
-                    </span>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: cfg.color, fontFeatureSettings: "'tnum'" }}>
-                      {count}
-                    </span>
-                  </div>
-                );
-              })}
+      {Object.keys(data.deployment_status).length > 0 && (() => {
+        const entries = Object.entries(data.deployment_status) as [string, number][];
+        const total = entries.reduce((s, [, v]) => s + v, 0);
+        const activeCount  = (data.deployment_status["running"] ?? 0);
+        const failedCount  = (data.deployment_status["failed"]  ?? 0);
+        const healthPct    = total > 0 ? Math.round((activeCount / total) * 100) : 0;
+
+        // order: running → installing → pending → stopped → removed → failed
+        const ORDER = ["running","installing","pending","stopped","removed","failed"];
+        const sorted = [...entries].sort(([a], [b]) => {
+          const ai = ORDER.indexOf(a); const bi = ORDER.indexOf(b);
+          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+        });
+
+        return (
+          <div>
+            {/* section header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <p style={{ fontSize: 11.5, fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.09em", display: "flex", alignItems: "center", gap: 6 }}>
+                <Ico d={Icons.deploy} size={13} color="#94A3B8" /> Deployment Status Breakdown
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <span style={{ fontSize: 11.5, color: "#94A3B8", fontWeight: 600 }}>
+                  {total} total deployment{total !== 1 ? "s" : ""}
+                </span>
+                {failedCount > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "#DC2626", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", padding: "2px 8px", borderRadius: 99 }}>
+                    {failedCount} failed
+                  </span>
+                )}
+                <span style={{ fontSize: 11, fontWeight: 800, color: healthPct >= 80 ? "#16A34A" : healthPct >= 50 ? "#B45309" : "#DC2626", background: healthPct >= 80 ? "rgba(34,197,94,0.1)" : healthPct >= 50 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${healthPct >= 80 ? "rgba(34,197,94,0.3)" : healthPct >= 50 ? "rgba(245,158,11,0.3)" : "rgba(239,68,68,0.3)"}`, padding: "2px 8px", borderRadius: 99 }}>
+                  {healthPct}% active
+                </span>
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+              {/* stacked proportion bar */}
+              <div>
+                <div style={{ display: "flex", height: 10, borderRadius: 99, overflow: "hidden", gap: 2 }}>
+                  {sorted.map(([status, count]) => {
+                    const cfg = STATUS_COLOR[status] ?? STATUS_COLOR.stopped;
+                    const pct = (count / total) * 100;
+                    return (
+                      <div
+                        key={status}
+                        title={`${status}: ${count} (${Math.round(pct)}%)`}
+                        style={{ flex: pct, background: cfg.bar, minWidth: pct > 0 ? 4 : 0, transition: "flex 0.4s ease" }}
+                      />
+                    );
+                  })}
+                </div>
+                {/* legend row */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 9 }}>
+                  {sorted.map(([status, count]) => {
+                    const cfg = STATUS_COLOR[status] ?? STATUS_COLOR.stopped;
+                    return (
+                      <div key={status} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: 99, background: cfg.bar, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600, textTransform: "capitalize" }}>
+                          {status} <span style={{ color: "#94A3B8" }}>({Math.round((count / total) * 100)}%)</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* status cards grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 11 }}>
+                {sorted.map(([status, count]) => {
+                  const cfg = STATUS_COLOR[status] ?? STATUS_COLOR.stopped;
+                  const pct = total > 0 ? (count / total) * 100 : 0;
+                  return (
+                    <div key={status} style={{
+                      borderRadius: 12, padding: "14px 16px",
+                      background: cfg.bg, border: `1.5px solid ${cfg.border}`,
+                      display: "flex", flexDirection: "column", gap: 10,
+                    }}>
+                      {/* top row */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                          <div style={{
+                            width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center",
+                            background: "#fff", boxShadow: `0 0 0 1.5px ${cfg.border}`,
+                          }}>
+                            <Ico d={cfg.icon} size={16} color={cfg.color} sw={2.2} />
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: cfg.color, textTransform: "capitalize" }}>
+                            {status}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 22, fontWeight: 900, color: cfg.color, fontFeatureSettings: "'tnum'", letterSpacing: "-0.02em" }}>
+                          {count}
+                        </span>
+                      </div>
+
+                      {/* progress bar */}
+                      <div style={{ height: 5, borderRadius: 99, background: "rgba(255,255,255,0.55)", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: cfg.bar, borderRadius: 99, transition: "width 0.5s ease" }} />
+                      </div>
+
+                      {/* footer */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 11, color: cfg.color, opacity: 0.75, lineHeight: 1.4 }}>
+                          {cfg.desc}
+                        </span>
+                        <span style={{ fontSize: 11.5, fontWeight: 800, color: cfg.color, marginLeft: 8, flexShrink: 0 }}>
+                          {Math.round(pct)}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Runtime info ── */}
       <div>
