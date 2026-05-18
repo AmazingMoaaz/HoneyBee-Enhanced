@@ -103,6 +103,11 @@ func (d *Dispatcher) handleHeartbeat(ctx context.Context, sess *Session, env *pr
 	if err := protocol.DecodePayload(env, &hb); err != nil {
 		return
 	}
+	d.logger.Debug("heartbeat received",
+		slog.Int64("node_id", sess.nodeID),
+		slog.Float64("cpu_pct", hb.CPUPct),
+		slog.Float64("mem_pct", hb.MemPct),
+	)
 	_ = d.store.UpdateNodeHeartbeat(ctx, sess.nodeID)
 	// Persist the performance snapshot for historical charts.
 	_ = d.store.InsertNodeMetric(ctx, sess.nodeID, hb.CPUPct, hb.MemPct, hb.DiskPct, hb.UptimeSecs)

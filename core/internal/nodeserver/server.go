@@ -12,6 +12,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/honeybee-enhanced/core/internal/api/ws"
 	"github.com/honeybee-enhanced/core/internal/store"
@@ -133,14 +134,21 @@ func (s *Server) SendCommand(nodeID int64, command string, payload any) error {
 
 // Start begins accepting connections; blocks until the listener fails or ctx is canceled.
 func (s *Server) Start(ctx context.Context) error {
-	var err error
-	if s.tlsConfig != nil {
-		s.listener, err = tls.Listen("tcp", s.addr, s.tlsConfig)
-	} else {
-		s.listener, err = net.Listen("tcp", s.addr)
-	}
+	// Use net.ListenTCP so we can enable per-connection TCP keepalive before
+	// optionally wrapping with TLS. OS-level keepalive probes (every 30 s)
+	// keep NAT table entries alive and detect half-open connections much faster
+	// than waiting for a read-deadline timeout.
+	tcpLn, err := net.ListenTCP("tcp", func() *net.TCPAddr {
+		addr, _ := net.ResolveTCPAddr("tcp", s.addr)
+		return addr
+	}())
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", s.addr, err)
+	}
+	if s.tlsConfig != nil {
+		s.listener = tls.NewListener(tcpLn, s.tlsConfig)
+	} else {
+		s.listener = tcpLn
 	}
 	s.logger.Info("node server listening", slog.String("addr", s.addr), slog.Bool("tls", s.tlsConfig != nil))
 
@@ -158,6 +166,9 @@ func (s *Server) Start(ctx context.Context) error {
 			s.logger.Warn("accept error", slog.Any("err", err))
 			continue
 		}
+		// Enable TCP keepalive. For a TLS listener the Accept() returns a
+		// *tls.Conn; the underlying raw conn is the *net.TCPConn we accepted.
+		setKeepAlive(conn)
 		go s.handleConn(ctx, conn)
 	}
 }
@@ -238,9 +249,18 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 		msgEnv, err := protocol.ReadMessage(conn)
 		if err != nil {
 			// EOF / closed connection are normal disconnects — log at debug only.
-			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || strings.Contains(err.Error(), "use of closed network connection") {
+			switch {
+			case errors.Is(err, io.EOF), errors.Is(err, net.ErrClosed),
+				strings.Contains(err.Error(), "use of closed network connection"):
 				s.logger.Debug("node disconnected", slog.Int64("node_id", node.ID))
-			} else {
+			case isTimeout(err):
+				// Read deadline expired — heartbeats are not arriving from the
+				// node. This is the symptom of a half-broken connection.
+				s.logger.Warn("node read deadline exceeded; no heartbeats received",
+					slog.Int64("node_id", node.ID),
+					slog.Any("err", err),
+				)
+			default:
 				s.logger.Info("node read err", slog.Int64("node_id", node.ID), slog.Any("err", err))
 			}
 			break
@@ -321,6 +341,22 @@ type nodeRef struct {
 	LAEnabled     bool
 	LAIngestToken string
 	LAWorkspaceID string
+}
+
+// isTimeout returns true if err is a net.Error caused by a deadline expiring.
+func isTimeout(err error) bool {
+	var ne net.Error
+	return errors.As(err, &ne) && ne.Timeout()
+}
+
+// setKeepAlive enables OS-level TCP keepalive probes on conn (30 s interval).
+// Works for both plain *net.TCPConn and *tls.Conn (which wraps a TCPConn).
+func setKeepAlive(conn net.Conn) {
+	switch c := conn.(type) {
+	case *net.TCPConn:
+		_ = c.SetKeepAlive(true)
+		_ = c.SetKeepAlivePeriod(30 * time.Second)
+	}
 }
 
 // DisconnectNode forcibly closes the active session for a node (used on delete/regenerate-token).

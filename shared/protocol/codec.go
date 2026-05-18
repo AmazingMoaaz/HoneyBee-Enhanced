@@ -22,7 +22,9 @@ const (
 	MaxMessageSize = 10 * 1024 * 1024
 
 	// ReadTimeout is the per-message read deadline.
-	ReadTimeout = 120 * time.Second
+	// Set to 5 minutes: well above the 20 s heartbeat interval so a handful of
+	// delayed or missed heartbeats never cause a spurious disconnect.
+	ReadTimeout = 5 * time.Minute
 
 	// WriteTimeout is the per-message write deadline.
 	WriteTimeout = 30 * time.Second

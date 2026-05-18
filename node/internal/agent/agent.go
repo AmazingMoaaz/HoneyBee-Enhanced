@@ -69,7 +69,13 @@ func (a *Agent) Run(ctx context.Context) error {
 }
 
 func (a *Agent) connect(ctx context.Context) error {
-	d := net.Dialer{Timeout: 15 * time.Second}
+	// KeepAlive sends OS-level TCP probes every 30 s, which keeps NAT table
+	// entries alive and lets the OS detect half-open connections independently
+	// of our application-level heartbeats.
+	d := net.Dialer{
+		Timeout:   15 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
 	var conn net.Conn
 	var err error
 	if a.cfg.Server.TLS {
@@ -135,7 +141,12 @@ func (a *Agent) connect(ctx context.Context) error {
 		env, err := protocol.ReadMessage(conn)
 		if err != nil {
 			a.logger.Warn("read loop ended", slog.Any("err", err))
-			return err
+			// We are past a successful auth — always return nil so Run() resets
+			// backoff to 1 s for a fast reconnect. We must not enumerate
+			// platform-specific error strings (Linux "connection reset by peer"
+			// vs Windows "wsarecv: An existing connection was forcibly closed",
+			// etc.); any mid-session TCP error is treated as a normal disconnect.
+			return nil
 		}
 		go a.dispatch(ctx, env)
 	}
@@ -154,8 +165,13 @@ func (a *Agent) send(msgType string, payload any) error {
 	return protocol.SendMessage(conn, msgType, payload)
 }
 
+// heartbeatInterval is how often the agent sends a heartbeat to core.
+// Must be well below protocol.ReadTimeout (120s) so a single missed heartbeat
+// does not trip the server-side read deadline.
+const heartbeatInterval = 20 * time.Second
+
 func (a *Agent) heartbeatLoop(ctx context.Context) {
-	t := time.NewTicker(30 * time.Second)
+	t := time.NewTicker(heartbeatInterval)
 	defer t.Stop()
 	a.sendHeartbeat()
 	for {
@@ -189,7 +205,39 @@ func (a *Agent) sendHeartbeat() {
 	if du != nil {
 		hb.DiskPct = du.UsedPercent
 	}
-	_ = a.send(protocol.MsgHeartbeat, hb)
+
+	// Snapshot conn before send so we can act on it on failure.
+	a.mu.Lock()
+	conn := a.conn
+	ok := a.connOK
+	a.mu.Unlock()
+
+	if err := a.send(protocol.MsgHeartbeat, hb); err != nil {
+		// A failed heartbeat send means the TCP socket is broken (write deadline
+		// hit, peer closed, etc.). Don't silently swallow — log it and force the
+		// connection closed so the read loop unblocks immediately and Run()
+		// reconnects without waiting up to 120s for the read deadline.
+		a.logger.Warn("heartbeat send failed; forcing reconnect",
+			slog.Any("err", err),
+			slog.Bool("conn_ok", ok),
+			slog.Bool("conn_nil", conn == nil),
+		)
+		if conn != nil {
+			_ = conn.Close()
+		}
+		return
+	}
+	a.logger.Debug("heartbeat sent",
+		slog.Float64("cpu_pct", hb.CPUPct),
+		slog.Float64("mem_pct", hb.MemPct),
+		slog.Float64("disk_pct", hb.DiskPct),
+	)
+
+	// Extend the read deadline so the main read loop doesn't time out while
+	// we're actively heart-beating.
+	if conn != nil {
+		_ = conn.SetReadDeadline(time.Now().Add(protocol.ReadTimeout))
+	}
 }
 
 func (a *Agent) reportInstalledLoop(ctx context.Context) {
@@ -257,11 +305,16 @@ func (a *Agent) handleTask(ctx context.Context, ta protocol.TaskAssign) {
 		// Tell the core we've started installing so the dashboard can show progress.
 		a.sendPotStatus(p.PotID, p.HoneypotType, protocol.PotStatusInstalling, "install started")
 		_, err := a.hp.Install(ctx, p.PotID, p.HoneypotType, p.GitURL, p.GitBranch, p.Config, opts)
-		if err != nil {
+		alreadyInstalled := err != nil && err.Error() == "already installed"
+		if err != nil && !alreadyInstalled {
 			a.sendPotStatus(p.PotID, p.HoneypotType, protocol.PotStatusFailed, err.Error())
 			status, msg = protocol.TaskStatusFailed, err.Error()
 		} else {
-			a.sendPotStatus(p.PotID, p.HoneypotType, protocol.PotStatusStopped, "installed")
+			if alreadyInstalled {
+				a.sendPotStatus(p.PotID, p.HoneypotType, protocol.PotStatusStopped, "already installed")
+			} else {
+				a.sendPotStatus(p.PotID, p.HoneypotType, protocol.PotStatusStopped, "installed")
+			}
 			if p.AutoStart {
 				if err := a.hp.Start(ctx, p.PotID); err != nil {
 					a.sendPotStatus(p.PotID, p.HoneypotType, protocol.PotStatusFailed, err.Error())

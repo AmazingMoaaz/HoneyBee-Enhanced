@@ -1111,14 +1111,14 @@ export default function TopologyPage() {
                       onDoubleClick={()=>startEdit(node)}
                       onContextMenu={e=>onNodeRClick(e,node)}
                     >
-                      {/* Selection glow */}
+                      {/* Selection glow — inset within card bounds to avoid SVG-viewport clip artefacts */}
                       {(isSel||isCF)&&(
-                        <rect x={-7} y={-7} width={NW+14} height={NH+14} rx={20}
+                        <rect x={3} y={3} width={NW-6} height={NH-6} rx={13}
                           fill="none"
                           stroke={isCF?"#3B82F6":m.stroke}
-                          strokeWidth={2.5}
-                          strokeDasharray={isCF?"8 3":undefined}
-                          opacity={0.55}/>
+                          strokeWidth={2}
+                          strokeDasharray={isCF?"7 3":undefined}
+                          opacity={0.65}/>
                       )}
 
                       {/* Card shadow */}
@@ -1257,6 +1257,9 @@ export default function TopologyPage() {
             <Stat label="honeypots" value={nodes.filter(n=>n.kind==="honeypot").length} color="#D97706"/>
             <Stat label="firewalls" value={nodes.filter(n=>n.kind==="firewall").length}  color="#EF4444"/>
             <Stat label="pinned"    value={nodes.filter(n=>n.fixed).length}              color="#F59E0B"/>
+            {nodes.some(n=>n.kind==="loganalyzer")&&(
+              <Stat label="log analyzers" value={nodes.filter(n=>n.kind==="loganalyzer").length} color="#7C3AED"/>
+            )}
             {nodes.some(n=>n.online!=null)&&(
               <Stat label="online" value={nodes.filter(n=>n.online===true).length}        color="#10B981"/>
             )}
