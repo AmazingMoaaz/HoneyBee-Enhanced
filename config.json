@@ -2,7 +2,7 @@
   "server": {
     "http_addr": "0.0.0.0:5400",
     "node_addr": "0.0.0.0:9001",
-    "node_public_addr": "node.h0neybee.online",
+    "node_public_addr": "node.0xnight-fury.me:9001",
     "public_http_addr": "",
     "allowed_origins": [
       "https://h0neybee.online",
