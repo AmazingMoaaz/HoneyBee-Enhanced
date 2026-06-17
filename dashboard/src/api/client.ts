@@ -1,8 +1,9 @@
 import axios, { AxiosInstance } from "axios";
 import { useAuthStore } from "../stores/auth";
+import { API_BASE } from "../lib/apiBase";
 
 const api: AxiosInstance = axios.create({
-  baseURL: "/api/v1",
+  baseURL: API_BASE,
 });
 
 api.interceptors.request.use((cfg) => {

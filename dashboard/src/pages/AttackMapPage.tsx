@@ -27,7 +27,7 @@ const MAP_H = 520;
 const CENTER: [number, number] = [10, 22];
 const SCALE = 165;
 // Defended honeypot grid — attack arcs converge here.
-const TARGET: [number, number] = [55.2708, 25.2048]; // Dubai
+const TARGET: [number, number] = [31.2357, 30.0444]; // Cairo, Egypt
 
 interface GeoEvent {
   id: number;
@@ -376,71 +376,105 @@ export default function AttackMapPage() {
         )}
       </div>
 
-      {/* ── Top attack origins ── */}
-      {stats.top.length > 0 && (
-        <div className="card">
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-            <div>
-              <h3 className="section-title">Top attack origins</h3>
-              <p style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 2 }}>
-                Ranked by geo-located hits · {stats.located.toLocaleString()} total
-              </p>
-            </div>
-            <span className="badge badge-violet">{stats.countries} countries</span>
+      {/* ── Top attack origins (SOC threat-intel data grid) ── */}
+      <div className="card">
+        <div style={{ marginBottom: 14 }}>
+          <h3 className="section-title">Top attack origins</h3>
+          <p style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 2 }}>
+            Geo-located honeypot hits by source country
+          </p>
+        </div>
+
+        <div className="to-grid" role="table" aria-label="Top attack origins">
+          <div className="to-head" role="row">
+            <span className="to-h" role="columnheader">Rank</span>
+            <span className="to-h" role="columnheader">Origin</span>
+            <span className="to-h" role="columnheader">Distribution</span>
+            <span className="to-h to-h-num" role="columnheader">Hits</span>
+            <span className="to-h to-h-num to-h-share" role="columnheader">Share</span>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-            {stats.top.map(([cc, count], i) => {
+          {stats.top.length === 0 ? (
+            <div className="to-empty">
+              No geo-located origins yet — waiting for attacks with public-IP geolocation in this organization.
+            </div>
+          ) : (
+            stats.top.map(([cc, count], i) => {
               const max = stats.top[0][1] || 1;
-              const pct = Math.max((count / max) * 100, 5);
+              const pct = Math.max((count / max) * 100, 1.5);
               const share = stats.located ? (count / stats.located) * 100 : 0;
-              const medal = ["#F59E0B", "#94A3B8", "#B45309"][i]; // gold / silver / bronze
+              const lead = i === 0;
               return (
-                <div key={cc} className="origin-row" style={{ position: "relative", height: 50, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)" }}>
-                  {/* gradient progress fill = the row background */}
-                  <div style={{
-                    position: "absolute", top: 0, bottom: 0, left: 0, width: `${pct}%`,
-                    background: "linear-gradient(90deg, rgba(251,191,36,0.30) 0%, rgba(245,158,11,0.18) 55%, rgba(234,88,12,0.10) 100%)",
-                    borderRight: "2px solid rgba(245,158,11,0.7)",
-                    animation: "barGrow 1s cubic-bezier(.2,.8,.2,1) both",
-                    animationDelay: `${i * 65}ms`,
-                  }} />
-                  {/* foreground content */}
-                  <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", gap: 12, padding: "0 14px" }}>
-                    <span style={{
-                      width: 23, height: 23, flexShrink: 0, display: "grid", placeItems: "center",
-                      borderRadius: 7, fontSize: 11, fontWeight: 800,
-                      color: medal ? "#1C0A00" : "var(--text-muted)",
-                      background: medal ?? "var(--bg-2)",
-                      boxShadow: medal ? `0 2px 8px ${medal}66` : "none",
-                    }}>{i + 1}</span>
+                <div key={cc} className={"to-row" + (lead ? " to-row-lead" : "")} role="row">
+                  <span className="to-rank" role="cell">{String(i + 1).padStart(2, "0")}</span>
 
-                    <Flag cc={cc} size={27} />
+                  <span className="to-origin" role="cell">
+                    <Flag cc={cc} size={20} />
+                    <span className="to-name" title={countryName(cc)}>{countryName(cc)}</span>
+                    <span className="to-iso">{cc.toUpperCase()}</span>
+                  </span>
 
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.15 }}>
-                        {countryName(cc)}
-                      </div>
-                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--text-faint)" }}>{cc.toUpperCase()}</div>
-                    </div>
+                  <span className="to-dist" role="cell">
+                    <span className="to-track"><span className="to-fill" style={{ width: `${pct}%` }} /></span>
+                  </span>
 
-                    <div style={{ marginLeft: "auto", display: "flex", alignItems: "baseline", gap: 8, flexShrink: 0 }}>
-                      <span style={{ fontSize: 16, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{count.toLocaleString()}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", width: 30, textAlign: "right" }}>{share.toFixed(0)}%</span>
-                    </div>
-                  </div>
+                  <span className="to-num to-hits" role="cell">{count.toLocaleString()}</span>
+
+                  <span className="to-num to-share" role="cell">
+                    {share.toFixed(1)}<span className="to-pct">%</span>
+                  </span>
                 </div>
               );
-            })}
-          </div>
+            })
+          )}
+
+          {stats.top.length > 0 && (
+            <div className="to-foot">
+              <span>{stats.top.length} of {stats.countries} origins</span>
+              <span>{stats.located.toLocaleString()} located hits</span>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <style>{`
         @media (max-width: 820px) { .map-feed { display: none !important; } }
-        .origin-row { transition: box-shadow .16s, border-color .16s; }
-        .origin-row:hover { border-color: rgba(245,158,11,0.55) !important; box-shadow: 0 4px 16px rgba(245,158,11,0.16); }
-        @keyframes barGrow { from { width: 0; } }
+
+        .to-grid { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); }
+        .to-head, .to-row { display: grid; grid-template-columns: 44px minmax(120px, max-content) minmax(110px, 1fr) 84px 60px; align-items: center; column-gap: 16px; padding: 0 14px; }
+        .to-head { height: 32px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+        .to-h { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); white-space: nowrap; }
+        .to-h-num { text-align: right; }
+
+        .to-empty { padding: 22px 16px; text-align: center; font-size: 12px; color: var(--text-faint); }
+        .to-row { height: 44px; border-bottom: 1px solid var(--border); transition: background .12s ease; }
+        .to-row:hover { background: var(--bg-2); }
+        .to-row-lead { box-shadow: inset 2px 0 0 var(--accent); }
+
+        .to-rank { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-faint); }
+        .to-row-lead .to-rank { color: var(--accent); }
+
+        .to-origin { display: flex; align-items: center; gap: 9px; min-width: 0; }
+        .to-name { min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .to-iso { flex-shrink: 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; color: var(--text-muted); background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 4px; padding: 1px 5px; }
+
+        .to-num { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+        .to-hits { font-size: 12.5px; font-weight: 600; color: var(--text); }
+        .to-share { font-size: 11.5px; font-weight: 500; color: var(--text-muted); }
+        .to-pct { font-size: 9.5px; color: var(--text-faint); margin-left: 1px; }
+
+        .to-dist { display: flex; align-items: center; }
+        .to-track { position: relative; width: 100%; height: 5px; border-radius: 2px; background: var(--bg-2); overflow: hidden; box-shadow: inset 0 0 0 1px var(--border); }
+        .to-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 2px; background: color-mix(in srgb, var(--text-muted) 50%, transparent); }
+        .to-row-lead .to-fill { background: var(--accent); }
+
+        .to-foot { display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 14px; background: var(--bg-2); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-faint); }
+        .to-foot span:last-child { font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+        @media (max-width: 640px) {
+          .to-head, .to-row { grid-template-columns: 38px minmax(96px, max-content) minmax(70px, 1fr) 70px; column-gap: 12px; }
+          .to-h-share, .to-share { display: none; }
+        }
       `}</style>
     </div>
   );

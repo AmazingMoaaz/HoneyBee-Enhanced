@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "../stores/auth";
+import { apiWsUrl } from "../lib/apiBase";
 
 interface Msg {
   type: string;
@@ -16,8 +17,7 @@ export function useWebSocket(topics: string[] = []) {
 
   useEffect(() => {
     if (!token) return;
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${window.location.host}/api/v1/ws?token=${token}`);
+    const ws = new WebSocket(apiWsUrl("/ws", { token }));
     wsRef.current = ws;
     ws.onopen = () => {
       setConnected(true);

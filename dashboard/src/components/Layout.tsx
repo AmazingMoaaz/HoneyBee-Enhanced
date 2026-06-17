@@ -179,7 +179,7 @@ function LogAnalyzerFab() {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <span className="grid place-items-center shrink-0" style={{ width: 22 }}><Icon d={Icons.search} size={19} sw={2.2} /></span>
+      <span className="grid place-items-center shrink-0" style={{ width: 22 }}><Icon d="M4 6h16M4 10h16M4 14h10M4 18h13" size={19} sw={2.2} /></span>
       <span style={{ display: "flex", alignItems: "center", gap: 7, opacity: hover ? 1 : 0, transition: "opacity .18s" }}>
         Log Analyzer <Icon d={Icons.external} size={13} sw={2.2} />
       </span>

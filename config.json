@@ -4,7 +4,11 @@
     "node_addr": "0.0.0.0:9001",
     "node_public_addr": "127.0.0.1:9001",
     "public_http_addr": "",
-    "allowed_origins": []
+    "allowed_origins": [
+      "https://h0neybee.online",
+      "https://www.h0neybee.online",
+      "http://localhost:5300"
+    ]
   },
   "database": {
     "dsn": "Moaaz:2591367@tcp(localhost:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4",
