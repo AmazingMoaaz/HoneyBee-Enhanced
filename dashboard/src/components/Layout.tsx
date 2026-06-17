@@ -18,6 +18,10 @@ import { getTheme, setTheme, type Theme } from "../lib/theme";
      • Topbar shows live time + connection breadcrumb
 ─────────────────────────────────────────────────────────────────── */
 
+// Command-palette shortcut, shown correctly per platform (⌘ on macOS, Ctrl elsewhere).
+const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
+const MOD_KEY = IS_MAC ? "⌘" : "Ctrl";
+
 interface NavItem { to: string; label: string; icon: string; group: string; end?: boolean; desc?: string }
 
 const NAV: NavItem[] = [
@@ -424,14 +428,41 @@ export default function Layout() {
 
         {/* Right side: search + clock + bell + account menu */}
         <div className="flex items-center gap-2.5">
-          {/* Command palette trigger */}
-          <button onClick={() => setPaletteOpen(true)} title="Search (Ctrl/⌘ K)"
-                  className="hidden sm:flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full transition-colors"
-                  style={{ background: "var(--bg-2)", border: "1px solid var(--border-2)", color: "var(--text-faint)" }}>
-            <Icon d={Icons.search} size={14} />
-            <span className="text-[12px] font-medium" style={{ color: "var(--text-faint)" }}>Search…</span>
-            <kbd className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                 style={{ background: "var(--surface)", border: "1px solid var(--border-2)", color: "var(--text-muted)" }}>⌘K</kbd>
+          {/* Command palette trigger — interactive search field */}
+          <button
+            onClick={() => setPaletteOpen(true)}
+            title={`Search (${MOD_KEY}+K)`}
+            className="hidden sm:flex items-center gap-2.5 pl-3.5 pr-2 h-9 rounded-xl outline-none"
+            style={{
+              minWidth: 234,
+              color: "var(--text-faint)",
+              background: "linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 100%)",
+              border: "1px solid var(--border-2)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+              transition: "border-color .18s, box-shadow .18s, color .18s",
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget;
+              el.style.borderColor = "rgba(245,158,11,0.55)";
+              el.style.color = "var(--accent)";
+              el.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.10), inset 0 1px 0 rgba(255,255,255,0.05)";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget;
+              el.style.borderColor = "var(--border-2)";
+              el.style.color = "var(--text-faint)";
+              el.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.04)";
+            }}
+          >
+            {/* icon inherits the button color (shifts to amber on hover) */}
+            <span className="grid place-items-center shrink-0"><Icon d={Icons.search} size={15} sw={2.2} /></span>
+            <span className="text-[12.5px] font-medium flex-1 text-left" style={{ color: "var(--text-muted)" }}>Search commands, pages…</span>
+            <span className="flex items-center gap-1 shrink-0">
+              <kbd className="grid place-items-center text-[10px] font-bold rounded-md"
+                   style={{ minWidth: 22, height: 19, padding: "0 6px", background: "var(--surface)", border: "1px solid var(--border-2)", color: "var(--text-muted)" }}>{MOD_KEY}</kbd>
+              <kbd className="grid place-items-center text-[10px] font-bold rounded-md"
+                   style={{ width: 19, height: 19, background: "var(--surface)", border: "1px solid var(--border-2)", color: "var(--text-muted)" }}>K</kbd>
+            </span>
           </button>
 
           {/* Live clock */}
