@@ -185,7 +185,7 @@ export default function AttackMapPage() {
           overflow: "hidden",
           border: "1px solid #1c3a5e",
           background: "radial-gradient(130% 95% at 50% 18%, #0e2440 0%, #081628 52%, #04090f 100%)",
-          boxShadow: "0 24px 70px rgba(0,0,0,0.45), inset 0 1px 0 rgba(120,170,230,0.12)",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.22), inset 0 1px 0 rgba(120,170,230,0.12)",
         }}
       >
         <ComposableMap
@@ -377,8 +377,10 @@ export default function AttackMapPage() {
       </div>
 
       {/* ── Top attack origins (SOC threat-intel data grid) ── */}
-      <div className="card">
-        <div style={{ marginBottom: 14 }}>
+      <div className="card" style={{ padding: "20px 22px" }}>
+        {/* paddingLeft matches the table's content inset (1px border + 14px row
+            padding) so the title/subtitle line up with the RANK column below. */}
+        <div style={{ marginBottom: 14, paddingLeft: 15 }}>
           <h3 className="section-title">Top attack origins</h3>
           <p style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 2 }}>
             Geo-located honeypot hits by source country
@@ -441,7 +443,9 @@ export default function AttackMapPage() {
         @media (max-width: 820px) { .map-feed { display: none !important; } }
 
         .to-grid { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); }
-        .to-head, .to-row { display: grid; grid-template-columns: 44px minmax(120px, max-content) minmax(110px, 1fr) 84px 60px; align-items: center; column-gap: 16px; padding: 0 14px; }
+        /* All track sizes are content-INDEPENDENT (px + fr) so every row — each its
+           own grid — computes identical column edges and the columns line up. */
+        .to-head, .to-row { display: grid; grid-template-columns: 40px 158px minmax(110px, 1fr) 78px 58px; align-items: center; column-gap: 14px; padding: 0 14px; }
         .to-head { height: 32px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
         .to-h { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); white-space: nowrap; }
         .to-h-num { text-align: right; }
@@ -472,7 +476,7 @@ export default function AttackMapPage() {
         .to-foot span:last-child { font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
 
         @media (max-width: 640px) {
-          .to-head, .to-row { grid-template-columns: 38px minmax(96px, max-content) minmax(70px, 1fr) 70px; column-gap: 12px; }
+          .to-head, .to-row { grid-template-columns: 38px 132px minmax(70px, 1fr) 70px; column-gap: 12px; }
           .to-h-share, .to-share { display: none; }
         }
       `}</style>

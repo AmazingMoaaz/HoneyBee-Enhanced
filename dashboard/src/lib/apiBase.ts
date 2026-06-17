@@ -1,25 +1,20 @@
 // Single source of truth for where the HoneyBee core API lives.
 //
-// Resolution order:
-//   1. Explicit VITE_API_BASE_URL build/env override (e.g. "https://hapi.h0neybee.online").
-//   2. Public domain: when the dashboard is served from *.h0neybee.online, the
-//      backend lives on the dedicated `hapi.h0neybee.online` subdomain.
-//   3. Otherwise (localhost / LAN dev): same-origin — requests use the relative
-//      "/api/v1" path, which the Vite dev server proxies to the local core.
+// Default is SAME-ORIGIN: the browser calls the relative "/api/v1" path, and the
+// front-door proxy (Vite dev server in dev, the reverse proxy in prod) forwards
+// "/api" to the core on :5400. Same-origin means NO CORS and NO preflight — which
+// sidesteps Cloudflare/nginx stripping the Access-Control-* headers entirely, and
+// the WebSocket connects to the same host (also proxied).
+//
+// To deliberately talk to a cross-origin backend (e.g. a dedicated
+// hapi.<domain> subdomain), set VITE_API_BASE_URL — but then that backend must
+// return correct CORS headers all the way through the proxy chain.
 //
 // Both the REST client and the WebSocket hook derive their URLs from here, so
 // there is exactly one place that knows the backend address.
 function resolveApiOrigin(): string {
   const override = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").trim().replace(/\/+$/, "");
-  if (override) return override;
-
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "h0neybee.online" || host.endsWith(".h0neybee.online")) {
-      return `${window.location.protocol}//hapi.h0neybee.online`;
-    }
-  }
-  return ""; // same-origin; dev proxy forwards /api to the local core
+  return override; // "" => same-origin (relative /api, proxied to the core)
 }
 
 // Absolute origin of the API, or "" for same-origin.
