@@ -36,15 +36,18 @@ type Agent struct {
 	connOK bool
 
 	writeMu sync.Mutex // serialises all writes to conn; held only during SendMessage
+
+	diag *agentDiag
 }
 
 // New constructs an Agent.
 func New(cfg *config.Config, logger *slog.Logger, hp *honeypot.Manager) *Agent {
-	return &Agent{cfg: cfg, logger: logger, hp: hp}
+	return &Agent{cfg: cfg, logger: logger, hp: hp, diag: newAgentDiag(logger)}
 }
 
 // Run loops: dial → auth → serve until disconnect, with exponential backoff.
 func (a *Agent) Run(ctx context.Context) error {
+	go a.diag.reportLoop(ctx) // periodic colored node-health panel
 	backoff := time.Second
 	for {
 		if ctx.Err() != nil {
@@ -64,6 +67,10 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 			continue
 		}
+		// connect() returned nil → we were authenticated and the session
+		// dropped. The next loop iteration is a reconnect.
+		a.diag.onReconnect()
+		a.logger.Info("disconnected from core; reconnecting", slog.String("diag", "reconnect"))
 		backoff = time.Second
 	}
 }
@@ -122,6 +129,7 @@ func (a *Agent) connect(ctx context.Context) error {
 	a.nodeID = ar.NodeID
 	a.connOK = true
 	a.mu.Unlock()
+	a.diag.setConnected(true, ar.NodeID)
 	a.logger.Info("connected", slog.Int64("node_id", ar.NodeID))
 
 	hbCtx, cancel := context.WithCancel(ctx)
@@ -134,6 +142,7 @@ func (a *Agent) connect(ctx context.Context) error {
 		a.connOK = false
 		a.conn = nil
 		a.mu.Unlock()
+		a.diag.setConnected(false, ar.NodeID)
 		_ = conn.Close()
 	}()
 
@@ -161,8 +170,13 @@ func (a *Agent) send(msgType string, payload any) error {
 		return errors.New("not connected")
 	}
 	a.writeMu.Lock()
-	defer a.writeMu.Unlock()
-	return protocol.SendMessage(conn, msgType, payload)
+	t0 := time.Now()
+	err := protocol.SendMessage(conn, msgType, payload)
+	a.writeMu.Unlock()
+	// Observational: surface send failures (most callers ignore the error) and
+	// flag slow writes that indicate the core is draining the socket slowly.
+	a.diag.recordSend(msgType, time.Since(t0), err)
+	return err
 }
 
 // heartbeatInterval is how often the agent sends a heartbeat to core.
@@ -453,6 +467,7 @@ func (a *Agent) SendPotLog(potID, potType, logType, line string) {
 
 // SendSessionStart implements session.Sender.
 func (a *Agent) SendSessionStart(potID, sessionID, srcIP string, srcPort int) {
+	a.diag.onSession()
 	_ = a.send(protocol.MsgSessionStart, protocol.SessionStart{
 		NodeID: a.nodeID, SessionID: sessionID, PotID: potID,
 		SrcIP: srcIP, SrcPort: srcPort, StartedAt: time.Now().UTC(),
@@ -478,6 +493,7 @@ func (a *Agent) SendSessionEnd(sessionID string, durationSec float64) {
 
 // OnPotEvent implements eventfwd.Sink.
 func (a *Agent) OnPotEvent(potID, eventType, sourceIP string, raw map[string]any) {
+	a.diag.onEvent()
 	dataBytes, _ := json.Marshal(raw)
 	potType, _ := raw["pot_type"].(string)
 	srcPort, _ := raw["src_port"].(float64)

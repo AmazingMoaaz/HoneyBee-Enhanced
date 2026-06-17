@@ -33,3 +33,18 @@ func RequireAdmin(next http.Handler) http.Handler {
 func RequireOperator(next http.Handler) http.Handler {
 	return RequireRole(models.RoleAdmin, models.RoleOperator)(next)
 }
+
+// RequirePermission gates a route on a single permission key. Admin always
+// passes (HasPerm treats admin as wildcard); any role whose permission set
+// includes perm also passes.
+func RequirePermission(perm string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !HasPerm(r.Context(), perm) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

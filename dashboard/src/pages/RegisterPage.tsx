@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/auth";
 import logoUrl from "../assets/logo.png";
 import ParticleCanvas, { HoneycombGrid } from "../components/ParticleCanvas";
+import { LIGHT_THEME_VARS } from "./LoginPage";
 
 export default function RegisterPage() {
   const [orgName, setOrgName] = useState("");
@@ -23,7 +24,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div style={{ minHeight:"100vh", display:"flex", overflow:"hidden", background:"#FFFFFF" }}>
+    <div style={{ minHeight:"100vh", display:"flex", overflow:"hidden", background:"#FFFFFF", ...LIGHT_THEME_VARS }}>
 
       {/* ── Mouse-reactive floating particles ── */}
       <ParticleCanvas />
@@ -66,20 +67,20 @@ export default function RegisterPage() {
       <div style={{
         flex:1, display:"flex", flexDirection:"column",
         alignItems:"center", justifyContent:"center",
-        padding:"32px 40px", background:"#FFFFFF", position:"relative", zIndex:2,
+        padding:"32px 40px", background:"var(--surface)", position:"relative", zIndex:2,
       }}>
         <div className="lg:hidden" style={{ display:"flex", flexDirection:"column", alignItems:"center", marginBottom:28 }}>
           <img src={logoUrl} alt="HoneyBee"
                style={{ height:56, width:56, objectFit:"contain", marginBottom:10,
                         filter:"drop-shadow(0 6px 16px rgba(245,158,11,0.45))" }} />
-          <span style={{ fontSize:18, fontWeight:900, color:"#0F172A" }}>HoneyBee</span>
+          <span style={{ fontSize:18, fontWeight:900, color:"var(--text)" }}>HoneyBee</span>
         </div>
 
         <div style={{ width:"100%", maxWidth:440 }} className="animate-float-up">
-          <h2 style={{ fontSize:28, fontWeight:900, letterSpacing:"-0.03em", color:"#0F172A", margin:"0 0 5px" }}>
+          <h2 style={{ fontSize:28, fontWeight:900, letterSpacing:"-0.03em", color:"var(--text)", margin:"0 0 5px" }}>
             Create account
           </h2>
-          <p style={{ fontSize:14, color:"#64748B", margin:"0 0 26px" }}>
+          <p style={{ fontSize:14, color:"var(--text-muted)", margin:"0 0 26px" }}>
             Register your organisation to get started.
           </p>
 
@@ -107,7 +108,7 @@ export default function RegisterPage() {
                      onChange={e => setPw(e.target.value)} required />
             </div>
             {err && (
-              <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", color:"#DC2626",
+              <div style={{ background:"var(--danger-bg)", border:"1px solid var(--border)", color:"var(--danger)",
                             borderRadius:10, padding:"10px 14px", fontSize:13, fontWeight:500 }}>
                 {err}
               </div>
@@ -118,9 +119,9 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          <p style={{ marginTop:20, textAlign:"center", fontSize:13, color:"#64748B" }}>
+          <p style={{ marginTop:20, textAlign:"center", fontSize:13, color:"var(--text-muted)" }}>
             Already have an account?{" "}
-            <Link to="/login" style={{ color:"#B45309", fontWeight:700 }}>Sign in</Link>
+            <Link to="/login" style={{ color:"var(--accent)", fontWeight:700 }}>Sign in</Link>
           </p>
         </div>
       </div>

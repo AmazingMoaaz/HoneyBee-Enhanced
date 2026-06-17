@@ -39,8 +39,92 @@ type User struct {
 	PasswordHash string    `json:"-" db:"password_hash"`
 	Name         string    `json:"name" db:"name"`
 	Role         Role      `json:"role" db:"role"`
+	Avatar       string    `json:"avatar" db:"avatar"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// ── Permissions & custom roles ───────────────────────────────────────
+//
+// Each protected, mutating route requires a single permission key. A role
+// (built-in or custom) is a named set of these keys. The built-in admin role
+// implicitly holds every permission.
+
+const (
+	PermPotsDeploy       = "pots.deploy"
+	PermNodesManage      = "nodes.manage"
+	PermAlertsManage     = "alerts.manage"
+	PermBroadcast        = "broadcast"
+	PermPotstoreSync     = "potstore.sync"
+	PermAlertRulesManage = "alertrules.manage"
+	PermUsersManage      = "users.manage"
+	PermNotificationsManage = "notifications.manage"
+)
+
+// PermissionDef describes one permission for the role-builder UI.
+type PermissionDef struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Group string `json:"group"`
+	Desc  string `json:"description"`
+}
+
+// PermissionCatalog is the full, ordered list of assignable permissions.
+var PermissionCatalog = []PermissionDef{
+	{PermPotsDeploy, "Deploy & control honeypots", "Honeypots", "Install, start, stop, restart and remove honeypots."},
+	{PermNodesManage, "Manage nodes", "Infrastructure", "Register, delete, regenerate tokens, and configure nodes."},
+	{PermBroadcast, "Broadcast commands", "Infrastructure", "Send commands to every node at once."},
+	{PermAlertsManage, "Manage alerts", "Security", "Create, acknowledge and delete alerts."},
+	{PermAlertRulesManage, "Manage alert rules", "Security", "Create, edit and delete alert rules."},
+	{PermPotstoreSync, "Sync PotStore catalog", "Catalog", "Refresh the honeypot catalog from the repository."},
+	{PermUsersManage, "Manage users & roles", "Administration", "Invite users, assign roles, and define custom roles."},
+	{PermNotificationsManage, "Manage notifications", "Administration", "Create, configure, test and delete Telegram notification bots."},
+}
+
+// AllPermKeys returns every permission key (admin's implicit set).
+func AllPermKeys() []string {
+	out := make([]string, len(PermissionCatalog))
+	for i, p := range PermissionCatalog {
+		out[i] = p.Key
+	}
+	return out
+}
+
+// ValidPerm reports whether key is a known permission.
+func ValidPerm(key string) bool {
+	for _, p := range PermissionCatalog {
+		if p.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// BuiltinRolePerms maps each built-in role slug to its default permission set.
+var BuiltinRolePerms = map[string][]string{
+	string(RoleAdmin):    AllPermKeys(),
+	string(RoleOperator): {PermPotsDeploy, PermNodesManage, PermBroadcast, PermAlertsManage},
+	string(RoleViewer):   {},
+}
+
+// SystemRoleMeta is display metadata for the seeded built-in roles.
+var SystemRoleMeta = map[string]struct{ Name, Color string }{
+	string(RoleAdmin):    {"Administrator", "#B45309"},
+	string(RoleOperator): {"Operator", "#4338CA"},
+	string(RoleViewer):   {"Viewer", "#475569"},
+}
+
+// RoleDef is a role row (built-in or custom) with its permission set.
+type RoleDef struct {
+	ID          int64     `json:"id"`
+	OrgID       int64     `json:"org_id"`
+	Slug        string    `json:"slug"`
+	Name        string    `json:"name"`
+	Color       string    `json:"color"`
+	Permissions []string  `json:"permissions"`
+	IsSystem    bool      `json:"is_system"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Node is a registered field agent.

@@ -24,7 +24,13 @@ type NodeKind =
   | "internet" | "firewall"  | "router"   | "switch"
   | "server"   | "linux"     | "windows"  | "workstation"
   | "honeypot" | "dmz"       | "database" | "mysql"
-  | "loganalyzer";
+  | "loganalyzer"
+  // network
+  | "cloud"    | "loadbalancer" | "vpn"    | "waf"   | "proxy" | "accesspoint"
+  // systems
+  | "container"| "kubernetes"   | "webserver" | "mailserver" | "dns" | "storage" | "iot"
+  // security
+  | "ids"      | "siem"         | "bastion" | "sandbox" | "sensor";
 
 interface TopoNode {
   id:       string;
@@ -39,8 +45,20 @@ interface TopoNode {
   online?:  boolean;  // for live-imported nodes
 }
 
-interface TopoEdge { id: string; source: string; target: string }
+type EdgeType = "link" | "allow" | "deny" | "trust" | "monitor";
+interface TopoEdge { id: string; source: string; target: string; type?: EdgeType; label?: string }
 interface Topology  { nodes: TopoNode[]; edges: TopoEdge[] }
+
+/* Edge visual style + semantics per connection type */
+const EDGE_STYLE: Record<EdgeType, { color: string; dash?: string; label: string; icon: string }> = {
+  link:    { color: "var(--border-2)", label: "Link",    icon: Icons.link },
+  allow:   { color: "#22C55E",         label: "Allow",   icon: Icons.check },
+  deny:    { color: "#EF4444", dash: "7 4", label: "Deny",   icon: Icons.close },
+  trust:   { color: "#3B82F6",         label: "Trust",   icon: Icons.shield },
+  monitor: { color: "#A78BFA", dash: "2 5", label: "Monitor", icon: Icons.activity },
+};
+const EDGE_TYPES: EdgeType[] = ["link", "allow", "deny", "trust", "monitor"];
+const edgeColor = (t?: EdgeType) => EDGE_STYLE[t ?? "link"].color;
 
 /* ── Known honeypot types from PotStore ──────────────────────────── */
 const KNOWN_POT_TYPES = [
@@ -51,33 +69,56 @@ const KNOWN_POT_TYPES = [
   { id:"heralding",   label:"Heralding",    desc:"Multi-service credential trap",  color:"#F97316" },
   { id:"elasticpot",  label:"ElasticPot",   desc:"Fake Elasticsearch endpoint",    color:"#06B6D4" },
   { id:"mailoney",    label:"Mailoney",     desc:"SMTP honeypot",                  color:"#22C55E" },
-  { id:"custom",      label:"Custom…",      desc:"Type your own",                  color:"#94A3B8" },
+  { id:"custom",      label:"Custom…",      desc:"Type your own",                  color:"var(--text-faint)" },
 ];
 
 /* ── Palette ──────────────────────────────────────────────────────── */
 interface PaletteItem {
   kind:   NodeKind;
   label:  string;
-  img:    string;
+  img?:   string;          // PNG asset; when absent the SVG fallback icon is used
   stroke: string;
   fill:   string;
   group:  "network" | "systems" | "security";
 }
 
 const PALETTE: PaletteItem[] = [
-  { kind:"internet",    label:"Internet",    img:internetIcon,  stroke:"#3B82F6", fill:"#EFF6FF", group:"network"  },
-  { kind:"firewall",    label:"Firewall",    img:firewallIcon,  stroke:"#EF4444", fill:"#FEF2F2", group:"network"  },
-  { kind:"router",      label:"Router",      img:routerIcon,    stroke:"#D97706", fill:"#FFFBEB", group:"network"  },
-  { kind:"switch",      label:"Switch",      img:switchIcon,    stroke:"#8B5CF6", fill:"#F5F3FF", group:"network"  },
-  { kind:"dmz",         label:"DMZ",         img:dmzIcon,       stroke:"#EA580C", fill:"#FFF7ED", group:"network"  },
-  { kind:"server",      label:"Server",      img:serverIcon,    stroke:"#059669", fill:"#ECFDF5", group:"systems"  },
-  { kind:"linux",       label:"Linux",       img:linuxIcon,     stroke:"#0891B2", fill:"#ECFEFF", group:"systems"  },
-  { kind:"windows",     label:"Windows",     img:windowsIcon,   stroke:"#0078D4", fill:"#EFF6FF", group:"systems"  },
-  { kind:"workstation", label:"Workstation", img:macIcon,       stroke:"#64748B", fill:"#F8FAFC", group:"systems"  },
-  { kind:"database",    label:"Database",    img:databaseIcon,  stroke:"#0E7490", fill:"#ECFEFF", group:"systems"  },
-  { kind:"mysql",       label:"MySQL",       img:mysqlIcon,     stroke:"#DE6914", fill:"#FFF7ED", group:"systems"  },
-  { kind:"honeypot",     label:"Honeypot",     img:honeypotIcon,     stroke:"#F59E0B", fill:"#FFFBEB", group:"security" },
-  { kind:"loganalyzer",  label:"Log Analyser", img:loganalyzerIcon,  stroke:"#7C3AED", fill:"#F5F3FF", group:"security" },
+  { kind:"internet",    label:"Internet",    img:internetIcon,  stroke:"#3B82F6", fill:"rgba(59,130,246,0.12)", group:"network"  },
+  { kind:"firewall",    label:"Firewall",    img:firewallIcon,  stroke:"#EF4444", fill:"rgba(239,68,68,0.13)", group:"network"  },
+  { kind:"router",      label:"Router",      img:routerIcon,    stroke:"#D97706", fill:"rgba(245,158,11,0.13)", group:"network"  },
+  { kind:"switch",      label:"Switch",      img:switchIcon,    stroke:"#8B5CF6", fill:"rgba(139,92,246,0.12)", group:"network"  },
+  { kind:"dmz",         label:"DMZ",         img:dmzIcon,       stroke:"#EA580C", fill:"var(--warn-bg)", group:"network"  },
+  { kind:"server",      label:"Server",      img:serverIcon,    stroke:"#10B981", fill:"rgba(34,197,94,0.12)", group:"systems"  },
+  { kind:"linux",       label:"Linux",       img:linuxIcon,     stroke:"#0891B2", fill:"var(--info-bg)", group:"systems"  },
+  { kind:"windows",     label:"Windows",     img:windowsIcon,   stroke:"#0078D4", fill:"rgba(59,130,246,0.12)", group:"systems"  },
+  { kind:"workstation", label:"Workstation", img:macIcon,       stroke:"var(--text-muted)", fill:"var(--bg-2)", group:"systems"  },
+  { kind:"database",    label:"Database",    img:databaseIcon,  stroke:"#0E7490", fill:"var(--info-bg)", group:"systems"  },
+  { kind:"mysql",       label:"MySQL",       img:mysqlIcon,     stroke:"#DE6914", fill:"var(--warn-bg)", group:"systems"  },
+  { kind:"honeypot",     label:"Honeypot",     img:honeypotIcon,     stroke:"#F59E0B", fill:"rgba(245,158,11,0.13)", group:"security" },
+  { kind:"loganalyzer",  label:"Log Analyser", img:loganalyzerIcon,  stroke:"#7C3AED", fill:"rgba(139,92,246,0.12)", group:"security" },
+
+  /* ── Extra modules (SVG-icon, no PNG asset) ─────────────────────────── */
+  // Network
+  { kind:"cloud",        label:"Cloud",        stroke:"#38BDF8", fill:"#38BDF81f", group:"network"  },
+  { kind:"loadbalancer", label:"Load Balancer",stroke:"#14B8A6", fill:"#14B8A61f", group:"network"  },
+  { kind:"vpn",          label:"VPN Gateway",  stroke:"#6366F1", fill:"#6366F11f", group:"network"  },
+  { kind:"waf",          label:"WAF",          stroke:"#F43F5E", fill:"#F43F5E1f", group:"network"  },
+  { kind:"proxy",        label:"Proxy",        stroke:"#A855F7", fill:"#A855F71f", group:"network"  },
+  { kind:"accesspoint",  label:"Wireless AP",  stroke:"#0EA5E9", fill:"#0EA5E91f", group:"network"  },
+  // Systems
+  { kind:"webserver",    label:"Web Server",   stroke:"#10B981", fill:"#10B9811f", group:"systems"  },
+  { kind:"mailserver",   label:"Mail Server",  stroke:"#F59E0B", fill:"#F59E0B1f", group:"systems"  },
+  { kind:"dns",          label:"DNS Server",   stroke:"#6366F1", fill:"#6366F11f", group:"systems"  },
+  { kind:"container",    label:"Container",    stroke:"#2496ED", fill:"#2496ED1f", group:"systems"  },
+  { kind:"kubernetes",   label:"Kubernetes",   stroke:"#326CE5", fill:"#326CE51f", group:"systems"  },
+  { kind:"storage",      label:"Storage / NAS",stroke:"#64748B", fill:"#64748B1f", group:"systems"  },
+  { kind:"iot",          label:"IoT Device",   stroke:"#22C55E", fill:"#22C55E1f", group:"systems"  },
+  // Security
+  { kind:"ids",          label:"IDS / IPS",    stroke:"#EF4444", fill:"#EF44441f", group:"security" },
+  { kind:"siem",         label:"SIEM",         stroke:"#7C3AED", fill:"#7C3AED1f", group:"security" },
+  { kind:"bastion",      label:"Bastion Host", stroke:"#D97706", fill:"#D977061f", group:"security" },
+  { kind:"sandbox",      label:"Sandbox",      stroke:"#06B6D4", fill:"#06B6D41f", group:"security" },
+  { kind:"sensor",       label:"Sensor",       stroke:"#F97316", fill:"#F973161f", group:"security" },
 ];
 
 const KIND_META: Record<NodeKind, PaletteItem> = Object.fromEntries(
@@ -99,7 +140,41 @@ const KIND_FALLBACK_ICON: Record<NodeKind, string> = {
   mysql:       "M12 2C7 2 3 4.3 3 7v10c0 2.7 4 5 9 5s9-2.3 9-5V7c0-2.7-4-5-9-5zm0 0C7 2 3 4.3 3 7m18 0c0 2.7-4 5-9 5S3 9.7 3 7",
   honeypot:    "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
   loganalyzer: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4",
+  // network
+  cloud:        "M17 18H7a4 4 0 0 1-1-7.9A5.5 5.5 0 0 1 17 9a4.5 4.5 0 0 1 0 9z",
+  loadbalancer: Icons.network,
+  vpn:          Icons.lock,
+  waf:          Icons.shield,
+  proxy:        Icons.external,
+  accesspoint:  Icons.signal,
+  // systems
+  webserver:    Icons.web,
+  mailserver:   Icons.mail,
+  dns:          Icons.globe,
+  container:    Icons.deploy,
+  kubernetes:   Icons.hex,
+  storage:      Icons.database,
+  iot:          Icons.cpu,
+  // security
+  ids:          Icons.eye,
+  siem:         Icons.chart,
+  bastion:      Icons.key,
+  sandbox:      Icons.honeycomb,
+  sensor:       Icons.activity,
 };
+
+/* Renders a kind's PNG icon, or its SVG fallback when no PNG asset exists. */
+function KindIcon({ kind, size = 22 }: { kind: NodeKind; size?: number }) {
+  const m = KIND_META[kind];
+  if (m.img) return <img src={m.img} alt="" style={{ width:size, height:size, objectFit:"contain", flexShrink:0 }} />;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={m.stroke} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"
+      style={{ flexShrink:0 }}>
+      <path d={KIND_FALLBACK_ICON[kind]} />
+    </svg>
+  );
+}
 
 const PALETTE_GROUPS = [
   { id:"network"  as const, label:"Network",  icon:Icons.network },
@@ -115,37 +190,50 @@ const GRID = 24;    // snap-to-grid
 
 /* ── Auto-layout ──────────────────────────────────────────────────── */
 const LAYER_MAP: NodeKind[][] = [
-  ["internet"],
-  ["firewall"],
-  ["router", "dmz"],
-  ["switch"],
-  ["server", "linux", "windows", "workstation", "database", "mysql"],
-  ["loganalyzer"],
+  ["internet", "cloud"],
+  ["firewall", "waf", "vpn"],
+  ["router", "dmz", "proxy"],
+  ["switch", "loadbalancer", "accesspoint"],
+  ["server", "linux", "windows", "workstation", "database", "mysql",
+   "webserver", "mailserver", "dns", "container", "kubernetes", "storage", "iot"],
+  ["loganalyzer", "siem", "ids", "sensor", "bastion", "sandbox"],
   ["honeypot"],
 ];
 
 function autoLayout(nodes: TopoNode[]): TopoNode[] {
-  const LAYER_H  = 145;   // vertical gap between layers
-  const MIN_COL  = 130;   // minimum horizontal gap between nodes in same layer
-  const PAD_X    = 90;
-  const PAD_Y    = 50;
+  const LAYER_H = 150;                       // vertical gap between layers
+  const COL_W   = Math.max(140, NW + 56);    // horizontal slot per node
+  const PAD_Y   = 48;
 
-  return nodes.map(n => {
+  // Bucket nodes into their layer (unknown kinds fall into the last layer).
+  const layers: TopoNode[][] = LAYER_MAP.map(() => []);
+  const extra: TopoNode[] = [];
+  nodes.forEach(n => {
     const li = LAYER_MAP.findIndex(g => g.includes(n.kind));
-    const layer = li >= 0 ? li : LAYER_MAP.length - 1;
-    const peers = nodes.filter(nn => {
-      const ll = LAYER_MAP.findIndex(g => g.includes(nn.kind));
-      return (ll >= 0 ? ll : LAYER_MAP.length - 1) === layer;
-    });
-    const pos = peers.indexOf(n);
-    const colW = Math.max(MIN_COL, NW + 60);
-    const totalW = peers.length * colW;
-    return {
-      ...n,
-      x: PAD_X + pos * colW + (colW - NW) / 2 - totalW / 2 + totalW / 2,
-      y: PAD_Y + layer * LAYER_H,
-    };
+    if (li >= 0) layers[li].push(n); else extra.push(n);
   });
+  if (extra.length) layers[layers.length - 1].push(...extra);
+
+  // Center every layer on a shared centre line so the diagram is symmetric.
+  const widest  = Math.max(1, ...layers.map(l => l.length));
+  const centreX = (widest * COL_W) / 2;
+
+  const out: TopoNode[] = [];
+  let visibleLayer = 0;
+  layers.forEach(layerNodes => {
+    if (!layerNodes.length) return;          // collapse empty layers (no vertical gaps)
+    const startX = centreX - (layerNodes.length * COL_W) / 2;
+    layerNodes
+      .slice()
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .forEach((n, i) => out.push({
+        ...n,
+        x: Math.round(startX + i * COL_W + (COL_W - NW) / 2),
+        y: PAD_Y + visibleLayer * LAYER_H,
+      }));
+    visibleLayer++;
+  });
+  return out;
 }
 
 /* ── Port-based edge routing ─────────────────────────────────────── */
@@ -239,6 +327,39 @@ function analyzeTopology({ nodes, edges }: Topology): Finding[] {
         detail:"Databases must never be directly reachable from the internet." });
   });
 
+  // Centralised logging / monitoring
+  if (hasKind("loganalyzer"))
+    out.push({ level:"good", title:"Centralised logging in place",
+      detail:"A Log Analyser is collecting telemetry — you have visibility into attacker activity." });
+  else if (hasKind("honeypot"))
+    out.push({ level:"info", title:"No log analyser",
+      detail:"Add a Log Analyser so honeypot events are aggregated and searchable." });
+
+  // Edge-type semantics
+  const idKind = (id:string) => nodes.find(n=>n.id===id)?.kind;
+  const isInternal = (k?:string) => ["server","linux","windows","workstation","database","mysql"].includes(k??"");
+  edges.forEach(e=>{
+    const sk=idKind(e.source), tk=idKind(e.target);
+    const touchesInternet = sk==="internet"||tk==="internet";
+    const touchesInternal = isInternal(sk)||isInternal(tk);
+    if (touchesInternet && touchesInternal) {
+      if (e.type==="allow")
+        out.push({ level:"critical", title:"Internet → internal marked Allow",
+          detail:"An explicit Allow rule lets the internet reach an internal system directly. Restrict or deny it." });
+      else if (e.type==="deny")
+        out.push({ level:"good", title:"Internet → internal denied",
+          detail:"Good — this path is explicitly blocked." });
+    }
+  });
+  if (byKind("honeypot").length>0 && edges.some(e=>e.type==="monitor"))
+    out.push({ level:"good", title:"Monitored honeypot paths",
+      detail:"Monitor links show where traffic is being observed — strong detection posture." });
+
+  // Single-firewall single point of failure
+  if (byKind("firewall").length===1)
+    out.push({ level:"info", title:"Single firewall",
+      detail:"One firewall is a single point of failure — consider a redundant pair for HA." });
+
   nodes.filter(n=>!edges.some(e=>e.source===n.id||e.target===n.id))
        .forEach(n=>out.push({ level:"warn", title:`"${n.label}" isolated`, detail:"Node has no connections." }));
 
@@ -265,14 +386,52 @@ interface Saved { id:string; name:string; savedAt:string; data:Topology }
 const loadSaved  = (): Saved[] => { try { return JSON.parse(localStorage.getItem(STORE_KEY)??"[]"); } catch { return []; } };
 const persistAll = (list:Saved[]) => localStorage.setItem(STORE_KEY, JSON.stringify(list));
 
-function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6)+Math.random().toString(36).slice(2,4); }
+
+/* ── Starter templates ────────────────────────────────────────────── */
+function tpl(spec:{k:NodeKind;l:string;pot?:string}[], links:[number,number,EdgeType?][]): Topology {
+  const ids = spec.map(()=>uid());
+  return {
+    nodes: spec.map((s,i)=>({ id:ids[i], kind:s.k, label:s.l, x:0, y:0, fixed:false, potType:s.pot })),
+    edges: links.map(([a,b,t])=>({ id:uid(), source:ids[a], target:ids[b], ...(t?{type:t}:{}) })),
+  };
+}
+const TEMPLATES: { id:string; name:string; desc:string; tags:string[]; build:()=>Topology }[] = [
+  { id:"perimeter", name:"Perimeter + DMZ", tags:["Firewall","DMZ","Honeypot"],
+    desc:"Internet behind a firewall, a DMZ with a monitored honeypot, and an internal app + database tier.",
+    build:()=>tpl(
+      [{k:"internet",l:"Internet"},{k:"firewall",l:"Perimeter FW"},{k:"dmz",l:"DMZ"},
+       {k:"honeypot",l:"Cowrie",pot:"cowrie"},{k:"switch",l:"Core Switch"},
+       {k:"linux",l:"App Server"},{k:"database",l:"Database"}],
+      [[0,1,"deny"],[1,2,"allow"],[2,3,"monitor"],[1,4],[4,5],[5,6,"trust"]]) },
+  { id:"zerotrust", name:"Zero-Trust Segmented", tags:["Segmentation","Monitor"],
+    desc:"Each segment sits behind its own firewall; honeypots and a log analyser watch every zone.",
+    build:()=>tpl(
+      [{k:"internet",l:"Internet"},{k:"firewall",l:"Edge FW"},{k:"router",l:"Router"},
+       {k:"firewall",l:"Segment FW"},{k:"linux",l:"Workload"},{k:"honeypot",l:"WebTrap",pot:"webtrap"},
+       {k:"loganalyzer",l:"Log Analyser"}],
+      [[0,1,"deny"],[1,2],[2,3],[3,4,"allow"],[3,5,"monitor"],[5,6,"monitor"],[4,6,"monitor"]]) },
+  { id:"threetier", name:"Classic 3-Tier", tags:["Web","App","DB"],
+    desc:"Web, application and database tiers protected by a single perimeter firewall.",
+    build:()=>tpl(
+      [{k:"internet",l:"Internet"},{k:"firewall",l:"Firewall"},{k:"server",l:"Web Tier"},
+       {k:"linux",l:"App Tier"},{k:"mysql",l:"DB Tier"}],
+      [[0,1,"deny"],[1,2,"allow"],[2,3,"trust"],[3,4,"trust"]]) },
+  { id:"honeynet", name:"Honeynet", tags:["Deception","Multi-pot"],
+    desc:"A dedicated deception subnet of several honeypots, all feeding a central log analyser.",
+    build:()=>tpl(
+      [{k:"internet",l:"Internet"},{k:"firewall",l:"Firewall"},{k:"dmz",l:"Honeynet DMZ"},
+       {k:"honeypot",l:"Cowrie",pot:"cowrie"},{k:"honeypot",l:"Dionaea",pot:"dionaea"},
+       {k:"honeypot",l:"WebTrap",pot:"webtrap"},{k:"loganalyzer",l:"Log Analyser"}],
+      [[0,1,"deny"],[1,2,"allow"],[2,3,"monitor"],[2,4,"monitor"],[2,5,"monitor"],[3,6,"monitor"],[4,6,"monitor"],[5,6,"monitor"]]) },
+];
 
 /* ── Level styles ─────────────────────────────────────────────────── */
 const LVL: Record<Finding["level"], { bg:string; fg:string; dot:string; lbl:string }> = {
-  good:     { bg:"#ECFDF5", fg:"#065F46", dot:"#10B981", lbl:"Good"     },
-  warn:     { bg:"#FFFBEB", fg:"#92400E", dot:"#F59E0B", lbl:"Warning"  },
-  critical: { bg:"#FEF2F2", fg:"#991B1B", dot:"#EF4444", lbl:"Critical" },
-  info:     { bg:"#EFF6FF", fg:"#1E40AF", dot:"#3B82F6", lbl:"Info"     },
+  good:     { bg:"var(--ok-bg)", fg:"var(--ok)", dot:"#10B981", lbl:"Good"     },
+  warn:     { bg:"var(--warn-bg)", fg:"var(--warn)", dot:"#F59E0B", lbl:"Warning"  },
+  critical: { bg:"var(--danger-bg)", fg:"var(--danger)", dot:"#EF4444", lbl:"Critical" },
+  info:     { bg:"var(--info-bg)", fg:"var(--info)", dot:"#3B82F6", lbl:"Info"     },
 };
 
 const scoreColor = (s:number) => s>=70?"#10B981":s>=45?"#F59E0B":"#EF4444";
@@ -305,6 +464,18 @@ export default function TopologyPage() {
   const [imgLoaded,    setImgLoaded   ] = useState<Set<NodeKind>>(new Set());
   const [draggingKind, setDraggingKind] = useState<NodeKind|null>(null);
   const [hoveredEdge,  setHoveredEdge  ] = useState<string|null>(null);
+
+  /* multi-select + marquee + edge menu + view toggles + search + templates */
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [marquee,      setMarquee    ] = useState<{x0:number;y0:number;x1:number;y1:number}|null>(null);
+  const marqueeRef = useRef(false);
+  const [edgeMenu,     setEdgeMenu   ] = useState<{x:number;y:number;eid:string}|null>(null);
+  const [showGrid,     setShowGrid   ] = useState(true);
+  const [snapOn,       setSnapOn     ] = useState(true);
+  const [showTemplates,setShowTemplates] = useState(false);
+  const [search,       setSearch     ] = useState("");
+  const [exportMenu,   setExportMenu ] = useState(false);
+  const clipboard = useRef<Topology|null>(null);
 
   /* pan / zoom */
   const [pan,   setPan  ] = useState({ x:80, y:40 });
@@ -406,6 +577,40 @@ export default function TopologyPage() {
   // eslint-disable-next-line
   }, [nodes,edges]);
 
+  /* ── Multi-selection ops (declared before the keyboard effect that uses them) ── */
+  const selIds = () => selectedIds.length ? selectedIds : (selected ? [selected] : []);
+
+  const deleteSelection = useCallback(() => {
+    const ids = selectedIds.length ? selectedIds : (selected ? [selected] : []);
+    if (!ids.length) return;
+    const s = new Set(ids);
+    push(nodes,edges);
+    setNodes(p=>p.filter(n=>!s.has(n.id)));
+    setEdges(p=>p.filter(e=>!s.has(e.source)&&!s.has(e.target)));
+    setSelected(null); setSelectedIds([]);
+  }, [selectedIds,selected,nodes,edges,push]);
+
+  const selectAll = useCallback(() => { setSelectedIds(nodes.map(n=>n.id)); setSelected(null); }, [nodes]);
+
+  const copySel = useCallback(() => {
+    const ids=new Set(selectedIds.length?selectedIds:(selected?[selected]:[]));
+    if (!ids.size) return;
+    clipboard.current={
+      nodes: nodes.filter(n=>ids.has(n.id)),
+      edges: edges.filter(e=>ids.has(e.source)&&ids.has(e.target)),
+    };
+  }, [selectedIds,selected,nodes,edges]);
+
+  const pasteSel = useCallback(() => {
+    const cb=clipboard.current; if (!cb||!cb.nodes.length) return;
+    const map=new Map<string,string>();
+    const nn=cb.nodes.map(n=>{ const nid=uid(); map.set(n.id,nid); return {...n,id:nid,x:n.x+32,y:n.y+32,fixed:false}; });
+    const ne=cb.edges.map(e=>({id:uid(),source:map.get(e.source)!,target:map.get(e.target)!,type:e.type,label:e.label}));
+    push(nodes,edges);
+    setNodes(p=>[...p,...nn]); setEdges(p=>[...p,...ne]);
+    setSelectedIds(nn.map(n=>n.id)); setSelected(nn.length===1?nn[0].id:null);
+  }, [nodes,edges,push]);
+
   /* ── Coord helpers ── */
   const svgPt = useCallback((cx:number, cy:number) => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -413,28 +618,25 @@ export default function TopologyPage() {
     return { x:(cx-r.left-pan.x)/scale, y:(cy-r.top-pan.y)/scale };
   }, [pan,scale]);
 
-  const snap = useCallback((v:number) => Math.round(v/GRID)*GRID, []);
+  const snap = useCallback((v:number) => snapOn ? Math.round(v/GRID)*GRID : Math.round(v), [snapOn]);
 
   /* ── Keyboard ── */
   useEffect(() => {
     const h = (e:KeyboardEvent) => {
       const tag = (e.target as Element)?.tagName;
       if (tag==="INPUT"||tag==="TEXTAREA") return;
-      if (e.key==="Delete"||e.key==="Backspace") {
-        if (selected) {
-          push(nodes,edges);
-          setNodes(p=>p.filter(n=>n.id!==selected));
-          setEdges(p=>p.filter(e=>e.source!==selected&&e.target!==selected));
-          setSelected(null);
-        }
-      }
-      if (e.key==="Escape") { setSelected(null); setConnectFirst(null); setConnectMode(false); setCtxMenu(null); }
-      if ((e.ctrlKey||e.metaKey)&&e.key==="z") { e.preventDefault(); undo(); }
-      if ((e.ctrlKey||e.metaKey)&&(e.key==="y"||(e.shiftKey&&e.key==="Z"))) { e.preventDefault(); redo(); }
+      const mod = e.ctrlKey||e.metaKey;
+      if (e.key==="Delete"||e.key==="Backspace") { e.preventDefault(); deleteSelection(); }
+      else if (e.key==="Escape") { setSelected(null); setSelectedIds([]); setConnectFirst(null); setConnectMode(false); setCtxMenu(null); setEdgeMenu(null); setMarquee(null); marqueeRef.current=false; }
+      else if (mod&&e.key==="z") { e.preventDefault(); undo(); }
+      else if (mod&&(e.key==="y"||(e.shiftKey&&(e.key==="Z"||e.key==="z")))) { e.preventDefault(); redo(); }
+      else if (mod&&e.key==="a") { e.preventDefault(); selectAll(); }
+      else if (mod&&e.key==="c") { e.preventDefault(); copySel(); }
+      else if (mod&&e.key==="v") { e.preventDefault(); pasteSel(); }
     };
     window.addEventListener("keydown",h);
     return ()=>window.removeEventListener("keydown",h);
-  }, [selected,nodes,edges,push,undo,redo]);
+  }, [deleteSelection,undo,redo,selectAll,copySel,pasteSel]);
 
   /* ── Wheel zoom ── */
   const onWheel = useCallback((e:React.WheelEvent) => {
@@ -451,20 +653,26 @@ export default function TopologyPage() {
 
   /* ── Canvas mousedown ── */
   const onCanvasMD = useCallback((e:React.MouseEvent) => {
-    if (ctxMenu) { setCtxMenu(null); return; }
+    if (ctxMenu||edgeMenu) { setCtxMenu(null); setEdgeMenu(null); return; }
     const tgt=e.target as Element;
     const isCanvas=tgt===canvasRef.current||tgt.getAttribute("data-bg")==="1";
     if (!isCanvas) return;
-    setSelected(null); setConnectFirst(null);
-    if (!connectMode) {
+    setSelected(null); setSelectedIds([]); setConnectFirst(null);
+    if (connectMode) return;
+    if (e.shiftKey) {
+      const pt=svgPt(e.clientX,e.clientY);
+      marqueeRef.current=true;
+      setMarquee({x0:pt.x,y0:pt.y,x1:pt.x,y1:pt.y});
+    } else {
       isPanning.current=true;
       panStart.current={mx:e.clientX,my:e.clientY,tx:pan.x,ty:pan.y};
     }
-  }, [pan,connectMode,ctxMenu]);
+  }, [pan,connectMode,ctxMenu,edgeMenu,svgPt]);
 
   const onMouseMove = useCallback((e:React.MouseEvent) => {
     const pt=svgPt(e.clientX,e.clientY);
     setMousePos(pt);
+    if (marqueeRef.current) { setMarquee(m=>m?{...m,x1:pt.x,y1:pt.y}:m); return; }
     if (isPanning.current)
       setPan({x:panStart.current.tx+e.clientX-panStart.current.mx,
               y:panStart.current.ty+e.clientY-panStart.current.my});
@@ -476,6 +684,13 @@ export default function TopologyPage() {
         if (!node) return prev;
         const dx=newX-node.x, dy=newY-node.y;
         if (dx===0&&dy===0) return prev;
+        // Group move: if the grabbed node is part of a multi-selection, move
+        // the whole selection rigidly (no spring pull).
+        if (selectedIds.length>1 && selectedIds.includes(id)) {
+          const sel=new Set(selectedIds);
+          return prev.map(n=> n.id===id ? {...n,x:newX,y:newY}
+                            : (sel.has(n.id)&&!n.fixed) ? {...n,x:n.x+dx,y:n.y+dy} : n);
+        }
         // Spring pull: 1-hop neighbours follow at 60%, 2-hop at 22%
         const hop1=new Set(
           edges.filter(e=>e.source===id||e.target===id)
@@ -496,11 +711,26 @@ export default function TopologyPage() {
         });
       });
     }
-  }, [svgPt,snap,edges]);
+  }, [svgPt,snap,edges,selectedIds]);
 
   const onMouseUp = useCallback(()=>{
+    if (marqueeRef.current) {
+      marqueeRef.current=false;
+      setMarquee(m=>{
+        if (m) {
+          const x0=Math.min(m.x0,m.x1), x1=Math.max(m.x0,m.x1);
+          const y0=Math.min(m.y0,m.y1), y1=Math.max(m.y0,m.y1);
+          if (Math.abs(x1-x0)>6 && Math.abs(y1-y0)>6) {
+            const hit=nodes.filter(n=>n.x+NW>x0&&n.x<x1&&n.y+NH>y0&&n.y<y1).map(n=>n.id);
+            setSelectedIds(hit);
+            setSelected(hit.length===1?hit[0]:null);
+          }
+        }
+        return null;
+      });
+    }
     isPanning.current=false; draggingNode.current=null;
-  },[]);
+  },[nodes]);
 
   /* ── Node mousedown ── */
   const onNodeMD = useCallback((e:React.MouseEvent, node:TopoNode) => {
@@ -516,12 +746,18 @@ export default function TopologyPage() {
       }
       return;
     }
+    if (e.shiftKey) {
+      setSelectedIds(ids=>ids.includes(node.id)?ids.filter(i=>i!==node.id):[...ids,node.id]);
+      setSelected(node.id);
+      return;
+    }
     setSelected(node.id);
+    if (!selectedIds.includes(node.id)) setSelectedIds([node.id]);
     if (!node.fixed) {
       const pt=svgPt(e.clientX,e.clientY);
       draggingNode.current={id:node.id,ox:pt.x-node.x,oy:pt.y-node.y};
     }
-  }, [connectMode,connectFirst,edges,nodes,push,svgPt]);
+  }, [connectMode,connectFirst,edges,nodes,push,svgPt,selectedIds]);
 
   const onNodeRClick = useCallback((e:React.MouseEvent, node:TopoNode)=>{
     e.preventDefault(); e.stopPropagation();
@@ -568,6 +804,60 @@ export default function TopologyPage() {
     const src=nodes.find(n=>n.id===id); if (!src) return;
     push(nodes,edges);
     setNodes(p=>[...p,{...src,id:uid(),x:src.x+NW+20,y:src.y+20,fixed:false}]);
+  };
+
+  /* ── Align / distribute (operate on current selection) ── */
+  const alignSel = (mode:"left"|"hcenter"|"right"|"top"|"vcenter"|"bottom") => {
+    const ids=selIds(); if (ids.length<2) return;
+    const sel=nodes.filter(n=>ids.includes(n.id));
+    const minX=Math.min(...sel.map(n=>n.x)), maxX=Math.max(...sel.map(n=>n.x+NW));
+    const minY=Math.min(...sel.map(n=>n.y)), maxY=Math.max(...sel.map(n=>n.y+NH));
+    const cX=(minX+maxX)/2, cY=(minY+maxY)/2;
+    const s=new Set(ids);
+    push(nodes,edges);
+    setNodes(p=>p.map(n=>{
+      if (!s.has(n.id)) return n;
+      switch(mode){
+        case "left":    return {...n,x:minX};
+        case "right":   return {...n,x:maxX-NW};
+        case "hcenter": return {...n,x:Math.round(cX-NW/2)};
+        case "top":     return {...n,y:minY};
+        case "bottom":  return {...n,y:maxY-NH};
+        case "vcenter": return {...n,y:Math.round(cY-NH/2)};
+      }
+    }));
+  };
+  const distributeSel = (axis:"h"|"v") => {
+    const ids=selIds(); if (ids.length<3) return;
+    const sel=nodes.filter(n=>ids.includes(n.id)).sort((a,b)=>axis==="h"?a.x-b.x:a.y-b.y);
+    const first=sel[0], last=sel[sel.length-1];
+    const span=axis==="h"?(last.x-first.x):(last.y-first.y);
+    const step=span/(sel.length-1);
+    const pos=new Map(sel.map((n,i)=>[n.id, axis==="h"?Math.round(first.x+i*step):Math.round(first.y+i*step)]));
+    push(nodes,edges);
+    setNodes(p=>p.map(n=>pos.has(n.id)?(axis==="h"?{...n,x:pos.get(n.id)!}:{...n,y:pos.get(n.id)!}):n));
+  };
+
+  /* ── Edge type + label ── */
+  const setEdgeType = (eid:string, type:EdgeType) => { push(nodes,edges); setEdges(p=>p.map(e=>e.id===eid?{...e,type}:e)); };
+  const setEdgeLabel = (eid:string, label:string) => setEdges(p=>p.map(e=>e.id===eid?{...e,label:label||undefined}:e));
+
+  /* ── Templates + image export ── */
+  const loadTemplate = (topo:Topology) => {
+    push(nodes,edges);
+    const laid=autoLayout(topo.nodes);
+    setNodes(laid); setEdges(topo.edges);
+    setSelected(null); setSelectedIds([]); setShowTemplates(false);
+    setTimeout(fitView, 30);
+  };
+
+  const findNode = (q:string) => {
+    const t=q.trim().toLowerCase(); if (!t) return;
+    const n=nodes.find(nd=>nd.label.toLowerCase().includes(t)||nd.ip?.toLowerCase().includes(t)||nd.kind.includes(t));
+    if (!n) return;
+    setSelected(n.id); setSelectedIds([n.id]);
+    setScale(1);
+    setPan({x:dim.w/2-(n.x+NW/2), y:dim.h/2-(n.y+NH/2)});
   };
 
   const toggleFixed = (id:string) =>
@@ -729,17 +1019,15 @@ export default function TopologyPage() {
     }
   };
 
-  /* ── Export SVG — full graph, not just current view ── */
-  const exportSVG = async () => {
+  /* ── Build a standalone SVG string of the full graph (theme-aware) ── */
+  const buildExportSVG = async (): Promise<{ svg:string; w:number; h:number }|null> => {
     const svg = canvasRef.current;
-    if (!svg || !nodes.length) return;
-
-    // Compute bounding box of all nodes
+    if (!svg || !nodes.length) return null;
     const PAD = 64;
-    const xs  = nodes.map(n=>n.x), ys = nodes.map(n=>n.y);
-    const bx  = Math.min(...xs),   by = Math.min(...ys);
-    const bw  = Math.max(...xs) + NW + PAD*2 - bx;
-    const bh  = Math.max(...ys) + NH + PAD*2 - by;
+    const xs = nodes.map(n=>n.x), ys = nodes.map(n=>n.y);
+    const bx = Math.min(...xs), by = Math.min(...ys);
+    const bw = Math.max(...xs) + NW + PAD*2 - bx;
+    const bh = Math.max(...ys) + NH + PAD*2 - by;
 
     const clone = svg.cloneNode(true) as SVGSVGElement;
     clone.setAttribute("xmlns",       "http://www.w3.org/2000/svg");
@@ -748,21 +1036,20 @@ export default function TopologyPage() {
     clone.setAttribute("height", String(Math.round(bh)));
     clone.removeAttribute("viewBox");
 
-    // Add a background fill
+    const cs = getComputedStyle(document.documentElement);
     const bg = document.createElementNS("http://www.w3.org/2000/svg","rect");
     bg.setAttribute("width",  String(Math.round(bw)));
     bg.setAttribute("height", String(Math.round(bh)));
-    bg.setAttribute("fill",   "#F0F4F8");
+    bg.setAttribute("fill", (cs.getPropertyValue("--bg-2").trim()) || "#F0F4F8");
     clone.insertBefore(bg, clone.firstChild);
 
-    // Reset the pan/zoom group so all nodes are visible at natural scale
     const mainG = clone.querySelector<SVGGElement>("g[transform]");
     if (mainG) mainG.setAttribute("transform", `translate(${PAD-bx},${PAD-by}) scale(1)`);
 
-    // Embed PNG icons as base64 so they appear in the standalone SVG file
+    // Embed PNG icons as base64 so they appear in the standalone file
     const imgs = Array.from(clone.querySelectorAll("image"));
     await Promise.all(imgs.map(async (img) => {
-      const href = img.getAttribute("href") ?? "";
+      const href = img.getAttribute("href") ?? img.getAttribute("xlink:href") ?? "";
       if (!href || href.startsWith("data:")) return;
       try {
         const resp = await fetch(href);
@@ -777,12 +1064,38 @@ export default function TopologyPage() {
       } catch { /* keep original href if fetch fails */ }
     }));
 
-    const blob = new Blob([clone.outerHTML], { type: "image/svg+xml" });
+    // Resolve CSS var() tokens to concrete colors — they don't resolve in a
+    // standalone file outside the app's stylesheet.
+    const svgStr = clone.outerHTML.replace(/var\((--[a-z0-9-]+)\)/g,
+      (_m, name) => cs.getPropertyValue(name).trim() || "#94A3B8");
+    return { svg: svgStr, w: Math.round(bw), h: Math.round(bh) };
+  };
+
+  const exportSVG = async () => {
+    setExportMenu(false);
+    const built = await buildExportSVG(); if (!built) return;
+    const blob = new Blob([built.svg], { type: "image/svg+xml" });
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "topology.svg";
-    a.click();
+    a.href = URL.createObjectURL(blob); a.download = "topology.svg"; a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const exportPNG = async () => {
+    setExportMenu(false);
+    const built = await buildExportSVG(); if (!built) return;
+    const SCALE = 2;
+    const url = URL.createObjectURL(new Blob([built.svg], { type:"image/svg+xml;charset=utf-8" }));
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = built.w*SCALE; c.height = built.h*SCALE;
+      const ctx = c.getContext("2d"); if (!ctx) { URL.revokeObjectURL(url); return; }
+      ctx.scale(SCALE,SCALE); ctx.drawImage(img,0,0);
+      URL.revokeObjectURL(url);
+      c.toBlob(b=>{ if(!b) return; const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download="topology.png"; a.click(); URL.revokeObjectURL(a.href); },"image/png");
+    };
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
   };
 
   /* derived */
@@ -801,10 +1114,14 @@ export default function TopologyPage() {
   ══════════════════════════════════════════════════════════════ */
   return (
     <div ref={pageRef} className="flex flex-col animate-fade-in"
-      style={{height:"100%",minHeight:0,
-        ...(isFullscreen && { background:"#F0F4F8", padding:"20px 24px", position:"fixed", inset:0, zIndex:9999 })
+      style={{
+        // Pin to the viewport (minus topbar + page padding) so the editor fills
+        // the screen and pans internally instead of scrolling the whole page.
+        height: isFullscreen ? "100%" : "calc(100vh - 120px)",
+        minHeight:0, overflow:"hidden",
+        ...(isFullscreen && { background:"var(--bg)", padding:"20px 24px", position:"fixed", inset:0, zIndex:9999 })
       }}
-      onClick={()=>setCtxMenu(null)}>
+      onClick={()=>{setCtxMenu(null);setEdgeMenu(null);setExportMenu(false);}}>
 
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4 mb-4 flex-shrink-0 flex-wrap">
@@ -814,17 +1131,21 @@ export default function TopologyPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center rounded-xl overflow-hidden"
-            style={{border:"1px solid rgba(15,23,42,0.11)"}}>
+            style={{border:"1px solid var(--border-2)"}}>
             <button onClick={undo} disabled={!history.length}
               className="icon-btn px-2.5 py-1.5 disabled:opacity-30" title="Undo (Ctrl+Z)">
               <Icon d="M3 7v6h6M3.51 13A9 9 0 1021 12" size={14}/>
             </button>
-            <div style={{width:1,height:20,background:"rgba(15,23,42,0.09)"}}/>
+            <div style={{width:1,height:20,background:"var(--border)"}}/>
             <button onClick={redo} disabled={!future.length}
               className="icon-btn px-2.5 py-1.5 disabled:opacity-30" title="Redo (Ctrl+Y)">
               <Icon d="M21 7v6h-6M20.49 13A9 9 0 113 12" size={14}/>
             </button>
           </div>
+          <button onClick={()=>setShowTemplates(true)}
+            className="btn btn-secondary text-xs py-1.5 px-3 gap-1.5">
+            <Icon d={Icons.deploy} size={13}/> Templates
+          </button>
           <button onClick={()=>setShowImport(true)}
             className="btn btn-secondary text-xs py-1.5 px-3 gap-1.5">
             <Icon d={Icons.network} size={13}/> Import Live
@@ -841,10 +1162,24 @@ export default function TopologyPage() {
             className="btn btn-secondary text-xs py-1.5 px-3 gap-1.5">
             <Icon d={Icons.copy} size={13}/> Save Draft
           </button>
-          <button onClick={exportSVG}
-            className="btn btn-secondary text-xs py-1.5 px-3 gap-1.5">
-            <Icon d={Icons.arrow} size={13}/> Export SVG
-          </button>
+          <div className="relative">
+            <button onClick={()=>setExportMenu(v=>!v)} disabled={!nodes.length}
+              className="btn btn-secondary text-xs py-1.5 px-3 gap-1.5 disabled:opacity-40">
+              <Icon d={Icons.arrow} size={13}/> Export <Icon d={Icons.arrowDown} size={11}/>
+            </button>
+            {exportMenu&&(
+              <div className="menu absolute right-0 mt-1 z-50"
+                style={{minWidth:140}}
+                onMouseLeave={()=>setExportMenu(false)}>
+                <button onClick={exportPNG} className="menu-item">
+                  <Icon d={Icons.install} size={13} color="var(--text-muted)"/> Export PNG
+                </button>
+                <button onClick={exportSVG} className="menu-item">
+                  <Icon d={Icons.copy} size={13} color="var(--text-muted)"/> Export SVG
+                </button>
+              </div>
+            )}
+          </div>
           <button onClick={toggleFullscreen}
             className="btn btn-secondary text-xs py-1.5 px-3 gap-1.5"
             title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
@@ -864,8 +1199,8 @@ export default function TopologyPage() {
       {/* ── Import success toast ── */}
       {importResult && (
         <div className="flex-shrink-0 mb-2 rounded-xl px-4 py-2.5 flex items-center gap-3 animate-fade-in"
-          style={{background:"#ECFDF5",border:"1px solid #A7F3D0",color:"#065F46"}}>
-          <Icon d={Icons.check} size={16} color="#10B981"/>
+          style={{background:"var(--ok-bg)",border:"1px solid var(--ok)",color:"var(--ok)"}}>
+          <Icon d={Icons.check} size={16} color="var(--ok)"/>
           <span className="text-sm font-semibold">
             Live topology imported — {importResult.nodes} node{importResult.nodes!==1?"s":""} and{" "}
             {importResult.deps} deployment{importResult.deps!==1?"s":""} loaded.
@@ -879,14 +1214,14 @@ export default function TopologyPage() {
         {/* ── Palette ── */}
         <div className="card flex-shrink-0 flex flex-col overflow-y-auto"
           style={{width:164,padding:"14px 10px"}}>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1 mb-3">
+          <p className="text-xs font-bold text-[var(--text-faint)] uppercase tracking-widest px-1 mb-3">
             Components
           </p>
           {PALETTE_GROUPS.map(g=>(
             <div key={g.id} className="mb-3">
               <div className="flex items-center gap-1.5 mb-1.5 px-1">
-                <Icon d={g.icon} size={11} color="#94A3B8"/>
-                <span style={{fontSize:9.5,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                <Icon d={g.icon} size={11} color="var(--text-faint)"/>
+                <span style={{fontSize:9.5,fontWeight:700,color:"var(--text-faint)",textTransform:"uppercase",letterSpacing:"0.07em"}}>
                   {g.label}
                 </span>
               </div>
@@ -905,18 +1240,13 @@ export default function TopologyPage() {
                     }}
                     title={`Click or drag to add ${item.label}`}
                   >
-                    <img src={item.img} alt={item.label} style={{width:22,height:22,objectFit:"contain",flexShrink:0}}/>
+                    <KindIcon kind={item.kind} size={22}/>
                     <span style={{fontSize:11,fontWeight:600,color:item.stroke,lineHeight:1.2}}>{item.label}</span>
                   </button>
                 ))}
               </div>
             </div>
           ))}
-          <div className="mt-auto pt-3" style={{borderTop:"1px solid rgba(15,23,42,0.07)"}}>
-            <p style={{fontSize:9.5,color:"#94A3B8",lineHeight:1.55}}>
-              Drag onto canvas or click to place. Right-click for options.
-            </p>
-          </div>
         </div>
 
         {/* ── Canvas column ── */}
@@ -927,27 +1257,68 @@ export default function TopologyPage() {
             style={{borderRadius:12}}>
             <button onClick={()=>{setConnectMode(false);setConnectFirst(null);}}
               className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg transition"
-              style={{background:!connectMode?"#F59E0B":"#F1F5F9",color:!connectMode?"#FFF":"#64748B"}}>
+              style={{background:!connectMode?"#F59E0B":"var(--bg-2)",color:!connectMode?"#FFF":"var(--text-muted)"}}>
               <Icon d={Icons.arrow} size={12}/> Select
             </button>
             <button onClick={()=>{setConnectMode(true);setSelected(null);}}
               className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg transition"
-              style={{background:connectMode?"#3B82F6":"#F1F5F9",color:connectMode?"#FFF":"#64748B"}}>
+              style={{background:connectMode?"#3B82F6":"var(--bg-2)",color:connectMode?"#FFF":"var(--text-muted)"}}>
               <Icon d={Icons.link} size={12}/> Connect
             </button>
             {connectMode&&(
-              <span className="text-xs font-semibold" style={{color:"#3B82F6"}}>
+              <span className="text-xs font-semibold" style={{color:"var(--info)"}}>
                 {connectFirst?"→ click 2nd node":"→ click 1st node"}
               </span>
             )}
-            <div style={{width:1,height:18,background:"rgba(15,23,42,0.09)",margin:"0 2px"}}/>
+            <div style={{width:1,height:18,background:"var(--border)",margin:"0 2px"}}/>
             <button onClick={doAutoLayout} disabled={!nodes.length}
               className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg transition disabled:opacity-40"
-              style={{background:"#F5F3FF",color:"#7C3AED",border:"1px solid #DDD6FE"}}>
+              style={{background:"var(--violet-bg)",color:"var(--violet)",border:"1px solid var(--violet-border)"}}>
               <Icon d={Icons.spark} size={12}/> Auto Layout
             </button>
+            {/* grid + snap toggles */}
+            <button onClick={()=>setShowGrid(g=>!g)} title="Toggle grid"
+              className="icon-btn" style={{color:showGrid?"var(--accent)":"var(--text-faint)"}}>
+              <Icon d={Icons.deploy} size={14}/>
+            </button>
+            <button onClick={()=>setSnapOn(s=>!s)} title="Toggle snap-to-grid"
+              className="icon-btn" style={{color:snapOn?"var(--accent)":"var(--text-faint)"}}>
+              <Icon d={Icons.hash} size={14}/>
+            </button>
+            {/* search */}
+            <div className="relative" style={{width:148}}>
+              <span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",color:"var(--text-faint)"}}>
+                <Icon d={Icons.search} size={12}/>
+              </span>
+              <input value={search} onChange={e=>setSearch(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter")findNode(search);}}
+                placeholder="Find node…"
+                className="input" style={{padding:"4px 8px 4px 26px",fontSize:11,height:28}}/>
+            </div>
             <div className="flex-1"/>
-            {selected&&selNode&&(
+            {/* multi-select align tools */}
+            {selIds().length>1&&(
+              <>
+                <span className="text-xs font-bold px-1.5" style={{color:"var(--info)"}}>{selIds().length} selected</span>
+                {([["left","Align left","M4 4v16M8 7h12M8 12h8M8 17h12"],
+                   ["hcenter","Align centre","M12 4v16M6 9h12M8 14h8"],
+                   ["right","Align right","M20 4v16M4 7h12M8 12h8M4 17h12"],
+                   ["top","Align top","M4 4h16M7 8v12M12 8v8M17 8v12"],
+                   ["vcenter","Align middle","M4 12h16M9 6v12M14 8v8"],
+                   ["bottom","Align bottom","M4 20h16M7 4v12M12 8v8M17 4v12"]] as const).map(([m,title,d])=>(
+                  <button key={m} onClick={()=>alignSel(m as any)} title={title} className="icon-btn" style={{width:26,height:26}}>
+                    <Icon d={d} size={13}/>
+                  </button>
+                ))}
+                <button onClick={()=>distributeSel("h")} title="Distribute horizontally" className="icon-btn" style={{width:26,height:26}}><Icon d="M4 4v16M20 4v16M9 9h6v6H9z" size={13}/></button>
+                <button onClick={()=>distributeSel("v")} title="Distribute vertically" className="icon-btn" style={{width:26,height:26}}><Icon d="M4 4h16M4 20h16M9 9h6v6H9z" size={13}/></button>
+                <button onClick={deleteSelection} className="icon-btn text-xs flex items-center gap-1" style={{color:"var(--danger)"}}>
+                  <Icon d={Icons.trash} size={13}/> Delete
+                </button>
+                <div style={{width:1,height:18,background:"var(--border)",margin:"0 2px"}}/>
+              </>
+            )}
+            {selected&&selNode&&selIds().length<=1&&(
               <>
                 <button onClick={()=>startEdit(selNode)}
                   className="icon-btn text-xs flex items-center gap-1">
@@ -955,20 +1326,20 @@ export default function TopologyPage() {
                 </button>
                 <button onClick={()=>toggleFixed(selNode.id)}
                   className="icon-btn text-xs flex items-center gap-1"
-                  style={{color:selNode.fixed?"#F59E0B":"#64748B"}}>
+                  style={{color:selNode.fixed?"var(--accent)":"var(--text-muted)"}}>
                   <Icon d={Icons.lock} size={13}/> {selNode.fixed?"Unpin":"Pin"}
                 </button>
                 <button onClick={deleteSelected}
-                  className="icon-btn text-xs flex items-center gap-1" style={{color:"#EF4444"}}>
+                  className="icon-btn text-xs flex items-center gap-1" style={{color:"var(--danger)"}}>
                   <Icon d={Icons.trash} size={13}/> Delete
                 </button>
-                <div style={{width:1,height:18,background:"rgba(15,23,42,0.09)",margin:"0 2px"}}/>
+                <div style={{width:1,height:18,background:"var(--border)",margin:"0 2px"}}/>
               </>
             )}
             <button onClick={()=>setScale(s=>Math.min(3,s*1.2))} className="icon-btn" title="Zoom in">
               <Icon d={Icons.plus} size={14}/>
             </button>
-            <span className="text-xs font-mono text-slate-400 w-9 text-center select-none">
+            <span className="text-xs font-mono text-[var(--text-faint)] w-9 text-center select-none">
               {Math.round(scale*100)}%
             </span>
             <button onClick={()=>setScale(s=>Math.max(0.2,s/1.2))} className="icon-btn" title="Zoom out">
@@ -985,38 +1356,40 @@ export default function TopologyPage() {
           <div ref={containerRef}
             className="flex-1 min-h-0 relative rounded-2xl overflow-hidden"
             style={{
-              background:"#F0F4F8",
-              border:"1px solid rgba(15,23,42,0.08)",
+              background:"var(--bg-2)",
+              border:"1px solid var(--border)",
               cursor:connectMode?"crosshair":"default",
             }}
             onDragOver={e=>e.preventDefault()}
             onDrop={onDrop}
           >
             {/* Dot grid */}
+            {showGrid&&(
             <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}>
               <defs>
                 <pattern id="dotgrid" width={GRID} height={GRID} patternUnits="userSpaceOnUse"
                   patternTransform={`translate(${((pan.x%GRID)+GRID)%GRID},${((pan.y%GRID)+GRID)%GRID})`}>
-                  <circle cx={GRID/2} cy={GRID/2} r={1} fill="rgba(15,23,42,0.08)"/>
+                  <circle cx={GRID/2} cy={GRID/2} r={1} fill="var(--border-2)"/>
                 </pattern>
               </defs>
               <rect width="100%" height="100%" fill="url(#dotgrid)"/>
             </svg>
+            )}
 
             {/* Empty hint */}
             {nodes.length===0&&(
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <img src={routerIcon} alt="" style={{width:72,height:72,opacity:0.15}}/>
-                <p className="text-sm font-semibold mt-5" style={{color:"#CBD5E1"}}>
+                <p className="text-sm font-semibold mt-5" style={{color:"var(--border-2)"}}>
                   Drag components from the palette to begin
                 </p>
-                <p className="text-xs mt-1.5 text-center px-12" style={{color:"#DDE4EE"}}>
+                <p className="text-xs mt-1.5 text-center px-12" style={{color:"var(--text-faint)"}}>
                   Or use "Import Live" to load your current deployed system topology
                 </p>
                 <div className="flex gap-2 mt-4">
                   {["Drag to place","Connect mode to wire","Right-click for options"].map(t=>(
                     <span key={t} className="text-xs px-2.5 py-1 rounded-full"
-                      style={{background:"rgba(15,23,42,0.05)",color:"#94A3B8"}}>{t}</span>
+                      style={{background:"var(--bg-2)",color:"var(--text-faint)"}}>{t}</span>
                   ))}
                 </div>
               </div>
@@ -1032,10 +1405,10 @@ export default function TopologyPage() {
             >
               <defs>
                 <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="3" stdDeviation="6" floodColor="rgba(15,23,42,0.14)"/>
+                  <feDropShadow dx="0" dy="3" stdDeviation="6" floodColor="var(--shadow)"/>
                 </filter>
                 <filter id="shadow-sel" x="-30%" y="-30%" width="160%" height="160%">
-                  <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="rgba(15,23,42,0.22)"/>
+                  <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="var(--shadow)"/>
                 </filter>
               </defs>
 
@@ -1054,28 +1427,52 @@ export default function TopologyPage() {
                   const mx=(sp.x+tp.x)/2, my=(sp.y+tp.y)/2;
                   const path=smartPath(sp.x,sp.y,tp.x,tp.y,sp.side,tp.side);
                   const isHov=hoveredEdge===edge.id;
+                  const est=EDGE_STYLE[edge.type??"link"];
+                  const col=est.color;
+                  const labelTxt=edge.label || (edge.type&&edge.type!=="link"?est.label:"");
                   return (
                     <g key={edge.id}
                       onMouseEnter={()=>setHoveredEdge(edge.id)}
-                      onMouseLeave={()=>setHoveredEdge(null)}>
+                      onMouseLeave={()=>setHoveredEdge(null)}
+                      onContextMenu={e=>{e.preventDefault();e.stopPropagation();setEdgeMenu({x:e.clientX,y:e.clientY,eid:edge.id});}}>
                       {/* Wide transparent hit area */}
                       <path d={path} fill="none" stroke="transparent" strokeWidth={18}
-                        style={{cursor:"pointer"}} onClick={()=>deleteEdge(edge.id)}/>
-                      {/* Visible edge line — no arrows, clean rounded caps */}
+                        style={{cursor:"pointer"}}/>
+                      {/* Visible edge line — colored + dashed per connection type */}
                       <path d={path} fill="none"
-                        stroke={isHov?"rgba(59,130,246,0.82)":"rgba(100,116,139,0.52)"}
-                        strokeWidth={isHov?2.8:2}
+                        stroke={col}
+                        strokeWidth={isHov?3:2.2}
+                        strokeDasharray={est.dash}
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        style={{pointerEvents:"none",transition:"stroke 0.15s,stroke-width 0.15s"}}/>
-                      {/* Delete button — hover only */}
+                        opacity={isHov?1:0.9}
+                        style={{pointerEvents:"none",transition:"stroke-width 0.15s,opacity 0.15s"}}/>
+                      {/* Type / custom label chip */}
+                      {labelTxt&&!isHov&&(
+                        <g transform={`translate(${mx},${my})`} style={{pointerEvents:"none"}}>
+                          <rect x={-labelTxt.length*3.3-6} y={-8} width={labelTxt.length*6.6+12} height={16} rx={8}
+                            fill="var(--surface)" stroke={col} strokeWidth={1} opacity={0.96}/>
+                          <text x={0} y={3.5} textAnchor="middle" fontSize={8.5} fontWeight="700"
+                            fill={col} fontFamily="Inter,sans-serif">{labelTxt}</text>
+                        </g>
+                      )}
+                      {/* Hover actions: edit (right-click hint) + delete */}
                       {isHov&&(
-                        <g transform={`translate(${mx},${my})`}
-                          style={{cursor:"pointer"}} onClick={()=>deleteEdge(edge.id)}>
-                          <circle r={9} fill="white" stroke="#FECACA" strokeWidth={1.5}
-                            style={{filter:"drop-shadow(0 2px 8px rgba(0,0,0,0.15))"}}/>
-                          <line x1={-4} y1={-4} x2={4} y2={4} stroke="#EF4444" strokeWidth={2}/>
-                          <line x1={4}  y1={-4} x2={-4} y2={4} stroke="#EF4444" strokeWidth={2}/>
+                        <g transform={`translate(${mx},${my})`}>
+                          <g transform="translate(-12,0)" style={{cursor:"pointer"}}
+                            onClick={e=>{e.stopPropagation();setEdgeMenu({x:(e as any).clientX,y:(e as any).clientY,eid:edge.id});}}>
+                            <circle r={9} fill="var(--elevated)" stroke={col} strokeWidth={1.5}
+                              style={{filter:"drop-shadow(0 2px 8px rgba(0,0,0,0.15))"}}/>
+                            <svg x={-5} y={-5} width={10} height={10} viewBox="0 0 24 24" fill="none"
+                              stroke={col} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d={Icons.settings}/></svg>
+                          </g>
+                          <g transform="translate(12,0)" style={{cursor:"pointer"}}
+                            onClick={e=>{e.stopPropagation();deleteEdge(edge.id);}}>
+                            <circle r={9} fill="var(--elevated)" stroke="var(--danger)" strokeWidth={1.5}
+                              style={{filter:"drop-shadow(0 2px 8px rgba(0,0,0,0.15))"}}/>
+                            <line x1={-4} y1={-4} x2={4} y2={4} stroke="var(--danger)" strokeWidth={2}/>
+                            <line x1={4}  y1={-4} x2={-4} y2={4} stroke="var(--danger)" strokeWidth={2}/>
+                          </g>
                         </g>
                       )}
                     </g>
@@ -1099,9 +1496,11 @@ export default function TopologyPage() {
                 {nodes.map(node=>{
                   const m=KIND_META[node.kind];
                   const isSel=node.id===selected;
+                  const isMulti=selectedIds.length>1&&selectedIds.includes(node.id);
                   const isCF=node.id===connectFirst;
+                  const matchSearch=search.trim()!==""&&(node.label.toLowerCase().includes(search.trim().toLowerCase())||(node.ip?.toLowerCase().includes(search.trim().toLowerCase())));
                   const potMeta=node.potType
-                    ? (KNOWN_POT_TYPES.find(p=>p.id===node.potType)||{color:"#94A3B8"})
+                    ? (KNOWN_POT_TYPES.find(p=>p.id===node.potType)||{color:"var(--text-faint)"})
                     : null;
                   return (
                     <g key={node.id}
@@ -1111,11 +1510,18 @@ export default function TopologyPage() {
                       onDoubleClick={()=>startEdit(node)}
                       onContextMenu={e=>onNodeRClick(e,node)}
                     >
+                      {/* Search match halo */}
+                      {matchSearch&&(
+                        <rect x={-4} y={-4} width={NW+8} height={NH+8} rx={18}
+                          fill="none" stroke="#F59E0B" strokeWidth={3} opacity={0.9}>
+                          <animate attributeName="opacity" values="0.9;0.35;0.9" dur="1.2s" repeatCount="indefinite"/>
+                        </rect>
+                      )}
                       {/* Selection glow — inset within card bounds to avoid SVG-viewport clip artefacts */}
-                      {(isSel||isCF)&&(
+                      {(isSel||isCF||isMulti)&&(
                         <rect x={3} y={3} width={NW-6} height={NH-6} rx={13}
                           fill="none"
-                          stroke={isCF?"#3B82F6":m.stroke}
+                          stroke={isCF?"#3B82F6":isMulti?"#3B82F6":m.stroke}
                           strokeWidth={2}
                           strokeDasharray={isCF?"7 3":undefined}
                           opacity={0.65}/>
@@ -1123,7 +1529,7 @@ export default function TopologyPage() {
 
                       {/* Card shadow */}
                       <rect x={2} y={6} width={NW} height={NH} rx={16}
-                        fill={isSel?`${m.stroke}18`:"rgba(15,23,42,0.08)"}
+                        fill={isSel?`${m.stroke}18`:"var(--shadow)"}
                         filter={isSel?"url(#shadow-sel)":"url(#shadow)"}
                         style={{pointerEvents:"none"}}/>
 
@@ -1145,7 +1551,7 @@ export default function TopologyPage() {
                       {node.online!=null&&(
                         <circle cx={NW-12} cy={NH-12} r={5}
                           fill={node.online?"#10B981":"#EF4444"}
-                          stroke="#FFF" strokeWidth={1.5}/>
+                          stroke="var(--surface)" strokeWidth={1.5}/>
                       )}
 
                       {/* Fallback icon — only shown while PNG hasn't loaded yet or failed */}
@@ -1162,13 +1568,15 @@ export default function TopologyPage() {
                         </g>
                       )}
 
-                      {/* PNG icon */}
-                      <image href={m.img}
-                        x={(NW-ICON)/2} y={10}
-                        width={ICON} height={ICON}
-                        style={{pointerEvents:"none"}}
-                        onLoad={()=>setImgLoaded(p=>new Set([...p, node.kind]))}
-                        onError={()=>{/* keep fallback visible */}}/>
+                      {/* PNG icon (kinds without a PNG asset keep the SVG fallback) */}
+                      {m.img && (
+                        <image href={m.img}
+                          x={(NW-ICON)/2} y={10}
+                          width={ICON} height={ICON}
+                          style={{pointerEvents:"none"}}
+                          onLoad={()=>setImgLoaded(p=>new Set([...p, node.kind]))}
+                          onError={()=>{/* keep fallback visible */}}/>
+                      )}
 
                       {/* Label */}
                       {editingId!==node.id&&(
@@ -1183,7 +1591,7 @@ export default function TopologyPage() {
                       {/* IP sub-label */}
                       {node.ip&&editingId!==node.id&&(
                         <text x={NW/2} y={NH-8}
-                          textAnchor="middle" fontSize={7.5} fill="#94A3B8"
+                          textAnchor="middle" fontSize={7.5} fill="var(--text-faint)"
                           fontFamily="Inter,sans-serif"
                           style={{pointerEvents:"none",userSelect:"none"}}>
                           {node.ip}
@@ -1194,10 +1602,10 @@ export default function TopologyPage() {
                       {node.kind==="honeypot"&&node.potType&&editingId!==node.id&&(
                         <g>
                           <rect x={4} y={NH-9} width={NW-8} height={11} rx={5.5}
-                            fill={potMeta?.color??"#94A3B8"} opacity={0.18}/>
+                            fill={potMeta?.color??"var(--text-faint)"} opacity={0.18}/>
                           <text x={NW/2} y={NH-2}
                             textAnchor="middle" fontSize={7} fontWeight="700"
-                            fill={potMeta?.color??"#94A3B8"}
+                            fill={potMeta?.color??"var(--text-faint)"}
                             fontFamily="Inter,sans-serif"
                             style={{pointerEvents:"none",userSelect:"none"}}>
                             {node.potType.length>14?node.potType.slice(0,13)+"…":node.potType}
@@ -1219,6 +1627,15 @@ export default function TopologyPage() {
                     </g>
                   );
                 })}
+
+                {/* Marquee selection rectangle */}
+                {marquee&&(
+                  <rect
+                    x={Math.min(marquee.x0,marquee.x1)} y={Math.min(marquee.y0,marquee.y1)}
+                    width={Math.abs(marquee.x1-marquee.x0)} height={Math.abs(marquee.y1-marquee.y0)}
+                    fill="rgba(59,130,246,0.10)" stroke="#3B82F6" strokeWidth={1.5} strokeDasharray="5 3"
+                    style={{pointerEvents:"none"}}/>
+                )}
               </g>
             </svg>
 
@@ -1254,18 +1671,18 @@ export default function TopologyPage() {
           <div className="card flex-shrink-0 flex items-center gap-4 px-4 py-2" style={{borderRadius:10}}>
             <Stat label="nodes"     value={nodes.length}/>
             <Stat label="edges"     value={edges.length}/>
-            <Stat label="honeypots" value={nodes.filter(n=>n.kind==="honeypot").length} color="#D97706"/>
-            <Stat label="firewalls" value={nodes.filter(n=>n.kind==="firewall").length}  color="#EF4444"/>
-            <Stat label="pinned"    value={nodes.filter(n=>n.fixed).length}              color="#F59E0B"/>
+            <Stat label="honeypots" value={nodes.filter(n=>n.kind==="honeypot").length} color="var(--accent)"/>
+            <Stat label="firewalls" value={nodes.filter(n=>n.kind==="firewall").length}  color="var(--danger)"/>
+            <Stat label="pinned"    value={nodes.filter(n=>n.fixed).length}              color="var(--accent)"/>
             {nodes.some(n=>n.kind==="loganalyzer")&&(
-              <Stat label="log analyzers" value={nodes.filter(n=>n.kind==="loganalyzer").length} color="#7C3AED"/>
+              <Stat label="log analyzers" value={nodes.filter(n=>n.kind==="loganalyzer").length} color="var(--violet)"/>
             )}
             {nodes.some(n=>n.online!=null)&&(
-              <Stat label="online" value={nodes.filter(n=>n.online===true).length}        color="#10B981"/>
+              <Stat label="online" value={nodes.filter(n=>n.online===true).length}        color="var(--ok)"/>
             )}
             <div className="flex-1"/>
-            <span className="text-xs text-slate-400 hidden lg:block">
-              Double-click to rename · Del to delete · Right-click for more
+            <span className="text-xs text-[var(--text-faint)] hidden lg:block">
+              Double-click rename · Shift-drag to box-select · Right-click edge to set type · Ctrl+C/V copy
             </span>
           </div>
         </div>
@@ -1279,18 +1696,17 @@ export default function TopologyPage() {
               /* Properties panel */
               <div className="flex flex-col h-full">
                 <div className="flex items-center justify-between px-4 py-3"
-                  style={{borderBottom:"1px solid rgba(15,23,42,0.07)"}}>
+                  style={{borderBottom:"1px solid var(--border)"}}>
                   <div className="flex items-center gap-2.5">
-                    <img src={KIND_META[selNode.kind].img} alt=""
-                      style={{width:32,height:32,objectFit:"contain"}}/>
+                    <KindIcon kind={selNode.kind} size={32}/>
                     <div>
-                      <p className="text-sm font-bold text-slate-800 leading-tight">{selNode.label}</p>
+                      <p className="text-sm font-bold text-[var(--text)] leading-tight">{selNode.label}</p>
                       <p className="text-xs font-semibold" style={{color:KIND_META[selNode.kind].stroke}}>
                         {KIND_META[selNode.kind].label}
                       </p>
                     </div>
                   </div>
-                  <button onClick={()=>setSelected(null)} className="icon-btn" style={{color:"#94A3B8"}}>
+                  <button onClick={()=>setSelected(null)} className="icon-btn" style={{color:"var(--text-faint)"}}>
                     <Icon d={Icons.close} size={15}/>
                   </button>
                 </div>
@@ -1354,17 +1770,17 @@ export default function TopologyPage() {
                   {/* Pin toggle */}
                   <div className="flex items-center justify-between rounded-xl px-3 py-2.5"
                     style={{
-                      background:selNode.fixed?"#FFFBEB":"#F8FAFC",
-                      border:`1px solid ${selNode.fixed?"#FDE68A":"rgba(15,23,42,0.08)"}`,
+                      background:selNode.fixed?"var(--warn-bg)":"var(--bg-2)",
+                      border:`1px solid ${selNode.fixed?"var(--warn-border)":"var(--border)"}`,
                     }}>
                     <div>
-                      <p className="text-xs font-semibold text-slate-700">Pin position</p>
-                      <p className="text-xs text-slate-400">Prevent accidental moves</p>
+                      <p className="text-xs font-semibold text-[var(--text)]">Pin position</p>
+                      <p className="text-xs text-[var(--text-faint)]">Prevent accidental moves</p>
                     </div>
                     <button onClick={()=>toggleFixed(selNode.id)}
                       style={{
                         width:38,height:22,borderRadius:11,position:"relative",
-                        background:selNode.fixed?"#F59E0B":"#CBD5E1",flexShrink:0,
+                        background:selNode.fixed?"#F59E0B":"var(--border-2)",flexShrink:0,
                       }}>
                       <span style={{
                         display:"block",width:16,height:16,borderRadius:"50%",background:"#FFF",
@@ -1378,17 +1794,17 @@ export default function TopologyPage() {
                   {selNode.online!=null&&(
                     <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5"
                       style={{
-                        background:selNode.online?"#ECFDF5":"#FEF2F2",
-                        border:`1px solid ${selNode.online?"#A7F3D0":"#FECACA"}`,
+                        background:selNode.online?"var(--ok-bg)":"var(--danger-bg)",
+                        border:`1px solid ${selNode.online?"var(--ok)":"var(--danger)"}`,
                       }}>
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{background:selNode.online?"#10B981":"#EF4444"}}/>
                       <div>
                         <p className="text-xs font-semibold"
-                          style={{color:selNode.online?"#065F46":"#991B1B"}}>
+                          style={{color:selNode.online?"var(--ok)":"var(--danger)"}}>
                           {selNode.online?"Online — live node":"Offline"}
                         </p>
-                        <p className="text-xs" style={{color:selNode.online?"#6EE7B7":"#FCA5A5"}}>
+                        <p className="text-xs" style={{color:selNode.online?"var(--ok)":"var(--danger)"}}>
                           Imported from system
                         </p>
                       </div>
@@ -1397,7 +1813,7 @@ export default function TopologyPage() {
                 </div>
 
                 <div className="flex gap-2 p-4 flex-shrink-0"
-                  style={{borderTop:"1px solid rgba(15,23,42,0.07)"}}>
+                  style={{borderTop:"1px solid var(--border)"}}>
                   <button onClick={()=>duplicateNode(selNode.id)}
                     className="btn btn-secondary text-xs flex-1 py-1.5 gap-1">
                     <Icon d={Icons.copy} size={12}/> Duplicate
@@ -1413,27 +1829,27 @@ export default function TopologyPage() {
               /* Analysis panel */
               <div className="flex flex-col h-full">
                 <div className="flex items-center justify-between px-4 py-3"
-                  style={{borderBottom:"1px solid rgba(15,23,42,0.07)"}}>
+                  style={{borderBottom:"1px solid var(--border)"}}>
                   <div className="flex items-center gap-2">
                     <div className="rounded-lg flex items-center justify-center"
-                      style={{width:28,height:28,background:"#FFFBEB"}}>
-                      <Icon d={Icons.spark} size={14} color="#F59E0B"/>
+                      style={{width:28,height:28,background:"var(--warn-bg)"}}>
+                      <Icon d={Icons.spark} size={14} color="var(--accent)"/>
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-800">System Opinion</p>
-                      <p className="text-xs text-slate-400">Heuristic analysis</p>
+                      <p className="text-sm font-bold text-[var(--text)]">System Opinion</p>
+                      <p className="text-xs text-[var(--text-faint)]">Heuristic analysis</p>
                     </div>
                   </div>
-                  <button onClick={()=>setShowOpinion(false)} className="icon-btn" style={{color:"#94A3B8"}}>
+                  <button onClick={()=>setShowOpinion(false)} className="icon-btn" style={{color:"var(--text-faint)"}}>
                     <Icon d={Icons.close} size={15}/>
                   </button>
                 </div>
 
                 {/* Score ring */}
                 <div className="flex flex-col items-center py-4"
-                  style={{borderBottom:"1px solid rgba(15,23,42,0.07)"}}>
+                  style={{borderBottom:"1px solid var(--border)"}}>
                   <svg width={88} height={88} viewBox="0 0 88 88">
-                    <circle cx={44} cy={44} r={RING_R} fill="none" stroke="#E2E8F0" strokeWidth={8}/>
+                    <circle cx={44} cy={44} r={RING_R} fill="none" stroke="var(--border)" strokeWidth={8}/>
                     <circle cx={44} cy={44} r={RING_R} fill="none"
                       stroke={rColor} strokeWidth={8} strokeLinecap="round"
                       strokeDasharray={CIRC} strokeDashoffset={ringOff}
@@ -1441,16 +1857,16 @@ export default function TopologyPage() {
                       style={{transition:"stroke-dashoffset 0.9s ease,stroke 0.4s"}}/>
                     <text x={44} y={49} textAnchor="middle" fontSize={22} fontWeight="800"
                       fill={rColor} fontFamily="Inter,sans-serif">{score}</text>
-                    <text x={44} y={62} textAnchor="middle" fontSize={8} fill="#94A3B8"
+                    <text x={44} y={62} textAnchor="middle" fontSize={8} fill="var(--text-faint)"
                       fontFamily="Inter,sans-serif">/ 100</text>
                   </svg>
                   <p className="text-xs font-bold mt-1" style={{color:rColor}}>
                     {score>=70?"Solid design":score>=45?"Needs work":"High risk"}
                   </p>
                   <div className="flex gap-2 mt-2 flex-wrap justify-center">
-                    {crit>0&&<Badge bg="#FEF2F2" fg="#EF4444">{crit} Critical</Badge>}
-                    {warn>0&&<Badge bg="#FFFBEB" fg="#D97706">{warn} Warning</Badge>}
-                    {good>0&&<Badge bg="#ECFDF5" fg="#059669">{good} Good</Badge>}
+                    {crit>0&&<Badge bg="var(--danger-bg)" fg="var(--danger)">{crit} Critical</Badge>}
+                    {warn>0&&<Badge bg="var(--warn-bg)" fg="var(--warn)">{warn} Warning</Badge>}
+                    {good>0&&<Badge bg="var(--ok-bg)" fg="var(--ok)">{good} Good</Badge>}
                   </div>
                 </div>
 
@@ -1484,7 +1900,7 @@ export default function TopologyPage() {
                 </div>
 
                 <div className="p-3 flex-shrink-0"
-                  style={{borderTop:"1px solid rgba(15,23,42,0.07)"}}>
+                  style={{borderTop:"1px solid var(--border)"}}>
                   <button onClick={getOpinion}
                     className="btn btn-primary text-xs w-full gap-1.5 py-1.5">
                     <Icon d={Icons.refresh} size={13}/> Re-analyse
@@ -1503,17 +1919,17 @@ export default function TopologyPage() {
           <div className="fixed z-50 rounded-2xl overflow-hidden"
             style={{
               left:ctxMenu.x,top:ctxMenu.y,
-              background:"#FFF",
-              border:"1px solid rgba(15,23,42,0.1)",
-              boxShadow:"0 8px 32px rgba(15,23,42,0.18),0 2px 8px rgba(15,23,42,0.08)",
+              background:"var(--elevated)",
+              border:"1px solid var(--border-2)",
+              boxShadow:"0 8px 32px var(--shadow),0 2px 8px var(--shadow)",
               minWidth:190,
             }}
             onClick={e=>e.stopPropagation()}>
             <div className="flex items-center gap-2.5 px-3 py-2.5"
-              style={{borderBottom:"1px solid rgba(15,23,42,0.07)",background:"#F8FAFC"}}>
-              <img src={KIND_META[n.kind].img} alt="" style={{width:22,height:22,objectFit:"contain"}}/>
+              style={{borderBottom:"1px solid var(--border)",background:"var(--bg-2)"}}>
+              <KindIcon kind={n.kind} size={22}/>
               <div>
-                <p className="text-xs font-bold text-slate-800">{n.label}</p>
+                <p className="text-xs font-bold text-[var(--text)]">{n.label}</p>
                 <p className="text-xs" style={{color:KIND_META[n.kind].stroke}}>
                   {KIND_META[n.kind].label}
                   {n.potType&&` · ${n.potType}`}
@@ -1522,21 +1938,21 @@ export default function TopologyPage() {
             </div>
             {[
               {label:"Rename",                    icon:Icons.key,  col:undefined,   act:()=>{startEdit(n);setCtxMenu(null);}},
-              {label:n.fixed?"Unpin":"Pin position",icon:Icons.lock,col:n.fixed?"#F59E0B":undefined,act:()=>{toggleFixed(n.id);setCtxMenu(null);}},
+              {label:n.fixed?"Unpin":"Pin position",icon:Icons.lock,col:n.fixed?"var(--accent)":undefined,act:()=>{toggleFixed(n.id);setCtxMenu(null);}},
               {label:"Connect from here",          icon:Icons.link, col:undefined,   act:()=>{setConnectMode(true);setConnectFirst(n.id);setCtxMenu(null);}},
               {label:"Duplicate",                  icon:Icons.copy, col:undefined,   act:()=>{duplicateNode(n.id);setCtxMenu(null);}},
               null as null,
-              {label:"Delete node",                icon:Icons.trash,col:"#EF4444",   act:()=>{deleteSelected();setCtxMenu(null);}},
+              {label:"Delete node",                icon:Icons.trash,col:"var(--danger)",   act:()=>{deleteSelected();setCtxMenu(null);}},
             ].map((item,i)=>
               item===null?(
-                <div key={i} style={{height:1,background:"rgba(15,23,42,0.07)",margin:"2px 0"}}/>
+                <div key={i} style={{height:1,background:"var(--border)",margin:"2px 0"}}/>
               ):(
                 <button key={i} onClick={item.act}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold transition"
-                  style={{color:item.col??"#0F172A"}}
-                  onMouseEnter={e=>(e.currentTarget.style.background="#F8FAFC")}
+                  style={{color:item.col??"var(--text)"}}
+                  onMouseEnter={e=>(e.currentTarget.style.background="var(--bg-2)")}
                   onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
-                  <Icon d={item.icon} size={13} color={item.col??"#64748B"}/>
+                  <Icon d={item.icon} size={13} color={item.col??"var(--text-muted)"}/>
                   {item.label}
                 </button>
               )
@@ -1545,26 +1961,96 @@ export default function TopologyPage() {
         );
       })()}
 
+      {/* ══ Edge context menu — set connection type + label ══════════ */}
+      {edgeMenu&&(()=>{
+        const ed=edges.find(e=>e.id===edgeMenu.eid); if (!ed) return null;
+        return (
+          <div className="fixed z-50 rounded-2xl overflow-hidden"
+            style={{left:edgeMenu.x,top:edgeMenu.y,background:"var(--elevated)",border:"1px solid var(--border-2)",
+              boxShadow:"0 8px 32px var(--shadow)",minWidth:200,padding:8}}
+            onClick={e=>e.stopPropagation()}>
+            <p className="text-xs font-bold px-1.5 pb-1.5" style={{color:"var(--text-faint)"}}>CONNECTION TYPE</p>
+            <div className="grid grid-cols-1 gap-0.5">
+              {EDGE_TYPES.map(t=>{
+                const st=EDGE_STYLE[t]; const on=(ed.type??"link")===t;
+                return (
+                  <button key={t} onClick={()=>{setEdgeType(ed.id,t);}}
+                    className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs font-semibold"
+                    style={{background:on?`${st.color}1f`:"transparent",color:on?st.color:"var(--text)"}}
+                    onMouseEnter={e=>{if(!on)e.currentTarget.style.background="var(--bg-2)";}}
+                    onMouseLeave={e=>{if(!on)e.currentTarget.style.background="transparent";}}>
+                    <span style={{width:18,height:0,borderTop:`2.5px ${st.dash?"dashed":"solid"} ${st.color}`}}/>
+                    {st.label}
+                    {on&&<Icon d={Icons.check} size={12} color={st.color} style={{marginLeft:"auto"}}/>}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{height:1,background:"var(--border)",margin:"6px 0"}}/>
+            <input className="input text-xs" placeholder="Label (e.g. 2222 / SSH)…" defaultValue={ed.label??""}
+              onChange={e=>setEdgeLabel(ed.id,e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter")setEdgeMenu(null);}}/>
+            <button onClick={()=>{deleteEdge(ed.id);setEdgeMenu(null);}}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold mt-1.5"
+              style={{color:"var(--danger)"}}
+              onMouseEnter={e=>e.currentTarget.style.background="var(--danger-bg)"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <Icon d={Icons.trash} size={13} color="var(--danger)"/> Delete connection
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* ══ Templates dialog ══════════════════════════════════════ */}
+      {showTemplates&&(
+        <Modal onClose={()=>setShowTemplates(false)} title="Start from a Template"
+          sub="Pick a reference architecture — it loads onto the canvas, auto-arranged and ready to edit.">
+          <div className="grid grid-cols-1 gap-2.5">
+            {TEMPLATES.map(t=>(
+              <button key={t.id} onClick={()=>loadTemplate(t.build())}
+                className="text-left rounded-xl p-3.5 transition"
+                style={{background:"var(--bg-2)",border:"1px solid var(--border)"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.background="var(--warn-bg)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.background="var(--bg-2)";}}>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-bold" style={{color:"var(--text)"}}>{t.name}</p>
+                  <Icon d={Icons.arrow} size={14} color="var(--accent)"/>
+                </div>
+                <p className="text-xs mb-2" style={{color:"var(--text-muted)"}}>{t.desc}</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {t.tags.map(tag=>(
+                    <span key={tag} className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                      style={{background:"var(--warn-bg)",color:"var(--accent)"}}>{tag}</span>
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs mt-3" style={{color:"var(--text-faint)"}}>Loading a template replaces the current canvas — save your draft first if needed.</p>
+        </Modal>
+      )}
+
       {/* ══ Import Live dialog ════════════════════════════════════ */}
       {showImport&&(
         <Modal onClose={()=>{setShowImport(false);setImportErr("");}}
           title="Import Live System Topology"
           sub="Fetches your registered nodes and deployments and builds a topology automatically.">
           <div className="rounded-xl p-4 mb-4"
-            style={{background:"#F8FAFC",border:"1px solid rgba(15,23,42,0.08)"}}>
-            <p className="text-xs font-semibold text-slate-700 mb-1">What will be imported:</p>
-            <ul className="text-xs text-slate-500 leading-relaxed list-disc pl-4">
+            style={{background:"var(--bg-2)",border:"1px solid var(--border)"}}>
+            <p className="text-xs font-semibold text-[var(--text)] mb-1">What will be imported:</p>
+            <ul className="text-xs text-[var(--text-muted)] leading-relaxed list-disc pl-4">
               <li>A starting Internet + Firewall + Router chain</li>
               <li>One server card per registered node (Linux / Windows based on OS)</li>
               <li>One honeypot card per active deployment, linked to its node</li>
               <li>IP addresses, hostnames, and online status from your agents</li>
             </ul>
           </div>
-          <p className="text-xs text-slate-400 mb-4">
+          <p className="text-xs text-[var(--text-faint)] mb-4">
             Existing canvas content will be replaced. Save your draft first if needed.
           </p>
           {importErr&&(
-            <div className="text-xs text-red-700 bg-red-50 rounded-xl px-3 py-2 mb-3 border border-red-100">
+            <div className="text-xs rounded-xl px-3 py-2 mb-3"
+              style={{color:"var(--danger)",background:"var(--danger-bg)",border:"1px solid var(--danger-border)"}}>
               {importErr}
             </div>
           )}
@@ -1612,16 +2098,16 @@ export default function TopologyPage() {
                sub={`${savedList.length} draft${savedList.length!==1?"s":""} saved locally`}>
           <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
             {savedList.length===0&&(
-              <div className="rounded-xl p-8 text-center" style={{background:"#F8FAFC"}}>
-                <p className="text-sm font-medium text-slate-400">No saved topologies yet</p>
+              <div className="rounded-xl p-8 text-center" style={{background:"var(--bg-2)"}}>
+                <p className="text-sm font-medium text-[var(--text-faint)]">No saved topologies yet</p>
               </div>
             )}
             {savedList.map(s=>(
               <div key={s.id} className="flex items-center gap-3 rounded-xl p-3"
-                style={{background:"#F8FAFC",border:"1px solid rgba(15,23,42,0.07)"}}>
+                style={{background:"var(--bg-2)",border:"1px solid var(--border)"}}>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate">{s.name}</p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-sm font-semibold text-[var(--text)] truncate">{s.name}</p>
+                  <p className="text-xs text-[var(--text-faint)]">
                     {new Date(s.savedAt).toLocaleString(undefined,
                       {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}
                     {" · "}{s.data.nodes.length}n, {s.data.edges.length}e
@@ -1629,11 +2115,11 @@ export default function TopologyPage() {
                 </div>
                 <button onClick={()=>loadTopo(s)}
                   className="text-xs px-3 py-1.5 rounded-lg font-semibold flex-shrink-0"
-                  style={{background:"#FFFBEB",color:"#D97706",border:"1px solid #FDE68A"}}>
+                  style={{background:"var(--warn-bg)",color:"var(--accent)",border:"1px solid var(--warn-border)"}}>
                   Load
                 </button>
                 <button onClick={()=>deleteSaved(s.id)} className="icon-btn flex-shrink-0"
-                  style={{color:"#EF4444"}}>
+                  style={{color:"var(--danger)"}}>
                   <Icon d={Icons.trash} size={14}/>
                 </button>
               </div>
@@ -1662,11 +2148,11 @@ function MiniMap({ nodes, edges, pan, scale, dim }:
   return (
     <div style={{
       position:"absolute",bottom:12,right:12,
-      background:"rgba(255,255,255,0.9)",
-      border:"1px solid rgba(15,23,42,0.1)",
+      background:"var(--glass-strong)",
+      border:"1px solid var(--border-2)",
       borderRadius:12,overflow:"hidden",
       backdropFilter:"blur(10px)",
-      boxShadow:"0 2px 14px rgba(15,23,42,0.1)",
+      boxShadow:"0 2px 14px var(--shadow)",
     }}>
       <svg width={W} height={H}>
         {edges.map(e=>{
@@ -1675,7 +2161,7 @@ function MiniMap({ nodes, edges, pan, scale, dim }:
           return <line key={e.id}
             x1={s.x*ms+ox+NW*ms/2} y1={s.y*ms+oy+NH*ms/2}
             x2={t.x*ms+ox+NW*ms/2} y2={t.y*ms+oy+NH*ms/2}
-            stroke="rgba(15,23,42,0.2)" strokeWidth={0.9}/>;
+            stroke="var(--border-2)" strokeWidth={0.9}/>;
         })}
         {nodes.map(n=>{
           const m=KIND_META[n.kind];
@@ -1697,8 +2183,8 @@ function MiniMap({ nodes, edges, pan, scale, dim }:
 ══════════════════════════════════════════════════════════════════ */
 function Stat({ label, value, color }:{ label:string; value:number; color?:string }) {
   return (
-    <span className="text-xs text-slate-500">
-      <strong style={{color:color??"#0F172A"}}>{value}</strong> {label}
+    <span className="text-xs text-[var(--text-muted)]">
+      <strong style={{color:color??"var(--text)"}}>{value}</strong> {label}
     </span>
   );
 }
@@ -1715,17 +2201,17 @@ function Modal({ children, onClose, title, sub }:
   { children:React.ReactNode; onClose:()=>void; title:string; sub?:string }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50"
-      style={{background:"rgba(15,23,42,0.45)",backdropFilter:"blur(6px)"}}
+      style={{background:"var(--overlay)",backdropFilter:"blur(6px)"}}
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
       <div className="card rounded-2xl p-6 shadow-2xl"
         style={{width:440,maxHeight:"82vh",display:"flex",flexDirection:"column",
-                background:"#FFF",border:"1px solid rgba(15,23,42,0.1)"}}>
+                background:"var(--surface)",border:"1px solid var(--border-2)"}}>
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h2 className="text-base font-bold text-slate-800">{title}</h2>
-            {sub&&<p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+            <h2 className="text-base font-bold text-[var(--text)]">{title}</h2>
+            {sub&&<p className="text-xs text-[var(--text-faint)] mt-0.5">{sub}</p>}
           </div>
-          <button onClick={onClose} className="icon-btn -mt-1" style={{color:"#94A3B8"}}>
+          <button onClick={onClose} className="icon-btn -mt-1" style={{color:"var(--text-faint)"}}>
             <Icon d={Icons.close} size={16}/>
           </button>
         </div>

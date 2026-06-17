@@ -68,6 +68,30 @@ func (c *Client) PublicURL() string {
 	return c.cfg.PublicURL
 }
 
+// Health performs a lightweight reachability probe against the LogAnalyzer
+// service. It returns nil when the service answers at all (any status < 500),
+// which is enough to confirm the integration endpoint is up and routable
+// without depending on a specific health route existing.
+func (c *Client) Health(ctx context.Context) error {
+	if !c.Enabled() {
+		return errors.New("loganalyzer: integration disabled")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.URL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 2048))
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("loganalyzer returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // WorkspaceURL returns a deep link to a specific workspace's UI page.
 func (c *Client) WorkspaceURL(workspaceID string) string {
 	if c == nil || workspaceID == "" {

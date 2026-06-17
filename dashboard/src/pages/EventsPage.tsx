@@ -6,17 +6,17 @@ import { Icon, Icons } from "../components/Icons";
 
 // ── Type colour map ─────────────────────────────────────────────────────────
 const TYPE_META: Record<string, { bg: string; fg: string; border: string; bar: string; label: string }> = {
-  login:       { bg: "#FFFBEB", fg: "#B45309", border: "#FDE68A", bar: "#F59E0B", label: "Login" },
-  "ssh.login": { bg: "#FFFBEB", fg: "#B45309", border: "#FDE68A", bar: "#F59E0B", label: "SSH Login" },
-  command:     { bg: "#ECFDF5", fg: "#065F46", border: "#A7F3D0", bar: "#10B981", label: "Command" },
-  connect:     { bg: "#EFF6FF", fg: "#1D4ED8", border: "#BFDBFE", bar: "#3B82F6", label: "Connect" },
-  disconnect:  { bg: "#F5F3FF", fg: "#6D28D9", border: "#DDD6FE", bar: "#8B5CF6", label: "Disconnect" },
-  error:       { bg: "#FEF2F2", fg: "#B91C1C", border: "#FECACA", bar: "#EF4444", label: "Error" },
-  scan:        { bg: "#FFF7ED", fg: "#C2410C", border: "#FED7AA", bar: "#F97316", label: "Scan" },
+  login:       { bg: "var(--warn-bg)", fg: "var(--accent)", border: "rgba(245,158,11,0.20)", bar: "#F59E0B", label: "Login" },
+  "ssh.login": { bg: "var(--warn-bg)", fg: "var(--accent)", border: "rgba(245,158,11,0.20)", bar: "#F59E0B", label: "SSH Login" },
+  command:     { bg: "var(--ok-bg)", fg: "var(--ok)", border: "var(--border)", bar: "#10B981", label: "Command" },
+  connect:     { bg: "var(--info-bg)", fg: "var(--info)", border: "var(--border)", bar: "#3B82F6", label: "Connect" },
+  disconnect:  { bg: "var(--violet-bg)", fg: "var(--violet)", border: "var(--border)", bar: "#8B5CF6", label: "Disconnect" },
+  error:       { bg: "var(--danger-bg)", fg: "var(--danger)", border: "var(--border)", bar: "#EF4444", label: "Error" },
+  scan:        { bg: "var(--warn-bg)", fg: "var(--accent)", border: "var(--border)", bar: "#F97316", label: "Scan" },
 };
 
 function typeMeta(t: string) {
-  return TYPE_META[t] ?? { bg: "#F8FAFC", fg: "#475569", border: "#E2E8F0", bar: "#94A3B8", label: t };
+  return TYPE_META[t] ?? { bg: "var(--bg-2)", fg: "var(--text-muted)", border: "var(--border)", bar: "#94A3B8", label: t };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ function TypeBadge({ type }: { type: string }) {
 function StatCard({ label, value, icon, color }: { label: string; value: any; icon: string; color: string }) {
   return (
     <div style={{
-      background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14,
+      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14,
       padding: "16px 20px", display: "flex", alignItems: "center", gap: 14,
       boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
     }}>
@@ -63,8 +63,8 @@ function StatCard({ label, value, icon, color }: { label: string; value: any; ic
         <Icon d={icon} size={18} color={color} />
       </div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", lineHeight: 1.1 }}>{value ?? "—"}</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>{value ?? "—"}</div>
       </div>
     </div>
   );
@@ -208,16 +208,16 @@ export default function EventsPage() {
         <div>
           <p className="page-label">Live feed</p>
           <h1 className="page-title" style={{ marginBottom: 2 }}>Events Explorer</h1>
-          <p style={{ fontSize: 12, color: "#94A3B8", display: "flex", alignItems: "center", gap: 6 }}>
+          <p style={{ fontSize: 12, color: "var(--text-faint)", display: "flex", alignItems: "center", gap: 6 }}>
             {refreshInterval > 0 && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981", display: "inline-block",
-                               boxShadow: "0 0 0 3px rgba(16,185,129,0.15)", animation: "pulse 2s infinite" }} />
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--ok)", display: "inline-block",
+                               boxShadow: "0 0 0 3px rgba(16,185,129,0.15)", animation: "pulse-green 2s infinite" }} />
                 Live
               </span>
             )}
             {list.length.toLocaleString()} events
-            {hasFilters && <span style={{ color: "#F59E0B", fontWeight: 600 }}> · filtered</span>}
+            {hasFilters && <span style={{ color: "var(--accent)", fontWeight: 600 }}> · filtered</span>}
           </p>
         </div>
 
@@ -225,13 +225,13 @@ export default function EventsPage() {
           {/* refresh interval */}
           <div style={{
             display: "flex", alignItems: "center", gap: 6, padding: "0 4px 0 12px", height: 36,
-            background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10,
+            background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 10,
           }}>
-            <Icon d={Icons.clock} size={13} color="#94A3B8" />
+            <Icon d={Icons.clock} size={13} color="var(--text-faint)" />
             <select
               value={refreshInterval}
               onChange={(e) => setRefreshInterval(Number(e.target.value))}
-              style={{ fontSize: 12, fontWeight: 600, color: "#475569", background: "transparent", border: "none", outline: "none", paddingRight: 20, cursor: "pointer" }}
+              style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", background: "transparent", border: "none", outline: "none", paddingRight: 20, cursor: "pointer" }}
             >
               <option value={0}>Manual</option>
               <option value={1000}>1 s</option>
@@ -243,12 +243,12 @@ export default function EventsPage() {
 
           <button onClick={() => refetch()} disabled={isFetching}
             style={{
-              height: 36, padding: "0 14px", borderRadius: 10, border: "1px solid #E2E8F0",
-              background: "#fff", fontSize: 12, fontWeight: 700, color: isFetching ? "#94A3B8" : "#0F172A",
+              height: 36, padding: "0 14px", borderRadius: 10, border: "1px solid var(--border)",
+              background: "var(--surface)", fontSize: 12, fontWeight: 700, color: isFetching ? "var(--text-faint)" : "var(--text)",
               cursor: isFetching ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6,
             }}>
             <span style={{ display: "inline-flex", animation: isFetching ? "spin 1s linear infinite" : "none" }}>
-              <Icon d={Icons.restart} size={13} color={isFetching ? "#94A3B8" : "#D97706"} />
+              <Icon d={Icons.restart} size={13} color={isFetching ? "var(--text-faint)" : "var(--accent)"} />
             </span>
             {isFetching ? "Loading…" : "Refresh"}
           </button>
@@ -258,19 +258,19 @@ export default function EventsPage() {
             <button
               onClick={(e) => { e.stopPropagation(); setExportOpen((o) => !o); }}
               style={{
-                height: 36, padding: "0 14px", borderRadius: 10, border: "1px solid #E2E8F0",
-                background: "#fff", fontSize: 12, fontWeight: 700, color: "#475569",
+                height: 36, padding: "0 14px", borderRadius: 10, border: "1px solid var(--border)",
+                background: "var(--surface)", fontSize: 12, fontWeight: 700, color: "var(--text-muted)",
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
               }}>
-              <Icon d={Icons.arrowDown} size={13} color="#94A3B8" /> Export
+              <Icon d={Icons.arrowDown} size={13} color="var(--text-faint)" /> Export
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }}>
-                <path d="M2 4l3 3 3-3" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M2 4l3 3 3-3" stroke="var(--text-faint)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </button>
             {exportOpen && (
               <div style={{
                 position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 200,
-                background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10,
+                background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.10)", minWidth: 150, overflow: "hidden",
               }}>
                 {[
@@ -282,10 +282,10 @@ export default function EventsPage() {
                     style={{
                       display: "block", width: "100%", textAlign: "left",
                       padding: "10px 16px", fontSize: 13, fontWeight: 600,
-                      color: "#334155", background: "transparent", border: "none",
+                      color: "var(--text)", background: "transparent", border: "none",
                       cursor: "pointer",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-2)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     {item.label}
@@ -307,20 +307,20 @@ export default function EventsPage() {
 
       {/* ── Filters ── */}
       <div style={{
-        background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14,
+        background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14,
         padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12,
         boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
       }}>
         {/* type pills */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.07em", marginRight: 4 }}>Type</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.07em", marginRight: 4 }}>Type</span>
           <button
             onClick={() => setTypeFilter("")}
             style={{
               padding: "4px 12px", borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: "pointer",
-              border: `1px solid ${!typeFilter ? "#F59E0B" : "#E2E8F0"}`,
-              background: !typeFilter ? "#FFFBEB" : "#F8FAFC",
-              color: !typeFilter ? "#B45309" : "#64748B",
+              border: `1px solid ${!typeFilter ? "var(--accent)" : "var(--border)"}`,
+              background: !typeFilter ? "var(--warn-bg)" : "var(--bg-2)",
+              color: !typeFilter ? "var(--accent)" : "var(--text-muted)",
             }}>All</button>
           {TYPE_PILLS.map((t) => {
             const m = typeMeta(t);
@@ -329,9 +329,9 @@ export default function EventsPage() {
               <button key={t} onClick={() => setTypeFilter(active ? "" : t)}
                 style={{
                   padding: "4px 12px", borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${active ? m.border : "#E2E8F0"}`,
-                  background: active ? m.bg : "#F8FAFC",
-                  color: active ? m.fg : "#64748B",
+                  border: `1px solid ${active ? m.border : "var(--border)"}`,
+                  background: active ? m.bg : "var(--bg-2)",
+                  color: active ? m.fg : "var(--text-muted)",
                   transition: "all 0.12s",
                 }}>{m.label}</button>
             );
@@ -341,14 +341,14 @@ export default function EventsPage() {
         {/* text filters */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ position: "relative", flex: "1 1 160px", maxWidth: 240 }}>
-            <Icon d={Icons.globe} size={13} color="#CBD5E1" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+            <Icon d={Icons.globe} size={13} color="var(--border-2)" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
             <input value={ipFilter} onChange={(e) => setIpFilter(e.target.value)}
               placeholder="Filter by source IP…"
               className="input w-full"
               style={{ fontSize: 12, padding: "8px 12px 8px 30px", borderRadius: 9 }} />
           </div>
           <div style={{ position: "relative", flex: "1 1 160px", maxWidth: 240 }}>
-            <Icon d={Icons.honeycomb} size={13} color="#CBD5E1" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+            <Icon d={Icons.honeycomb} size={13} color="var(--border-2)" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
             <input value={potFilter} onChange={(e) => setPotFilter(e.target.value)}
               placeholder="Filter by pot ID…"
               className="input w-full"
@@ -358,10 +358,10 @@ export default function EventsPage() {
             <button onClick={clearFilters}
               style={{
                 padding: "7px 14px", borderRadius: 9, fontSize: 12, fontWeight: 600,
-                background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626",
+                background: "var(--danger-bg)", border: "1px solid var(--border)", color: "var(--danger)",
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
               }}>
-              <Icon d={Icons.close} size={11} color="#DC2626" /> Clear
+              <Icon d={Icons.close} size={11} color="var(--danger)" /> Clear
             </button>
           )}
         </div>
@@ -369,28 +369,28 @@ export default function EventsPage() {
 
       {/* ── Event feed ── */}
       <div style={{
-        background: "#fff", border: "1px solid #E2E8F0", borderRadius: 16,
+        background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16,
         overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
       }}>
         {/* table toolbar */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "12px 20px", borderBottom: "1px solid #F1F5F9",
-          background: "linear-gradient(to bottom, #FAFAFA, #F8FAFC)",
+          padding: "12px 20px", borderBottom: "1px solid var(--border)",
+          background: "var(--bg-2)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981",
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--ok)",
                           boxShadow: "0 0 0 2px rgba(16,185,129,0.2)" }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
               {list.length.toLocaleString()} events
             </span>
             {hasFilters && (
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#F59E0B",
-                             background: "#FFFBEB", border: "1px solid #FDE68A",
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent)",
+                             background: "var(--warn-bg)", border: "1px solid var(--border)",
                              padding: "1px 7px", borderRadius: 99 }}>filtered</span>
             )}
           </div>
-          <span style={{ fontSize: 11, color: "#94A3B8" }}>
+          <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
             {list.length === 0 ? "0 events" : `Page ${page + 1} of ${Math.ceil(list.length / PAGE_SIZE)}`}
           </span>
         </div>
@@ -400,8 +400,8 @@ export default function EventsPage() {
           display: "grid",
           gridTemplateColumns: "36px 150px 1fr 1fr 120px 170px 110px 36px",
           padding: "9px 20px",
-          borderBottom: "2px solid #F1F5F9",
-          background: "#F8FAFC",
+          borderBottom: "2px solid var(--border)",
+          background: "var(--bg-2)",
           gap: 8,
           alignItems: "center",
         }}>
@@ -416,9 +416,9 @@ export default function EventsPage() {
             { label: "",          icon: ""               },
           ].map(({ label, icon, center }, idx) => (
             <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: center ? "center" : undefined, gap: 5 }}>
-              {icon && <Icon d={icon} size={11} color="#CBD5E1" />}
+              {icon && <Icon d={icon} size={11} color="var(--border-2)" />}
               <span style={{
-                fontSize: 10.5, fontWeight: 700, color: "#94A3B8",
+                fontSize: 10.5, fontWeight: 700, color: "var(--text-faint)",
                 textTransform: "uppercase", letterSpacing: "0.08em",
               }}>{label}</span>
             </div>
@@ -428,17 +428,17 @@ export default function EventsPage() {
         {/* empty state */}
         {list.length === 0 && (
           <div style={{ padding: "64px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 56, height: 56, borderRadius: 16, background: "#F8FAFC", display: "grid", placeItems: "center", border: "1px solid #E2E8F0" }}>
-              <Icon d={Icons.activity} size={24} color="#CBD5E1" />
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: "var(--bg-2)", display: "grid", placeItems: "center", border: "1px solid var(--border)" }}>
+              <Icon d={Icons.activity} size={24} color="var(--border-2)" />
             </div>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#94A3B8" }}>No events found</p>
-            <p style={{ fontSize: 12, color: "#CBD5E1" }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-faint)" }}>No events found</p>
+            <p style={{ fontSize: 12, color: "var(--border-2)" }}>
               {hasFilters ? "Try adjusting your filters" : "Events will appear here as honeypots receive traffic"}
             </p>
             {hasFilters && (
               <button onClick={clearFilters}
                 style={{ marginTop: 4, padding: "7px 18px", borderRadius: 9, fontSize: 12, fontWeight: 600,
-                         background: "#FFFBEB", border: "1px solid #FDE68A", color: "#B45309", cursor: "pointer" }}>
+                         background: "var(--warn-bg)", border: "1px solid var(--border)", color: "var(--accent)", cursor: "pointer" }}>
                 Clear filters
               </button>
             )}
@@ -461,9 +461,9 @@ export default function EventsPage() {
                 alignItems: "center",
                 gap: 8,
                 cursor: "pointer",
-                borderBottom: i < pageLen - 1 ? "1px solid #F8FAFC" : "none",
+                borderBottom: i < pageLen - 1 ? "1px solid var(--border)" : "none",
                 borderLeft: `3px solid ${m.bar}`,
-                background: isEven ? "#fff" : "#FDFEFF",
+                background: isEven ? "var(--surface)" : "var(--bg-2)",
                 transition: "background 0.12s, border-left-color 0.12s",
               }}
               onMouseEnter={(ev) => {
@@ -471,13 +471,13 @@ export default function EventsPage() {
                 ev.currentTarget.style.borderLeftColor = m.bar;
               }}
               onMouseLeave={(ev) => {
-                ev.currentTarget.style.background = isEven ? "#fff" : "#FDFEFF";
+                ev.currentTarget.style.background = isEven ? "var(--surface)" : "var(--bg-2)";
                 ev.currentTarget.style.borderLeftColor = m.bar;
               }}
             >
               {/* ── # ── */}
               <div style={{
-                fontSize: 11, fontWeight: 700, color: "#CBD5E1",
+                fontSize: 11, fontWeight: 700, color: "var(--border-2)",
                 fontVariantNumeric: "tabular-nums", textAlign: "center",
               }}>
                 {page * PAGE_SIZE + i + 1}
@@ -487,16 +487,16 @@ export default function EventsPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <div style={{
                   width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-                  background: "#F8FAFC", border: "1px solid #E2E8F0",
+                  background: "var(--bg-2)", border: "1px solid var(--border)",
                   display: "grid", placeItems: "center",
                 }}>
-                  <Icon d={Icons.clock} size={12} color="#94A3B8" />
+                  <Icon d={Icons.clock} size={12} color="var(--text-faint)" />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>
                     {fmtRelative(e.event_time)}
                   </div>
-                  <div style={{ fontSize: 10, color: "#94A3B8", fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)", fontVariantNumeric: "tabular-nums" }}>
                     {new Date(e.event_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                   </div>
                 </div>
@@ -506,13 +506,13 @@ export default function EventsPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
                 <div style={{
                   width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                  background: "#10B981", boxShadow: "0 0 0 2px rgba(16,185,129,0.18)",
+                  background: "var(--ok)", boxShadow: "0 0 0 2px rgba(16,185,129,0.18)",
                 }} />
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {nodeMap[e.node_id] ?? `Node #${e.node_id}`}
                   </div>
-                  <div style={{ fontSize: 10, color: "#94A3B8", fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)", fontVariantNumeric: "tabular-nums" }}>
                     #{e.node_id}
                   </div>
                 </div>
@@ -521,11 +521,11 @@ export default function EventsPage() {
               {/* ── Pot ── */}
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
-                background: "#F8FAFC", border: "1px solid #E2E8F0",
+                background: "var(--bg-2)", border: "1px solid var(--border)",
                 borderRadius: 6, padding: "3px 8px", maxWidth: "100%",
               }}>
                 <div style={{ width: 5, height: 5, borderRadius: "50%", flexShrink: 0, background: "#F59E0B" }} />
-                <span style={{ fontSize: 11, fontFamily: "monospace", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {e.pot_id ?? "—"}
                 </span>
               </div>
@@ -539,12 +539,12 @@ export default function EventsPage() {
               <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
                 <div style={{
                   display: "flex", alignItems: "center", gap: 5,
-                  background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 7,
+                  background: "var(--warn-bg)", border: "1px solid var(--border)", borderRadius: 7,
                   padding: "3px 8px", minWidth: 0, overflow: "hidden", maxWidth: "100%",
                 }}>
-                  <Icon d={Icons.globe} size={10} color="#FB923C" style={{ flexShrink: 0 }} />
+                  <Icon d={Icons.globe} size={10} color="var(--accent)" style={{ flexShrink: 0 }} />
                   <span style={{
-                    fontSize: 11.5, fontFamily: "monospace", fontWeight: 600, color: "#9A3412",
+                    fontSize: 11.5, fontFamily: "monospace", fontWeight: 600, color: "var(--accent)",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,
                   }}>
                     {e.source_ip ?? "—"}
@@ -558,18 +558,18 @@ export default function EventsPage() {
                   <>
                     <span style={{
                       fontSize: 11, fontFamily: "monospace", fontWeight: 600,
-                      background: "#F1F5F9", color: "#475569",
-                      padding: "2px 6px", borderRadius: 5, border: "1px solid #E2E8F0",
+                      background: "var(--bg-2)", color: "var(--text-muted)",
+                      padding: "2px 6px", borderRadius: 5, border: "1px solid var(--border)",
                     }}>{e.source_port}</span>
-                    <Icon d={Icons.arrow} size={9} color="#CBD5E1" />
+                    <Icon d={Icons.arrow} size={9} color="var(--border-2)" />
                     <span style={{
                       fontSize: 11, fontFamily: "monospace", fontWeight: 600,
-                      background: "#F1F5F9", color: "#475569",
-                      padding: "2px 6px", borderRadius: 5, border: "1px solid #E2E8F0",
+                      background: "var(--bg-2)", color: "var(--text-muted)",
+                      padding: "2px 6px", borderRadius: 5, border: "1px solid var(--border)",
                     }}>{e.dest_port}</span>
                   </>
                 ) : (
-                  <span style={{ fontSize: 12, color: "#CBD5E1" }}>—</span>
+                  <span style={{ fontSize: 12, color: "var(--border-2)" }}>—</span>
                 )}
               </div>
 
@@ -577,10 +577,10 @@ export default function EventsPage() {
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <div style={{
                   width: 24, height: 24, borderRadius: 6,
-                  border: "1px solid #E2E8F0", background: "#F8FAFC",
+                  border: "1px solid var(--border)", background: "var(--bg-2)",
                   display: "grid", placeItems: "center",
                 }}>
-                  <Icon d={Icons.arrow} size={11} color="#94A3B8" />
+                  <Icon d={Icons.arrow} size={11} color="var(--text-faint)" />
                 </div>
               </div>
             </div>
@@ -592,9 +592,9 @@ export default function EventsPage() {
           const totalPages = Math.ceil(list.length / PAGE_SIZE);
           const btnStyle = (active: boolean, disabled: boolean): React.CSSProperties => ({
             minWidth: 32, height: 32, borderRadius: 8, fontSize: 12, fontWeight: active ? 700 : 500,
-            border: active ? "1.5px solid #3B82F6" : "1px solid #E2E8F0",
-            background: active ? "#EFF6FF" : disabled ? "#F8FAFC" : "#fff",
-            color: active ? "#1D4ED8" : disabled ? "#CBD5E1" : "#475569",
+            border: active ? "1.5px solid var(--accent)" : "1px solid var(--border)",
+            background: active ? "var(--warn-bg)" : disabled ? "var(--bg-2)" : "var(--surface)",
+            color: active ? "var(--accent)" : disabled ? "var(--border-2)" : "var(--text-muted)",
             cursor: disabled ? "default" : "pointer",
             display: "grid", placeItems: "center", padding: "0 6px",
             transition: "all 0.12s",
@@ -610,11 +610,11 @@ export default function EventsPage() {
           }
           return (
             <div style={{
-              padding: "12px 20px", borderTop: "1px solid #F1F5F9",
+              padding: "12px 20px", borderTop: "1px solid var(--border)",
               display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-              background: "linear-gradient(to bottom, #FAFAFA, #F8FAFC)",
+              background: "var(--bg-2)",
             }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>
+              <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
                 {list.length.toLocaleString()} events · page {page + 1} of {totalPages}
               </span>
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -623,22 +623,22 @@ export default function EventsPage() {
                   disabled={page === 0}
                   onClick={() => setPage((p) => p - 1)}
                   style={btnStyle(false, page === 0)}
-                  onMouseEnter={(ev) => { if (page !== 0) ev.currentTarget.style.background = "#F1F5F9"; }}
-                  onMouseLeave={(ev) => { ev.currentTarget.style.background = page === 0 ? "#F8FAFC" : "#fff"; }}
+                  onMouseEnter={(ev) => { if (page !== 0) ev.currentTarget.style.background = "var(--bg-2)"; }}
+                  onMouseLeave={(ev) => { ev.currentTarget.style.background = page === 0 ? "var(--bg-2)" : "var(--surface)"; }}
                 >
                   ‹
                 </button>
                 {/* Page numbers */}
                 {pages.map((p, idx) =>
                   p === "..." ? (
-                    <span key={`ellipsis-${idx}`} style={{ fontSize: 12, color: "#CBD5E1", padding: "0 2px" }}>…</span>
+                    <span key={`ellipsis-${idx}`} style={{ fontSize: 12, color: "var(--border-2)", padding: "0 2px" }}>…</span>
                   ) : (
                     <button
                       key={p}
                       onClick={() => setPage(p as number)}
                       style={btnStyle(p === page, false)}
-                      onMouseEnter={(ev) => { if (p !== page) ev.currentTarget.style.background = "#F1F5F9"; }}
-                      onMouseLeave={(ev) => { ev.currentTarget.style.background = p === page ? "#EFF6FF" : "#fff"; }}
+                      onMouseEnter={(ev) => { if (p !== page) ev.currentTarget.style.background = "var(--bg-2)"; }}
+                      onMouseLeave={(ev) => { ev.currentTarget.style.background = p === page ? "var(--warn-bg)" : "var(--surface)"; }}
                     >
                       {(p as number) + 1}
                     </button>
@@ -649,8 +649,8 @@ export default function EventsPage() {
                   disabled={page === totalPages - 1}
                   onClick={() => setPage((p) => p + 1)}
                   style={btnStyle(false, page === totalPages - 1)}
-                  onMouseEnter={(ev) => { if (page !== totalPages - 1) ev.currentTarget.style.background = "#F1F5F9"; }}
-                  onMouseLeave={(ev) => { ev.currentTarget.style.background = page === totalPages - 1 ? "#F8FAFC" : "#fff"; }}
+                  onMouseEnter={(ev) => { if (page !== totalPages - 1) ev.currentTarget.style.background = "var(--bg-2)"; }}
+                  onMouseLeave={(ev) => { ev.currentTarget.style.background = page === totalPages - 1 ? "var(--bg-2)" : "var(--surface)"; }}
                 >
                   ›
                 </button>
@@ -708,7 +708,7 @@ function EventDetailModal({ event: ev, onClose }: { event: any; onClose: () => v
         style={{
           width: "100%", maxWidth: 600,
           maxHeight: "calc(100vh - 48px)",
-          background: "#fff", borderRadius: 18,
+          background: "var(--surface)", borderRadius: 18,
           boxShadow: "0 8px 48px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.05)",
           display: "flex", flexDirection: "column", overflow: "hidden",
           animation: "slideUp 0.22s ease-out",
@@ -720,8 +720,8 @@ function EventDetailModal({ event: ev, onClose }: { event: any; onClose: () => v
         {/* header */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "16px 22px", borderBottom: "1px solid #F1F5F9",
-          background: "#FAFAFA", flexShrink: 0,
+          padding: "16px 22px", borderBottom: "1px solid var(--border)",
+          background: "var(--bg-2)", flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
             <div style={{
@@ -733,21 +733,21 @@ function EventDetailModal({ event: ev, onClose }: { event: any; onClose: () => v
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Event Details</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>Event Details</span>
                 <TypeBadge type={ev.event_type} />
               </div>
-              <span style={{ fontSize: 11.5, color: "#94A3B8" }}>{fmtTime(ev.event_time)}</span>
+              <span style={{ fontSize: 11.5, color: "var(--text-faint)" }}>{fmtTime(ev.event_time)}</span>
             </div>
           </div>
           <button onClick={onClose} style={{
-            width: 34, height: 34, borderRadius: 9, border: "1px solid #E2E8F0", flexShrink: 0,
-            background: "#fff", display: "grid", placeItems: "center", cursor: "pointer", marginLeft: 12,
+            width: 34, height: 34, borderRadius: 9, border: "1px solid var(--border)", flexShrink: 0,
+            background: "var(--surface)", display: "grid", placeItems: "center", cursor: "pointer", marginLeft: 12,
             transition: "background 0.12s",
           }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#F1F5F9")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-2)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--surface)")}
           >
-            <Icon d={Icons.close} size={15} color="#64748B" />
+            <Icon d={Icons.close} size={15} color="var(--text-muted)" />
           </button>
         </div>
 
@@ -763,16 +763,16 @@ function EventDetailModal({ event: ev, onClose }: { event: any; onClose: () => v
           </div>
 
           {/* divider */}
-          <div style={{ height: 1, background: "#F1F5F9" }} />
+          <div style={{ height: 1, background: "var(--bg-2)" }} />
 
           {/* network card */}
-          <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 12, padding: "14px 16px" }}>
+          <div style={{ background: "var(--warn-bg)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
             <div style={{
-              fontSize: 11, fontWeight: 700, color: "#C2410C",
+              fontSize: 11, fontWeight: 700, color: "var(--accent)",
               textTransform: "uppercase", letterSpacing: "0.07em",
               marginBottom: 12, display: "flex", alignItems: "center", gap: 6,
             }}>
-              <Icon d={Icons.globe} size={13} color="#C2410C" /> Network Context
+              <Icon d={Icons.globe} size={13} color="var(--accent)" /> Network Context
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 28px" }}>
               <Field label="Source IP"        value={ev.source_ip}      mono accent />
@@ -788,16 +788,16 @@ function EventDetailModal({ event: ev, onClose }: { event: any; onClose: () => v
               <div style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10,
               }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
                   Raw Telemetry
                 </span>
                 <button onClick={copyJson} style={{
-                  padding: "5px 11px", borderRadius: 7, border: "1px solid #E2E8F0",
-                  background: copied ? "#ECFDF5" : "#F8FAFC", fontSize: 11.5, fontWeight: 600,
-                  color: copied ? "#065F46" : "#64748B", cursor: "pointer",
+                  padding: "5px 11px", borderRadius: 7, border: "1px solid var(--border)",
+                  background: copied ? "var(--ok-bg)" : "var(--bg-2)", fontSize: 11.5, fontWeight: 600,
+                  color: copied ? "var(--ok)" : "var(--text-muted)", cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 5, transition: "all 0.15s",
                 }}>
-                  <Icon d={copied ? Icons.check : Icons.copy} size={12} color={copied ? "#10B981" : "#94A3B8"} />
+                  <Icon d={copied ? Icons.check : Icons.copy} size={12} color={copied ? "var(--ok)" : "var(--text-faint)"} />
                   {copied ? "Copied!" : "Copy JSON"}
                 </button>
               </div>
@@ -823,11 +823,11 @@ function EventDetailModal({ event: ev, onClose }: { event: any; onClose: () => v
 function Field({ label, value, mono, accent }: { label: string; value: any; mono?: boolean; accent?: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</span>
       <span style={{
         fontSize: 13, fontFamily: mono ? "monospace" : undefined,
         fontWeight: mono ? 600 : 500,
-        color: accent ? "#9A3412" : "#0F172A",
+        color: accent ? "var(--accent)" : "var(--text)",
         wordBreak: "break-all",
       }}>{value ?? "—"}</span>
     </div>

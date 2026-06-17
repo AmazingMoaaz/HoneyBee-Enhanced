@@ -24,6 +24,46 @@ CREATE TABLE IF NOT EXISTS users (
     CONSTRAINT fk_users_org FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Custom roles: relax the role column from an ENUM to a free slug so it can
+-- reference custom roles, and add an avatar (base64 data URL, stored inline).
+-- MODIFY/ADD are idempotent / 1060-suppressed by the migrator.
+ALTER TABLE users MODIFY COLUMN role VARCHAR(64) NOT NULL DEFAULT 'viewer';
+ALTER TABLE users ADD COLUMN avatar LONGTEXT NULL;
+
+-- Roles catalogue (built-in + custom) with a JSON permission set per org.
+CREATE TABLE IF NOT EXISTS roles (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    org_id       BIGINT NOT NULL,
+    slug         VARCHAR(64)  NOT NULL,
+    name         VARCHAR(100) NOT NULL,
+    color        VARCHAR(20)  NOT NULL DEFAULT '#64748B',
+    permissions  JSON NOT NULL,
+    is_system    TINYINT(1)   NOT NULL DEFAULT 0,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_roles_org_slug (org_id, slug),
+    CONSTRAINT fk_roles_org FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Telegram notification bots: one row per bot, with a JSON subscription config
+-- controlling which system signals trigger a message.
+CREATE TABLE IF NOT EXISTS telegram_bots (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    org_id        BIGINT NOT NULL,
+    name          VARCHAR(120) NOT NULL,
+    bot_token     VARCHAR(255) NOT NULL,
+    chat_id       VARCHAR(64)  NOT NULL,
+    enabled       TINYINT(1)   NOT NULL DEFAULT 1,
+    config        JSON         NOT NULL,
+    msg_format    VARCHAR(16)  NOT NULL DEFAULT 'text',
+    throttle_secs INT          NOT NULL DEFAULT 0,
+    last_sent_at  TIMESTAMP NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_tgbots_org (org_id),
+    CONSTRAINT fk_tgbots_org FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS nodes (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     org_id          BIGINT NOT NULL,

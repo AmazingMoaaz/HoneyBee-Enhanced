@@ -9,11 +9,13 @@ import (
 	"github.com/honeybee-enhanced/shared/models"
 )
 
+const userCols = `id, org_id, email, password_hash, name, role, COALESCE(avatar,'') AS avatar, created_at, updated_at`
+
 // CreateUser inserts a new user.
-func (s *Store) CreateUser(ctx context.Context, orgID int64, email, passwordHash, name string, role models.Role) (int64, error) {
+func (s *Store) CreateUser(ctx context.Context, orgID int64, email, passwordHash, name string, role models.Role, avatar string) (int64, error) {
 	res, err := s.DB.ExecContext(ctx,
-		`INSERT INTO users(org_id, email, password_hash, name, role) VALUES (?, ?, ?, ?, ?)`,
-		orgID, email, passwordHash, name, string(role))
+		`INSERT INTO users(org_id, email, password_hash, name, role, avatar) VALUES (?, ?, ?, ?, ?, ?)`,
+		orgID, email, passwordHash, name, string(role), avatar)
 	if err != nil {
 		return 0, fmt.Errorf("insert user: %w", err)
 	}
@@ -24,8 +26,7 @@ func (s *Store) CreateUser(ctx context.Context, orgID int64, email, passwordHash
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var u models.User
 	err := s.DB.GetContext(ctx, &u,
-		`SELECT id, org_id, email, password_hash, name, role, created_at, updated_at
-		 FROM users WHERE email = ? LIMIT 1`, email)
+		`SELECT `+userCols+` FROM users WHERE email = ? LIMIT 1`, email)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -39,8 +40,7 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*models.User,
 func (s *Store) GetUser(ctx context.Context, id int64) (*models.User, error) {
 	var u models.User
 	err := s.DB.GetContext(ctx, &u,
-		`SELECT id, org_id, email, password_hash, name, role, created_at, updated_at
-		 FROM users WHERE id = ?`, id)
+		`SELECT `+userCols+` FROM users WHERE id = ?`, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -51,16 +51,15 @@ func (s *Store) GetUser(ctx context.Context, id int64) (*models.User, error) {
 func (s *Store) ListUsers(ctx context.Context, orgID int64) ([]models.User, error) {
 	var out []models.User
 	err := s.DB.SelectContext(ctx, &out,
-		`SELECT id, org_id, email, password_hash, name, role, created_at, updated_at
-		 FROM users WHERE org_id = ? ORDER BY created_at DESC`, orgID)
+		`SELECT `+userCols+` FROM users WHERE org_id = ? ORDER BY created_at DESC`, orgID)
 	return out, err
 }
 
-// UpdateUser updates name/role.
-func (s *Store) UpdateUser(ctx context.Context, orgID, id int64, name string, role models.Role) error {
+// UpdateUser updates name/role/avatar.
+func (s *Store) UpdateUser(ctx context.Context, orgID, id int64, name string, role models.Role, avatar string) error {
 	_, err := s.DB.ExecContext(ctx,
-		`UPDATE users SET name = ?, role = ? WHERE id = ? AND org_id = ?`,
-		name, string(role), id, orgID)
+		`UPDATE users SET name = ?, role = ?, avatar = ? WHERE id = ? AND org_id = ?`,
+		name, string(role), avatar, id, orgID)
 	return err
 }
 

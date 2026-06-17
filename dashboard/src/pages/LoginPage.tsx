@@ -1,8 +1,21 @@
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, CSSProperties } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuthStore } from "../stores/auth";
 import logoUrl from "../assets/logo.png";
 import ParticleCanvas, { HoneycombGrid } from "../components/ParticleCanvas";
+
+/* The sign-in screen is always light, even when the app theme is dark — these
+   inline custom-properties pin the light palette for this subtree only. */
+export const LIGHT_THEME_VARS: CSSProperties = {
+  ["--bg" as any]:"#F8FAFC", ["--bg-2" as any]:"#F1F5F9",
+  ["--surface" as any]:"#FFFFFF", ["--surface-2" as any]:"#FFFFFF", ["--elevated" as any]:"#FFFFFF",
+  ["--border" as any]:"rgba(15,23,42,0.07)", ["--border-2" as any]:"rgba(15,23,42,0.12)",
+  ["--text" as any]:"#0F172A", ["--text-muted" as any]:"#64748B", ["--text-faint" as any]:"#94A3B8",
+  ["--accent" as any]:"#B45309",
+  ["--ok" as any]:"#16A34A", ["--ok-bg" as any]:"rgba(34,197,94,0.13)",
+  ["--danger" as any]:"#DC2626", ["--danger-bg" as any]:"rgba(239,68,68,0.12)",
+  ["--warn" as any]:"#B45309", ["--warn-bg" as any]:"rgba(245,158,11,0.14)",
+};
 
 export default function LoginPage() {
   const [email, setEmail]     = useState("");
@@ -24,7 +37,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", overflow: "hidden", background: "#FFFFFF" }}>
+    <div style={{ minHeight: "100vh", display: "flex", overflow: "hidden", background: "#FFFFFF", ...LIGHT_THEME_VARS }}>
 
       {/* ── Mouse-reactive floating particles (full-page canvas) ── */}
       <ParticleCanvas />
@@ -82,27 +95,27 @@ export default function LoginPage() {
       <div style={{
         flex:1, display:"flex", flexDirection:"column",
         alignItems:"center", justifyContent:"center",
-        padding:"40px", background:"#FFFFFF", position:"relative", zIndex:2,
+        padding:"40px", background:"var(--surface)", position:"relative", zIndex:2,
       }}>
         {/* Mobile-only logo */}
         <div className="lg:hidden" style={{ display:"flex", flexDirection:"column", alignItems:"center", marginBottom:32 }}>
           <img src={logoUrl} alt="HoneyBee"
                style={{ height:64, width:64, objectFit:"contain", marginBottom:10,
                         filter:"drop-shadow(0 6px 16px rgba(245,158,11,0.45))" }} />
-          <span style={{ fontSize:20, fontWeight:900, color:"#0F172A" }}>HoneyBee</span>
+          <span style={{ fontSize:20, fontWeight:900, color:"var(--text)" }}>HoneyBee</span>
         </div>
 
         <div style={{ width:"100%", maxWidth:400 }} className="animate-float-up">
-          <h2 style={{ fontSize:30, fontWeight:900, letterSpacing:"-0.03em", color:"#0F172A", margin:"0 0 6px" }}>
+          <h2 style={{ fontSize:30, fontWeight:900, letterSpacing:"-0.03em", color:"var(--text)", margin:"0 0 6px" }}>
             Sign in
           </h2>
-          <p style={{ fontSize:14, color:"#64748B", margin:"0 0 30px" }}>
+          <p style={{ fontSize:14, color:"var(--text-muted)", margin:"0 0 30px" }}>
             Welcome back. Enter your credentials to continue.
           </p>
 
           <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:18 }}>
             {err && (
-              <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", color:"#DC2626",
+              <div style={{ background:"var(--danger-bg)", border:"1px solid var(--border)", color:"var(--danger)",
                             borderRadius:10, padding:"10px 14px", fontSize:13, fontWeight:500 }}>
                 {err}
               </div>
@@ -123,9 +136,9 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p style={{ marginTop:24, textAlign:"center", fontSize:13, color:"#64748B" }}>
+          <p style={{ marginTop:24, textAlign:"center", fontSize:13, color:"var(--text-muted)" }}>
             New organisation?{" "}
-            <Link to="/register" style={{ color:"#B45309", fontWeight:700 }}>Create account</Link>
+            <Link to="/register" style={{ color:"var(--accent)", fontWeight:700 }}>Create account</Link>
           </p>
         </div>
       </div>

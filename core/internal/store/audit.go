@@ -21,6 +21,9 @@ func (s *Store) LogAudit(ctx context.Context, orgID int64, userID *int64, action
 		`INSERT INTO audit_log(org_id, user_id, action, resource, resource_id, details)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		orgID, uid, action, resource, rid, details)
+	if err == nil && s.AuditHook != nil {
+		s.AuditHook(orgID, userID, action, resource)
+	}
 	return err
 }
 

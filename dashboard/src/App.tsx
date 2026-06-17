@@ -13,6 +13,7 @@ import PotStorePage from "./pages/PotStorePage";
 import UsersPage from "./pages/UsersPage";
 import SystemCheckPage from "./pages/SystemCheckPage";
 import TopologyPage from "./pages/TopologyPage";
+import TelegramBotsPage from "./pages/TelegramBotsPage";
 import Layout from "./components/Layout";
 
 function Protected({ children }: { children: JSX.Element }) {
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/system" element={<SystemCheckPage />} />
         <Route path="/topology" element={<TopologyPage />} />
         <Route path="/users" element={<UsersPage />} />
+        <Route path="/telegram-bots" element={<TelegramBotsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

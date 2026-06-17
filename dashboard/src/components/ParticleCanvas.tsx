@@ -3,14 +3,13 @@ import { useEffect, useRef, useId } from "react";
 /* ─── Mouse-reactive particle canvas ──────────────────────────────────────── */
 /*  Features:                                                                  */
 /*    - Mouse-orbit field: particles tangentially orbit the cursor             */
-/*    - Click bursts: emits expanding amber rings + radial impulse on pts      */
 /*    - Constellation lines: nearby particles within mouse radius are linked   */
 /*    - Glow halo on particles inside the cursor field                         */
 /*    - Edge wrap: seamless looping particles                                  */
 /*    - DPR-aware sizing for crisp lines on retina displays                    */
 /*    - subtle=true → low-density / low-alpha for use on white backgrounds     */
 /* ─────────────────────────────────────────────────────────────────────────── */
-export default function ParticleCanvas({ subtle = false }: { subtle?: boolean }) {
+export default function ParticleCanvas({ subtle = false, z = 3 }: { subtle?: boolean; z?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -35,24 +34,6 @@ export default function ParticleCanvas({ subtle = false }: { subtle?: boolean })
     const onLeave = () => { mouse.x = -9999; mouse.y = -9999; };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseleave", onLeave);
-
-    /* ── Click ripples ── */
-    type Ripple = { x: number; y: number; r: number; a: number };
-    const ripples: Ripple[] = [];
-    const onClick = (e: MouseEvent) => {
-      ripples.push({ x: e.clientX, y: e.clientY, r: 0, a: 0.55 });
-      for (const p of pts) {
-        const dx = p.x - e.clientX, dy = p.y - e.clientY;
-        const d = Math.hypot(dx, dy);
-        if (d < 280 && d > 0) {
-          const f = (1 - d / 280) * 4.2;
-          p.vx += (dx / d) * f;
-          p.vy += (dy / d) * f;
-          p.av += (Math.random() - 0.5) * 0.4;
-        }
-      }
-    };
-    window.addEventListener("click", onClick);
 
     const COLORS_VIVID  = ["245,158,11","217,119,6","252,211,77","180,83,9","253,230,138","251,191,36","28,10,0"];
     const COLORS_SUBTLE = ["245,158,11","217,119,6","252,211,77","251,191,36","180,83,9"];
@@ -152,24 +133,6 @@ export default function ParticleCanvas({ subtle = false }: { subtle?: boolean })
         ctx.restore();
       }
 
-      /* ── Click ripples ── */
-      for (let i = ripples.length - 1; i >= 0; i--) {
-        const rp = ripples[i];
-        rp.r += 5.2;
-        rp.a *= 0.955;
-        ctx.strokeStyle = `rgba(245,158,11,${rp.a})`;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.strokeStyle = `rgba(252,211,77,${rp.a * 0.6})`;
-        ctx.lineWidth = 0.9;
-        ctx.beginPath();
-        ctx.arc(rp.x, rp.y, rp.r * 0.62, 0, Math.PI * 2);
-        ctx.stroke();
-        if (rp.a < 0.02 || rp.r > 420) ripples.splice(i, 1);
-      }
-
       raf = requestAnimationFrame(tick);
     };
     tick();
@@ -179,14 +142,13 @@ export default function ParticleCanvas({ subtle = false }: { subtle?: boolean })
       window.removeEventListener("resize", resize);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseleave", onLeave);
-      window.removeEventListener("click", onClick);
     };
   }, [subtle]);
 
   return (
     <canvas
       ref={ref}
-      style={{ position: "fixed", inset: 0, zIndex: 3, pointerEvents: "none" }}
+      style={{ position: "fixed", inset: 0, zIndex: z, pointerEvents: "none" }}
     />
   );
 }

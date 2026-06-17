@@ -7,7 +7,7 @@
     "allowed_origins": []
   },
   "database": {
-    "dsn": "root:438023231@tcp(localhost:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4",
+    "dsn": "Moaaz:2591367@tcp(localhost:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4",
     "max_open": 25,
     "max_idle": 5
   },

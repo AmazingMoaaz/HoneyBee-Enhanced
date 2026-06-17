@@ -33,6 +33,7 @@ type Server struct {
 
 	dispatcher *Dispatcher
 	listener   net.Listener
+	diag       *Diag
 }
 
 // Config contains construction-time options.
@@ -49,6 +50,7 @@ func NewServer(cfg Config, st *store.Store, logger *slog.Logger) *Server {
 		store:     st,
 		logger:    logger,
 		sessions:  make(map[int64]*Session),
+		diag:      newDiag(logger),
 	}
 	s.dispatcher = NewDispatcher(st, s, logger)
 	return s
@@ -152,6 +154,9 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 	s.logger.Info("node server listening", slog.String("addr", s.addr), slog.Bool("tls", s.tlsConfig != nil))
 
+	// Periodic colored connection-health panel (observational only).
+	go s.diag.reportLoop(ctx, s.ConnectedCount)
+
 	go func() {
 		<-ctx.Done()
 		_ = s.listener.Close()
@@ -230,7 +235,19 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 		s.removeSession(ctx, node.ID, sess)
 		return
 	}
-	s.logger.Info("node online", slog.Int64("node_id", node.ID), slog.String("hostname", auth.Hostname))
+	connects, gap, storm := s.diag.onConnect(node.ID)
+	s.logger.Info("node online",
+		slog.Int64("node_id", node.ID),
+		slog.String("hostname", auth.Hostname),
+		slog.Int64("connects", connects),
+	)
+	if storm {
+		s.logger.Warn("reconnect storm — node is flapping",
+			slog.Int64("node_id", node.ID),
+			slog.Duration("gap", gap.Round(time.Millisecond)),
+			slog.String("diag", "reconnect_storm"),
+		)
+	}
 
 	if s.broadcaster != nil {
 		s.broadcaster.Broadcast(node.OrgID, "node_events", "node_status", map[string]any{
@@ -252,20 +269,39 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 			switch {
 			case errors.Is(err, io.EOF), errors.Is(err, net.ErrClosed),
 				strings.Contains(err.Error(), "use of closed network connection"):
-				s.logger.Debug("node disconnected", slog.Int64("node_id", node.ID))
+				s.diag.onDisconnect(node.ID, discClean)
+				s.logger.Debug("node disconnected", slog.Int64("node_id", node.ID), slog.String("class", string(discClean)))
 			case isTimeout(err):
 				// Read deadline expired — heartbeats are not arriving from the
-				// node. This is the symptom of a half-broken connection.
-				s.logger.Warn("node read deadline exceeded; no heartbeats received",
+				// node. This is the symptom of a half-broken (ghost) connection.
+				s.diag.onDisconnect(node.ID, discGhost)
+				s.logger.Warn("ghost connection — read deadline exceeded, no heartbeats received",
 					slog.Int64("node_id", node.ID),
+					slog.String("diag", string(discGhost)),
 					slog.Any("err", err),
 				)
 			default:
-				s.logger.Info("node read err", slog.Int64("node_id", node.ID), slog.Any("err", err))
+				s.diag.onDisconnect(node.ID, discErr)
+				s.logger.Info("node read err", slog.Int64("node_id", node.ID), slog.String("class", string(discErr)), slog.Any("err", err))
 			}
 			break
 		}
+		// Track heartbeat cadence: a large gap means beats are arriving late
+		// (slow read loop) or were dropped — an early ghost-connection warning.
+		if msgEnv.Type == protocol.MsgHeartbeat {
+			if gap := s.diag.onHeartbeat(node.ID); gap > heartbeatGapThreshold {
+				s.logger.Warn("late heartbeat — read loop lagging or beats dropped",
+					slog.Int64("node_id", node.ID),
+					slog.Duration("gap", gap.Round(time.Millisecond)),
+					slog.String("diag", "heartbeat_gap"),
+				)
+			}
+		}
+		// Time each dispatch: sustained slow dispatch == read-loop head-of-line
+		// blocking, which back-pressures the node and triggers disconnects.
+		t0 := time.Now()
 		s.dispatcher.Dispatch(ctx, sess, msgEnv)
+		s.diag.recordDispatch(msgEnv.Type, time.Since(t0))
 	}
 
 	s.removeSession(ctx, node.ID, sess)

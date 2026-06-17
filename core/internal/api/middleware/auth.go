@@ -18,6 +18,7 @@ const (
 	ctxUserID ctxKey = "uid"
 	ctxOrgID  ctxKey = "oid"
 	ctxRole   ctxKey = "role"
+	ctxPerms  ctxKey = "perms"
 )
 
 // Claims is the JWT claims structure.
@@ -25,6 +26,7 @@ type Claims struct {
 	UserID int64       `json:"uid"`
 	OrgID  int64       `json:"oid"`
 	Role   models.Role `json:"role"`
+	Perms  []string    `json:"perms,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -38,21 +40,22 @@ func NewJWTAuth(secret string) *JWTAuth {
 	return &JWTAuth{Secret: []byte(secret)}
 }
 
-// SignAccess signs a short-lived access token.
-func (j *JWTAuth) SignAccess(userID, orgID int64, role models.Role, ttl time.Duration) (string, error) {
-	return j.sign(userID, orgID, role, ttl, "access")
+// SignAccess signs a short-lived access token carrying the user's permissions.
+func (j *JWTAuth) SignAccess(userID, orgID int64, role models.Role, perms []string, ttl time.Duration) (string, error) {
+	return j.sign(userID, orgID, role, perms, ttl, "access")
 }
 
 // SignRefresh signs a long-lived refresh token.
-func (j *JWTAuth) SignRefresh(userID, orgID int64, role models.Role, ttl time.Duration) (string, error) {
-	return j.sign(userID, orgID, role, ttl, "refresh")
+func (j *JWTAuth) SignRefresh(userID, orgID int64, role models.Role, perms []string, ttl time.Duration) (string, error) {
+	return j.sign(userID, orgID, role, perms, ttl, "refresh")
 }
 
-func (j *JWTAuth) sign(userID, orgID int64, role models.Role, ttl time.Duration, sub string) (string, error) {
+func (j *JWTAuth) sign(userID, orgID int64, role models.Role, perms []string, ttl time.Duration, sub string) (string, error) {
 	c := Claims{
 		UserID: userID,
 		OrgID:  orgID,
 		Role:   role,
+		Perms:  perms,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   sub,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
@@ -114,6 +117,7 @@ func WithClaims(ctx context.Context, c *Claims) context.Context {
 	ctx = context.WithValue(ctx, ctxUserID, c.UserID)
 	ctx = context.WithValue(ctx, ctxOrgID, c.OrgID)
 	ctx = context.WithValue(ctx, ctxRole, c.Role)
+	ctx = context.WithValue(ctx, ctxPerms, c.Perms)
 	return ctx
 }
 
@@ -125,3 +129,20 @@ func OrgID(ctx context.Context) int64 { v, _ := ctx.Value(ctxOrgID).(int64); ret
 
 // Role returns the user role.
 func Role(ctx context.Context) models.Role { v, _ := ctx.Value(ctxRole).(models.Role); return v }
+
+// Perms returns the permission keys carried by the access token.
+func Perms(ctx context.Context) []string { v, _ := ctx.Value(ctxPerms).([]string); return v }
+
+// HasPerm reports whether the request is allowed to perform perm. The built-in
+// admin role implicitly holds every permission.
+func HasPerm(ctx context.Context, perm string) bool {
+	if Role(ctx) == models.RoleAdmin {
+		return true
+	}
+	for _, p := range Perms(ctx) {
+		if p == perm {
+			return true
+		}
+	}
+	return false
+}

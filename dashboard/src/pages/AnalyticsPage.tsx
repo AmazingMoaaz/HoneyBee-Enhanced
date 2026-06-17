@@ -33,29 +33,24 @@ function fmtHour(bucket: string) {
   catch { return bucket; }
 }
 
-function threatLevel(rank: number): { label: string; bg: string; fg: string } {
-  if (rank === 0) return { label: "CRITICAL", bg: "#FEF2F2", fg: "#DC2626" };
-  if (rank <= 2)  return { label: "HIGH",     bg: "#FFF7ED", fg: "#EA580C" };
-  if (rank <= 5)  return { label: "MEDIUM",   bg: "#FEFCE8", fg: "#CA8A04" };
-  return             { label: "LOW",      bg: "#F0FDF4", fg: "#16A34A" };
+function threatLevel(rank: number): { label: string; bg: string; fg: string; soft: string } {
+  if (rank === 0) return { label: "CRITICAL", bg: "var(--danger-bg)", fg: "var(--danger)", soft: "var(--danger-bg)" };
+  if (rank <= 2)  return { label: "HIGH",     bg: "var(--warn-bg)", fg: "var(--warn)", soft: "var(--warn-bg)" };
+  if (rank <= 5)  return { label: "MEDIUM",   bg: "var(--warn-bg)", fg: "var(--warn)", soft: "var(--warn-bg)" };
+  return             { label: "LOW",      bg: "var(--ok-bg)", fg: "var(--ok)", soft: "var(--ok-bg)" };
 }
 
 /* ─── Custom Tooltip ────────────────────────────────────── */
 function ChartTooltip({ active, payload, label, unit = "events" }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{
-      background: "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)",
-      border: "1px solid rgba(15,23,42,0.09)", borderRadius: 12,
-      padding: "10px 14px", boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
-      fontSize: 12,
-    }}>
-      {label && <p style={{ color: "#64748B", marginBottom: 6, fontWeight: 600, fontSize: 11 }}>{label}</p>}
+    <div className="tooltip">
+      {label && <p style={{ color: "var(--text-muted)", marginBottom: 6, fontWeight: 600, fontSize: 11 }}>{label}</p>}
       {payload.map((p: any, i: number) => (
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.color || p.fill, flexShrink: 0 }} />
-          <span style={{ color: "#0F172A", fontWeight: 600 }}>{p.value?.toLocaleString()}</span>
-          <span style={{ color: "#94A3B8" }}>{p.name || unit}</span>
+          <span style={{ color: "var(--text)", fontWeight: 600 }}>{p.value?.toLocaleString()}</span>
+          <span style={{ color: "var(--text-faint)" }}>{p.name || unit}</span>
         </div>
       ))}
     </div>
@@ -85,18 +80,18 @@ interface StatCardProps {
 function StatCard({ label, value, sub, icon, accent, accentBg, trend }: StatCardProps) {
   return (
     <div style={{
-      background: "#fff", borderRadius: 16, padding: "20px 22px",
-      border: "1px solid rgba(15,23,42,0.07)",
-      boxShadow: "0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.04)",
+      background: "var(--surface)", borderRadius: 16, padding: "20px 22px",
+      border: "1px solid var(--border)",
+      boxShadow: "0 1px 3px var(--shadow), 0 4px 16px var(--shadow)",
       position: "relative", overflow: "hidden",
       transition: "box-shadow 0.2s, transform 0.2s",
     }}
       onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 20px rgba(15,23,42,0.10), 0 0 0 1px ${accent}22`;
+        (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 20px var(--shadow), 0 0 0 1px ${accent}22`;
         (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
       }}
       onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.04)";
+        (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 3px var(--shadow), 0 4px 16px var(--shadow)";
         (e.currentTarget as HTMLElement).style.transform = "";
       }}
     >
@@ -107,7 +102,7 @@ function StatCard({ label, value, sub, icon, accent, accentBg, trend }: StatCard
       }} />
       <div style={{ position: "relative" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#94A3B8" }}>
+          <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--text-faint)" }}>
             {label}
           </p>
           <div style={{
@@ -117,11 +112,11 @@ function StatCard({ label, value, sub, icon, accent, accentBg, trend }: StatCard
             {icon}
           </div>
         </div>
-        <p style={{ fontSize: 30, fontWeight: 800, color: "#0F172A", lineHeight: 1, letterSpacing: "-0.03em", marginBottom: 6 }}>
+        <p style={{ fontSize: 30, fontWeight: 800, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.03em", marginBottom: 6 }}>
           {value?.toLocaleString() ?? "—"}
         </p>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          {sub && <p style={{ fontSize: 11, color: "#94A3B8" }}>{sub}</p>}
+          {sub && <p style={{ fontSize: 11, color: "var(--text-faint)" }}>{sub}</p>}
           {trend && (
             <span style={{ fontSize: 10, fontWeight: 700, color: accent, background: accentBg, padding: "2px 7px", borderRadius: 20 }}>
               {trend}
@@ -147,8 +142,8 @@ function SectionHeader({
         }}>{icon}</div>
       )}
       <div>
-        <p style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.01em" }}>{title}</p>
-        {sub && <p style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{sub}</p>}
+        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.01em" }}>{title}</p>
+        {sub && <p style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{sub}</p>}
       </div>
     </div>
   );
@@ -196,7 +191,7 @@ function HeatmapGrid({ data }: { data: { hour: number; count: number }[] }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
         {[0, 4, 8, 12, 16, 20, 23].map(h => (
-          <span key={h} style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>{h}:00</span>
+          <span key={h} style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 600 }}>{h}:00</span>
         ))}
       </div>
     </div>
@@ -209,14 +204,14 @@ function Skeleton() {
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} style={{ background: "#fff", borderRadius: 16, padding: "20px 22px", border: "1px solid rgba(15,23,42,0.07)", height: 110 }}>
-            <div style={{ width: "55%", height: 9, borderRadius: 5, background: "rgba(15,23,42,0.07)", marginBottom: 14 }} />
-            <div style={{ width: "38%", height: 26, borderRadius: 7, background: "rgba(15,23,42,0.09)", marginBottom: 8 }} />
-            <div style={{ width: "70%", height: 8, borderRadius: 5, background: "rgba(15,23,42,0.05)" }} />
+          <div key={i} style={{ background: "var(--surface)", borderRadius: 16, padding: "20px 22px", border: "1px solid var(--border)", height: 110 }}>
+            <div style={{ width: "55%", height: 9, borderRadius: 5, background: "var(--bg-2)", marginBottom: 14 }} />
+            <div style={{ width: "38%", height: 26, borderRadius: 7, background: "var(--border-2)", marginBottom: 8 }} />
+            <div style={{ width: "70%", height: 8, borderRadius: 5, background: "var(--bg-2)" }} />
           </div>
         ))}
       </div>
-      <div style={{ background: "#fff", borderRadius: 16, height: 320, border: "1px solid rgba(15,23,42,0.07)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "var(--surface)", borderRadius: 16, height: 320, border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin" />
       </div>
     </div>
@@ -264,31 +259,31 @@ export default function AnalyticsPage() {
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <div style={{
-              width: 32, height: 32, borderRadius: 9, background: "rgba(245,158,11,0.12)",
-              display: "flex", alignItems: "center", justifyContent: "center", color: "#F59E0B",
+              width: 32, height: 32, borderRadius: 9, background: "var(--warn-bg)",
+              display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)",
             }}>
               <FiActivity size={16} />
             </div>
-            <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "#94A3B8" }}>
+            <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--text-faint)" }}>
               Intelligence
             </p>
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0F172A", letterSpacing: "-0.03em", lineHeight: 1.2 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em", lineHeight: 1.2 }}>
             Attack Analytics
           </h1>
-          <p style={{ fontSize: 12, color: "#94A3B8", marginTop: 5, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <FiZap size={11} color="#F59E0B" />
-            <span><b style={{ color: "#F59E0B" }}>{total.toLocaleString()}</b> total events</span>
-            <span style={{ color: "#CBD5E1" }}>·</span>
-            <span><b style={{ color: "#EF4444" }}>{data?.unique_ips ?? 0}</b> unique attackers</span>
-            <span style={{ color: "#CBD5E1" }}>·</span>
+          <p style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 5, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <FiZap size={11} color="var(--accent)" />
+            <span><b style={{ color: "var(--accent)" }}>{total.toLocaleString()}</b> total events</span>
+            <span style={{ color: "var(--border-2)" }}>·</span>
+            <span><b style={{ color: "var(--danger)" }}>{data?.unique_ips ?? 0}</b> unique attackers</span>
+            <span style={{ color: "var(--border-2)" }}>·</span>
             <FiClock size={11} />
             <span>updated {lastUpdated}</span>
           </p>
         </div>
 
         {/* Timeframe pill selector */}
-        <div style={{ display: "flex", gap: 3, padding: 4, background: "rgba(15,23,42,0.05)", borderRadius: 12 }}>
+        <div className="segmented">
           {[
             { label: "6h", value: 6 },
             { label: "24h", value: 24 },
@@ -298,14 +293,7 @@ export default function AnalyticsPage() {
             <button
               key={opt.value}
               onClick={() => setHours(opt.value)}
-              style={{
-                padding: "6px 16px", borderRadius: 8, border: "none", cursor: "pointer",
-                fontSize: 12, fontWeight: 700,
-                background: hours === opt.value ? "#fff" : "transparent",
-                color: hours === opt.value ? "#0F172A" : "#94A3B8",
-                boxShadow: hours === opt.value ? "0 1px 6px rgba(15,23,42,0.12)" : "none",
-                transition: "all 0.15s",
-              }}
+              className={hours === opt.value ? "is-active" : undefined}
             >
               {opt.label}
             </button>
@@ -343,10 +331,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* ── Timeline ────────────────────────────────────────── */}
-      <div style={{
-        background: "#fff", borderRadius: 16, padding: "24px 26px",
-        border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
-      }}>
+      <div className="card" style={{ padding: "24px 26px" }}>
         <SectionHeader
           title={`Attack Timeline — Last ${hours}h`}
           sub="Events per time bucket — auto-refreshes every 30s"
@@ -370,13 +355,13 @@ export default function AnalyticsPage() {
                   <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
                 </filter>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
               <XAxis
                 dataKey="bucket" tickFormatter={fmtHour}
-                tick={{ fontSize: 10, fill: "#94A3B8", fontWeight: 600 }} axisLine={false} tickLine={false}
+                tick={{ fontSize: 10, fill: "var(--text-faint)", fontWeight: 600 }} axisLine={false} tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: "#94A3B8", fontWeight: 600 }} axisLine={false} tickLine={false}
+                tick={{ fontSize: 10, fill: "var(--text-faint)", fontWeight: 600 }} axisLine={false} tickLine={false}
                 tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)}
               />
               <Tooltip content={<ChartTooltip />} />
@@ -384,7 +369,7 @@ export default function AnalyticsPage() {
                 type="monotone" dataKey="count" name="Events"
                 stroke="url(#gradStroke)" strokeWidth={2.5}
                 fill="url(#gradTimeline)" dot={false}
-                activeDot={{ r: 5, fill: "#F59E0B", stroke: "#fff", strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: "#F59E0B", stroke: "var(--surface)", strokeWidth: 2 }}
                 filter="url(#glow)"
               />
             </AreaChart>
@@ -396,10 +381,7 @@ export default function AnalyticsPage() {
       <div className="grid md:grid-cols-2 gap-5">
 
         {/* Event Types Donut */}
-        <div style={{
-          background: "#fff", borderRadius: 16, padding: "24px 26px",
-          border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
-        }}>
+        <div className="card" style={{ padding: "24px 26px" }}>
           <SectionHeader
             title="Event Types Distribution"
             sub="Breakdown of captured attack patterns"
@@ -441,10 +423,10 @@ export default function AnalyticsPage() {
                     background: PALETTE[i % PALETTE.length], flexShrink: 0,
                   }} />
                   <span style={{
-                    fontSize: 11, color: "#475569", fontWeight: 600,
+                    fontSize: 11, color: "var(--text-muted)", fontWeight: 600,
                     flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>{t.type}</span>
-                  <span style={{ fontSize: 11, color: "#0F172A", fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+                  <span style={{ fontSize: 11, color: "var(--text)", fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
                     {t.count.toLocaleString()}
                   </span>
                 </div>
@@ -454,10 +436,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Radar / Bar */}
-        <div style={{
-          background: "#fff", borderRadius: 16, padding: "24px 26px",
-          border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
-        }}>
+        <div className="card" style={{ padding: "24px 26px" }}>
           <SectionHeader
             title="Attack Pattern Radar"
             sub="Relative intensity by event type"
@@ -474,22 +453,22 @@ export default function AnalyticsPage() {
                       <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0.05} />
                     </radialGradient>
                   </defs>
-                  <PolarGrid stroke="rgba(15,23,42,0.08)" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#64748B", fontWeight: 600 }} />
+                  <PolarGrid stroke="var(--border)" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "var(--text-muted)", fontWeight: 600 }} />
                   <PolarRadiusAxis tick={false} axisLine={false} />
                   <Radar
                     name="Events" dataKey="value"
                     stroke="#8B5CF6" strokeWidth={2}
                     fill="url(#radarFill)"
-                    dot={{ r: 4, fill: "#8B5CF6", stroke: "#fff", strokeWidth: 1.5 } as any}
+                    dot={{ r: 4, fill: "#8B5CF6", stroke: "var(--surface)", strokeWidth: 1.5 } as any}
                   />
                   <Tooltip content={<ChartTooltip />} />
                 </RadarChart>
               ) : (
                 <BarChart data={byType} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
-                  <XAxis dataKey="type" tick={{ fontSize: 10, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="type" tick={{ fontSize: 10, fill: "var(--text-faint)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "var(--text-faint)" }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} />
                   <Bar dataKey="count" radius={[4, 4, 0, 0]} name="Events">
                     {byType.map((_: any, i: number) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
@@ -505,10 +484,7 @@ export default function AnalyticsPage() {
       <div className="grid md:grid-cols-2 gap-5">
 
         {/* Top Targeted Ports */}
-        <div style={{
-          background: "#fff", borderRadius: 16, padding: "24px 26px",
-          border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
-        }}>
+        <div className="card" style={{ padding: "24px 26px" }}>
           <SectionHeader
             title="Top Targeted Ports"
             sub="Most attacked services"
@@ -527,15 +503,15 @@ export default function AnalyticsPage() {
                         fontFamily: "monospace", fontSize: 11, fontWeight: 800,
                         background: `${color}15`, color, padding: "2px 8px", borderRadius: 6,
                       }}>:{p.port}</span>
-                      <span style={{ fontSize: 11, color: "#64748B", fontWeight: 500 }}>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>
                         {portService(p.port)}
                       </span>
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", fontVariantNumeric: "tabular-nums" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>
                       {p.count.toLocaleString()}
                     </span>
                   </div>
-                  <div style={{ height: 5, borderRadius: 4, background: "rgba(15,23,42,0.06)", overflow: "hidden" }}>
+                  <div style={{ height: 5, borderRadius: 4, background: "var(--bg-2)", overflow: "hidden" }}>
                     <div style={{
                       height: "100%", borderRadius: 4, width: `${pct}%`,
                       background: `linear-gradient(90deg, ${color}bb, ${color})`,
@@ -549,10 +525,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Events by Honeypot */}
-        <div style={{
-          background: "#fff", borderRadius: 16, padding: "24px 26px",
-          border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
-        }}>
+        <div className="card" style={{ padding: "24px 26px" }}>
           <SectionHeader
             title="Events by Honeypot"
             sub="Activity distribution across pots"
@@ -570,10 +543,10 @@ export default function AnalyticsPage() {
                     </linearGradient>
                   ))}
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(15,23,42,0.05)" vertical={false} />
-                <XAxis dataKey="pot_id" tick={{ fontSize: 10, fill: "#94A3B8", fontWeight: 600 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="pot_id" tick={{ fontSize: 10, fill: "var(--text-faint)", fontWeight: 600 }} axisLine={false} tickLine={false} />
                 <YAxis
-                  tick={{ fontSize: 10, fill: "#94A3B8", fontWeight: 600 }} axisLine={false} tickLine={false}
+                  tick={{ fontSize: 10, fill: "var(--text-faint)", fontWeight: 600 }} axisLine={false} tickLine={false}
                   tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)}
                 />
                 <Tooltip content={<ChartTooltip />} />
@@ -589,10 +562,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* ── Heatmap ──────────────────────────────────────────── */}
-      <div style={{
-        background: "#fff", borderRadius: 16, padding: "24px 26px",
-        border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
-      }}>
+      <div className="card" style={{ padding: "24px 26px" }}>
         <SectionHeader
           title="Hourly Attack Heatmap"
           sub="Attack density by hour of day — hover each column for details"
@@ -601,41 +571,37 @@ export default function AnalyticsPage() {
         />
         {heatmap.length > 0
           ? <HeatmapGrid data={heatmap} />
-          : <p style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "28px 0" }}>No heatmap data available</p>
+          : <p style={{ fontSize: 12, color: "var(--text-faint)", textAlign: "center", padding: "28px 0" }}>No heatmap data available</p>
         }
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-          <span style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>Low</span>
+          <span style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 600 }}>Low</span>
           <div style={{
             width: 90, height: 7, borderRadius: 4,
             background: "linear-gradient(90deg, rgba(245,158,11,0.12), rgba(245,158,11,0.96))",
           }} />
-          <span style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>High</span>
+          <span style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 600 }}>High</span>
         </div>
       </div>
 
       {/* ── Top Attacker IPs ─────────────────────────────────── */}
-      <div style={{
-        background: "#fff", borderRadius: 16,
-        border: "1px solid rgba(15,23,42,0.07)", boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
-        overflow: "hidden",
-      }}>
+      <div className="card" style={{ overflow: "hidden" }}>
         <div style={{
           padding: "16px 24px",
-          background: "linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)",
-          borderBottom: "1px solid rgba(245,158,11,0.15)",
+          background: "var(--warn-bg)",
+          borderBottom: "1px solid var(--border)",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
-              width: 30, height: 30, borderRadius: 8, background: "rgba(245,158,11,0.15)",
-              display: "flex", alignItems: "center", justifyContent: "center", color: "#B45309",
+              width: 30, height: 30, borderRadius: 8, background: "rgba(245,158,11,0.22)",
+              display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)",
             }}>
               <HiOutlineGlobeAlt size={16} />
             </div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "#92400E" }}>Top Attacker IPs</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)" }}>Top Attacker IPs</p>
           </div>
           <div style={{
-            background: "#F59E0B", color: "#fff",
+            background: "linear-gradient(180deg, #FCD34D 0%, #F59E0B 55%, #D97706 100%)", color: "#1C0A00",
             fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20,
           }}>
             {byIP.length} sources
@@ -645,14 +611,9 @@ export default function AnalyticsPage() {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ background: "#F8FAFC" }}>
+              <tr>
                 {["Rank", "Threat", "IP Address", "Attacks", "Share"].map(h => (
-                  <th key={h} style={{
-                    padding: "10px 20px", textAlign: "left",
-                    fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                    letterSpacing: "0.09em", color: "#94A3B8",
-                    borderBottom: "1px solid rgba(15,23,42,0.06)",
-                  }}>{h}</th>
+                  <th key={h} className="th">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -661,50 +622,45 @@ export default function AnalyticsPage() {
                 const threat = threatLevel(i);
                 const pct = ((r.count / (total || 1)) * 100);
                 return (
-                  <tr
-                    key={r.ip}
-                    style={{ borderBottom: "1px solid rgba(15,23,42,0.04)", transition: "background 0.12s" }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#F8FAFC"}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
-                  >
-                    <td style={{ padding: "12px 20px", fontSize: 12, color: "#94A3B8", fontWeight: 700, fontFamily: "monospace" }}>
+                  <tr key={r.ip} className="tr">
+                    <td className="td" style={{ fontSize: 12, color: "var(--text-faint)", fontWeight: 700, fontFamily: "monospace" }}>
                       #{i + 1}
                     </td>
-                    <td style={{ padding: "12px 20px" }}>
+                    <td className="td">
                       <span style={{
                         fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 6,
                         background: threat.bg, color: threat.fg, letterSpacing: "0.05em",
-                        border: `1px solid ${threat.fg}22`,
+                        border: `1px solid ${threat.soft}`,
                       }}>
                         {threat.label}
                       </span>
                     </td>
-                    <td style={{ padding: "12px 20px" }}>
+                    <td className="td">
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{
                           width: 7, height: 7, borderRadius: "50%",
                           background: threat.fg, flexShrink: 0,
-                          boxShadow: `0 0 6px ${threat.fg}88`,
+                          boxShadow: `0 0 6px ${threat.soft}`,
                         }} />
-                        <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: "#DC2626" }}>
+                        <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: "var(--danger)" }}>
                           {r.ip}
                         </span>
                       </div>
                     </td>
-                    <td style={{ padding: "12px 20px", fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#0F172A" }}>
+                    <td className="td" style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                       {r.count.toLocaleString()}
                     </td>
-                    <td style={{ padding: "12px 20px", minWidth: 160 }}>
+                    <td className="td" style={{ minWidth: 160 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, height: 5, borderRadius: 3, background: "rgba(15,23,42,0.07)", overflow: "hidden" }}>
+                        <div style={{ flex: 1, height: 5, borderRadius: 3, background: "var(--bg-2)", overflow: "hidden" }}>
                           <div style={{
                             height: "100%", borderRadius: 3,
                             width: `${Math.min(pct, 100)}%`,
-                            background: `linear-gradient(90deg, ${threat.fg}88, ${threat.fg})`,
+                            background: `linear-gradient(90deg, ${threat.soft}, ${threat.fg})`,
                             transition: "width 0.6s",
                           }} />
                         </div>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", minWidth: 38, fontVariantNumeric: "tabular-nums" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", minWidth: 38, fontVariantNumeric: "tabular-nums" }}>
                           {pct.toFixed(1)}%
                         </span>
                       </div>

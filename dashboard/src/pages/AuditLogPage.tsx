@@ -1,233 +1,165 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import api from "../api/client";
+import { Icon, Icons } from "../components/Icons";
+import { useAuthStore } from "../stores/auth";
 
-/* ─── Helpers ───────────────────────────────────────────── */
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  });
-}
-function fmtRelative(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60)   return `${s}s ago`;
+/* ─── time helpers ──────────────────────────────────────── */
+const fmtTime = (iso: string) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const fmtRelative = (iso: string) => {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
-}
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-}
-function dayKey(iso: string) {
-  return new Date(iso).toDateString();
-}
-
-/* ─── Action meta ───────────────────────────────────────── */
-interface ActionMeta { bg: string; fg: string; border: string; icon: string; label: string; }
-const ACTION_META: Record<string, ActionMeta> = {
-  create:             { bg: "#F0FDF4", fg: "#15803D", border: "#86EFAC", icon: "✦", label: "Create" },
-  delete:             { bg: "#FEF2F2", fg: "#DC2626", border: "#FECACA", icon: "✕", label: "Delete" },
-  uninstall:          { bg: "#FEF2F2", fg: "#DC2626", border: "#FECACA", icon: "⊖", label: "Uninstall" },
-  update:             { bg: "#EFF6FF", fg: "#2563EB", border: "#BFDBFE", icon: "✎", label: "Update" },
-  login:              { bg: "#F0FDF4", fg: "#059669", border: "#6EE7B7", icon: "→", label: "Login" },
-  logout:             { bg: "#F8FAFC", fg: "#475569", border: "#CBD5E1", icon: "←", label: "Logout" },
-  "regenerate-token": { bg: "#FFFBEB", fg: "#D97706", border: "#FCD34D", icon: "↻", label: "Regen Token" },
-  deploy:             { bg: "#FAF5FF", fg: "#7C3AED", border: "#C4B5FD", icon: "▲", label: "Deploy" },
-  start:              { bg: "#ECFDF5", fg: "#047857", border: "#6EE7B7", icon: "▶", label: "Start" },
-  stop:               { bg: "#FFF7ED", fg: "#C2410C", border: "#FED7AA", icon: "■", label: "Stop" },
 };
-function getActionMeta(action: string): ActionMeta {
-  return ACTION_META[action] ?? { bg: "#F8FAFC", fg: "#475569", border: "#E2E8F0", icon: "·", label: action };
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+const dayKey = (iso: string) => new Date(iso).toDateString();
+const titleCase = (s: string) => (s || "").replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+/* ─── action → tone + icon ──────────────────────────────── */
+type Tone = "ok" | "danger" | "warn" | "info" | "violet" | "muted";
+const TONE: Record<Tone, { bg: string; fg: string; border: string }> = {
+  ok:     { bg: "var(--ok-bg)",     fg: "var(--ok)",     border: "var(--ok-border)" },
+  danger: { bg: "var(--danger-bg)", fg: "var(--danger)", border: "var(--danger-border)" },
+  warn:   { bg: "var(--warn-bg)",   fg: "var(--accent)", border: "var(--warn-border)" },
+  info:   { bg: "var(--info-bg)",   fg: "var(--info)",   border: "var(--info-border)" },
+  violet: { bg: "var(--violet-bg)", fg: "var(--violet)", border: "var(--violet-border)" },
+  muted:  { bg: "var(--bg-2)",      fg: "var(--text-muted)", border: "var(--border-2)" },
+};
+const ACTION_META: Record<string, { icon: string; tone: Tone; label: string }> = {
+  create:             { icon: Icons.plus,    tone: "ok",     label: "Create" },
+  delete:             { icon: Icons.trash,   tone: "danger", label: "Delete" },
+  remove:             { icon: Icons.trash,   tone: "danger", label: "Remove" },
+  uninstall:          { icon: Icons.offline, tone: "danger", label: "Uninstall" },
+  update:             { icon: Icons.settings,tone: "info",   label: "Update" },
+  login:              { icon: Icons.online,  tone: "ok",     label: "Login" },
+  logout:             { icon: Icons.logout,  tone: "muted",  label: "Logout" },
+  "regenerate-token": { icon: Icons.key,     tone: "warn",   label: "Regen Token" },
+  deploy:             { icon: Icons.deploy,  tone: "violet", label: "Deploy" },
+  start:              { icon: Icons.play,     tone: "ok",     label: "Start" },
+  stop:               { icon: Icons.stop,     tone: "warn",   label: "Stop" },
+  restart:            { icon: Icons.restart,  tone: "info",   label: "Restart" },
+  broadcast:          { icon: Icons.megaphone,tone: "violet", label: "Broadcast" },
+  "user-create":      { icon: Icons.user,    tone: "ok",     label: "User Created" },
+  "user-update":      { icon: Icons.user,    tone: "info",   label: "User Updated" },
+  "user-delete":      { icon: Icons.user,    tone: "danger", label: "User Deleted" },
+  "user-role-change": { icon: Icons.shield,  tone: "violet", label: "Role Changed" },
+  "role-create":      { icon: Icons.key,     tone: "ok",     label: "Role Created" },
+  "role-update":      { icon: Icons.key,     tone: "violet", label: "Role Updated" },
+  "role-delete":      { icon: Icons.key,     tone: "danger", label: "Role Deleted" },
+};
+function getActionMeta(action: string): { icon: string; tone: Tone; label: string } {
+  if (ACTION_META[action]) return ACTION_META[action];
+  const a = (action || "").toLowerCase();
+  if (a.includes("delete") || a.includes("remove") || a.includes("uninstall")) return { icon: Icons.trash, tone: "danger", label: titleCase(action) };
+  if (a.includes("create") || a.includes("add"))                              return { icon: Icons.plus, tone: "ok", label: titleCase(action) };
+  if (a.includes("role"))                                                     return { icon: Icons.shield, tone: "violet", label: titleCase(action) };
+  if (a.includes("token") || a.includes("regen"))                             return { icon: Icons.key, tone: "warn", label: titleCase(action) };
+  if (a.includes("update") || a.includes("edit") || a.includes("config"))     return { icon: Icons.settings, tone: "info", label: titleCase(action) };
+  if (a.includes("login"))                                                    return { icon: Icons.online, tone: "ok", label: titleCase(action) };
+  if (a.includes("logout"))                                                   return { icon: Icons.logout, tone: "muted", label: titleCase(action) };
+  return { icon: Icons.hash, tone: "muted", label: titleCase(action) };
+}
+function resourceIcon(res: string): string {
+  const r = (res || "").toLowerCase();
+  if (r.includes("node")) return Icons.server;
+  if (r.includes("user")) return Icons.users;
+  if (r.includes("deploy")) return Icons.deploy;
+  if (r.includes("pot")) return Icons.honeypot;
+  if (r.includes("alert")) return Icons.bell;
+  if (r.includes("session")) return Icons.signal;
+  if (r.includes("token")) return Icons.key;
+  if (r.includes("role")) return Icons.shield;
+  if (r.includes("org")) return Icons.hash;
+  return Icons.clipboard;
 }
 
-/* ─── Resource icon ─────────────────────────────────────── */
-function resourceIcon(res: string) {
-  if (!res) return "📦";
-  const r = res.toLowerCase();
-  if (r.includes("node"))   return "🖥";
-  if (r.includes("user"))   return "👤";
-  if (r.includes("deploy")) return "🚀";
-  if (r.includes("pot"))    return "🍯";
-  if (r.includes("alert"))  return "🔔";
-  if (r.includes("session"))return "💬";
-  if (r.includes("token"))  return "🔑";
-  if (r.includes("org"))    return "🏢";
-  return "📦";
-}
+type UserLite = { id: number; name?: string; email?: string; avatar?: string };
 
-/* ─── User avatar ───────────────────────────────────────── */
-function UserAvatar({ userId }: { userId: any }) {
-  const id = userId ?? 0;
-  const hue = (id * 47) % 360;
-  const initials = `#${id}`;
+/* ─── actor avatar ──────────────────────────────────────── */
+function Avatar({ uid, user }: { uid: number | null; user?: UserLite }) {
+  if (uid == null) {
+    return (
+      <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "grid", placeItems: "center", background: "var(--bg-2)", border: "1px solid var(--border-2)", color: "var(--text-faint)" }}>
+        <Icon d={Icons.settings} size={13} color="var(--text-faint)" />
+      </div>
+    );
+  }
+  if (user?.avatar) return <img src={user.avatar} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
+  const initials = (user?.name ? user.name.split(/\s+/).map(w => w[0]).slice(0, 2).join("") : user?.email ? user.email.slice(0, 2) : String(uid)).toUpperCase();
+  const hue = (uid * 47) % 360;
   return (
-    <div style={{
-      width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
-      background: `hsl(${hue},60%,88%)`,
-      border: `2px solid hsl(${hue},45%,75%)`,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: 9, fontWeight: 800, color: `hsl(${hue},50%,35%)`,
-      fontFamily: "monospace",
-    }}>
+    <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: `hsl(${hue},60%,86%)`, border: `2px solid hsl(${hue},45%,72%)`,
+      display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: `hsl(${hue},55%,32%)` }}>
       {initials}
     </div>
   );
 }
 
-/* ─── Stat chip ─────────────────────────────────────────── */
-function StatChip({ label, value, meta, active }: { label: string; value: number; meta: ActionMeta; active?: boolean }) {
-  return (
-    <div className="card card-hover" style={{
-      padding: "12px 16px", display: "flex", alignItems: "center", gap: 10,
-      background: active ? meta.bg : undefined,
-      border: active ? `2px solid ${meta.border}` : undefined,
-      boxShadow: active ? `0 0 0 3px ${meta.border}55, 0 2px 8px ${meta.border}44` : undefined,
-      transform: active ? "translateY(-1px)" : undefined,
-      transition: "all 0.18s",
-      position: "relative",
-    }}>
-      {active && (
-        <div style={{
-          position: "absolute", top: 6, right: 8,
-          width: 16, height: 16, borderRadius: "50%",
-          background: meta.fg, display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <svg viewBox="0 0 12 12" width="8" height="8" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="2,6 5,9 10,3" />
-          </svg>
-        </div>
-      )}
-      <div style={{
-        width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-        background: active ? meta.fg : meta.bg,
-        border: `1px solid ${meta.border}`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 15, color: active ? "#fff" : meta.fg,
-        transition: "all 0.18s",
-      }}>
-        {meta.icon}
-      </div>
-      <div>
-        <p style={{ fontSize: 18, fontWeight: 800, color: meta.fg, lineHeight: 1, letterSpacing: "-0.02em" }}>
-          {value.toLocaleString()}
-        </p>
-        <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: active ? meta.fg : "#94A3B8", marginTop: 2 }}>
-          {label}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Expandable row ────────────────────────────────────── */
-function AuditRow({ e, expanded, onToggle }: { e: any; expanded: boolean; onToggle: () => void }) {
-  const meta = getActionMeta(e.action);
+/* ─── expandable row ────────────────────────────────────── */
+function AuditRow({ e, user, actorName, expanded, onToggle }: { e: any; user?: UserLite; actorName: string; expanded: boolean; onToggle: () => void }) {
+  const m = getActionMeta(e.action);
+  const t = TONE[m.tone];
   return (
     <>
-      <tr
-        onClick={onToggle}
-        style={{
-          borderBottom: expanded ? "none" : "1px solid rgba(15,23,42,0.05)",
-          cursor: "pointer",
-          background: expanded ? `${meta.bg}66` : undefined,
-          transition: "background 0.15s",
-        }}
-        onMouseEnter={ev => { if (!expanded) (ev.currentTarget as HTMLElement).style.background = "rgba(245,158,11,0.03)"; }}
-        onMouseLeave={ev => { if (!expanded) (ev.currentTarget as HTMLElement).style.background = ""; }}
-      >
-        {/* Expand chevron */}
+      <tr onClick={onToggle}
+        style={{ borderBottom: expanded ? "none" : "1px solid var(--border)", cursor: "pointer", background: expanded ? t.bg : undefined, transition: "background 0.15s" }}
+        onMouseEnter={ev => { if (!expanded) (ev.currentTarget as HTMLElement).style.background = "var(--sel-amber)"; }}
+        onMouseLeave={ev => { if (!expanded) (ev.currentTarget as HTMLElement).style.background = ""; }}>
         <td style={{ padding: "11px 8px 11px 16px", width: 28 }}>
-          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"
-            style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
-            <polyline points="5,3 11,8 5,13" />
-          </svg>
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeLinecap="round"
+            style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s" }}><polyline points="5,3 11,8 5,13" /></svg>
         </td>
-
-        {/* Time */}
         <td style={{ padding: "11px 14px", whiteSpace: "nowrap" }}>
-          <p style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", fontFamily: "monospace" }}>{fmtTime(e.created_at)}</p>
-          <p style={{ fontSize: 10, color: "#94A3B8", marginTop: 1 }}>{fmtRelative(e.created_at)}</p>
+          <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: "ui-monospace, monospace" }}>{fmtTime(e.created_at)}</p>
+          <p style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 1 }}>{fmtRelative(e.created_at)}</p>
         </td>
-
-        {/* User */}
         <td style={{ padding: "11px 14px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <UserAvatar userId={e.user_id} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
-              {e.user_id ? `User #${e.user_id}` : "System"}
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <Avatar uid={e.user_id ?? null} user={user} />
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: e.user_id == null ? "var(--text-faint)" : "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 150 }}>{actorName}</span>
           </div>
         </td>
-
-        {/* Action badge */}
         <td style={{ padding: "11px 14px" }}>
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            padding: "3px 9px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-            background: meta.bg, color: meta.fg,
-            border: `1px solid ${meta.border}`,
-            letterSpacing: "0.02em",
-          }}>
-            <span style={{ fontSize: 12 }}>{meta.icon}</span>
-            {meta.label}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: t.bg, color: t.fg, border: `1px solid ${t.border}`, whiteSpace: "nowrap" }}>
+            <Icon d={m.icon} size={11} color={t.fg} /> {m.label}
           </span>
         </td>
-
-        {/* Resource */}
         <td style={{ padding: "11px 14px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 14 }}>{resourceIcon(e.resource)}</span>
-            <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 600, color: "#334155" }}>{e.resource || "—"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Icon d={resourceIcon(e.resource)} size={14} color="var(--text-faint)" />
+            <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{e.resource || "—"}</span>
           </div>
         </td>
-
-        {/* Resource ID */}
         <td style={{ padding: "11px 14px" }}>
-          {e.resource_id != null ? (
-            <span style={{
-              fontFamily: "monospace", fontSize: 11, fontWeight: 700,
-              background: "rgba(245,158,11,0.10)", color: "#92400E",
-              padding: "2px 7px", borderRadius: 5,
-            }}>
-              {e.resource_id}
-            </span>
-          ) : (
-            <span style={{ color: "#CBD5E1", fontSize: 12 }}>—</span>
-          )}
+          {e.resource_id != null
+            ? <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, fontWeight: 700, background: "var(--warn-bg)", color: "var(--accent)", padding: "2px 7px", borderRadius: 6, border: "1px solid var(--warn-border)" }}>{e.resource_id}</span>
+            : <span style={{ color: "var(--text-faint)", fontSize: 12 }}>—</span>}
         </td>
-
-        {/* Details preview */}
-        <td style={{ padding: "11px 14px", maxWidth: 220 }}>
+        <td style={{ padding: "11px 14px", maxWidth: 240 }}>
           {e.details
-            ? <span style={{ fontSize: 11, color: "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{e.details}</span>
-            : <span style={{ color: "#CBD5E1", fontSize: 12 }}>—</span>
-          }
+            ? <span style={{ fontSize: 11.5, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{e.details}</span>
+            : <span style={{ color: "var(--text-faint)", fontSize: 12 }}>—</span>}
         </td>
       </tr>
 
-      {/* Expanded detail panel */}
       {expanded && (
-        <tr style={{ borderBottom: "1px solid rgba(15,23,42,0.05)" }}>
+        <tr style={{ borderBottom: "1px solid var(--border)" }}>
           <td colSpan={7} style={{ padding: 0 }}>
-            <div style={{
-              margin: "0 16px 12px 40px", borderRadius: 10,
-              background: meta.bg, border: `1px solid ${meta.border}`,
-              padding: "12px 16px",
-            }}>
+            <div style={{ margin: "0 16px 12px 40px", borderRadius: 10, background: t.bg, border: `1px solid ${t.border}`, padding: "12px 16px" }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-                <DetailField label="Event ID"    value={`#${e.id}`} mono />
-                <DetailField label="Timestamp"   value={new Date(e.created_at).toISOString()} mono />
-                <DetailField label="User ID"     value={e.user_id ?? "System"} mono />
-                <DetailField label="Action"      value={e.action} mono />
-                <DetailField label="Resource"    value={e.resource || "—"} mono />
-                <DetailField label="Resource ID" value={e.resource_id ?? "—"} mono />
+                <DetailField label="Event ID" value={`#${e.id}`} />
+                <DetailField label="Timestamp" value={new Date(e.created_at).toISOString()} />
+                <DetailField label="Actor" value={actorName} />
+                <DetailField label="Action" value={e.action} />
+                <DetailField label="Resource" value={e.resource || "—"} />
+                <DetailField label="Resource ID" value={e.resource_id ?? "—"} />
               </div>
               {e.details && (
-                <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${meta.border}` }}>
-                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: meta.fg, marginBottom: 4 }}>Details</p>
-                  <p style={{ fontSize: 12, color: "#334155", fontFamily: "monospace", wordBreak: "break-all" }}>{e.details}</p>
+                <div style={{ marginTop: 12 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: t.fg, marginBottom: 5 }}>Details</p>
+                  <pre className="code-block" style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 11.5 }}>{e.details}</pre>
                 </div>
               )}
             </div>
@@ -237,120 +169,125 @@ function AuditRow({ e, expanded, onToggle }: { e: any; expanded: boolean; onTogg
     </>
   );
 }
-
-function DetailField({ label, value, mono }: { label: string; value: any; mono?: boolean }) {
+function DetailField({ label, value }: { label: string; value: any }) {
   return (
     <div>
-      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#94A3B8", marginBottom: 2 }}>{label}</p>
-      <p style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", fontFamily: mono ? "monospace" : undefined }}>{String(value)}</p>
+      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--text-faint)", marginBottom: 2 }}>{label}</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: "ui-monospace, monospace" }}>{String(value)}</p>
     </div>
   );
 }
-
-/* ─── Day separator ─────────────────────────────────────── */
 function DaySeparator({ date }: { date: string }) {
   return (
     <tr>
-      <td colSpan={7} style={{ padding: "6px 16px 4px", background: "#F8FAFC", borderBottom: "1px solid rgba(15,23,42,0.05)" }}>
+      <td colSpan={7} style={{ padding: "7px 16px 5px", background: "var(--bg-2)", borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#F59E0B", flexShrink: 0 }} />
-          <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.09em", color: "#94A3B8" }}>
-            {date}
-          </span>
+          <span className="status-dot status-dot-amber" style={{ width: 6, height: 6 }} />
+          <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.09em", color: "var(--text-faint)" }}>{date}</span>
         </div>
       </td>
     </tr>
   );
 }
 
-/* ─── Skeleton ──────────────────────────────────────────── */
-function Skeleton() {
+/* ─── stat tile ─────────────────────────────────────────── */
+function StatTile({ color, label, value, icon }: { color: string; label: string; value: number; icon: string }) {
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <div style={{ width: 80, height: 9, borderRadius: 5, background: "rgba(15,23,42,0.07)", marginBottom: 8 }} />
-        <div style={{ width: 180, height: 22, borderRadius: 8, background: "rgba(15,23,42,0.09)" }} />
+    <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
+      <div style={{ width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0, background: `${color}1A`, color }}>
+        <Icon d={icon} size={18} color={color} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="card" style={{ padding: "12px 16px", height: 62 }}>
-            <div style={{ width: "50%", height: 9, borderRadius: 5, background: "rgba(15,23,42,0.07)" }} />
-          </div>
-        ))}
-      </div>
-      <div className="card" style={{ overflow: "hidden" }}>
-        {[...Array(8)].map((_, i) => (
-          <div key={i} style={{ padding: "14px 18px", borderBottom: "1px solid rgba(15,23,42,0.05)", display: "flex", gap: 16, alignItems: "center" }}>
-            <div style={{ width: 80, height: 10, borderRadius: 5, background: "rgba(15,23,42,0.06)" }} />
-            <div style={{ width: 50, height: 10, borderRadius: 5, background: "rgba(15,23,42,0.05)" }} />
-            <div style={{ width: 70, height: 18, borderRadius: 6, background: "rgba(15,23,42,0.06)" }} />
-            <div style={{ width: 90, height: 10, borderRadius: 5, background: "rgba(15,23,42,0.05)" }} />
-            <div style={{ flex: 1, height: 10, borderRadius: 5, background: "rgba(15,23,42,0.04)" }} />
-          </div>
-        ))}
+      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1, minWidth: 0 }}>
+        <span className="stat-number-sm">{value.toLocaleString()}</span>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.07em", marginTop: 3, whiteSpace: "nowrap" }}>{label}</span>
       </div>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   MAIN PAGE
-═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════ */
 const PAGE_SIZE = 25;
+type Range = "all" | "24h" | "7d" | "30d";
+const RANGES: { key: Range; label: string; ms: number }[] = [
+  { key: "all", label: "All time", ms: 0 },
+  { key: "24h", label: "24h", ms: 86400e3 },
+  { key: "7d", label: "7 days", ms: 7 * 86400e3 },
+  { key: "30d", label: "30 days", ms: 30 * 86400e3 },
+];
 
 export default function AuditLogPage() {
-  const [search, setSearch]       = useState("");
+  const [search, setSearch] = useState("");
   const [filterAction, setFilter] = useState("all");
-  const [page, setPage]           = useState(1);
-  const [expanded, setExpanded]   = useState<number | null>(null);
+  const [range, setRange] = useState<Range>("all");
+  const [page, setPage] = useState(1);
+  const [expanded, setExpanded] = useState<number | null>(null);
 
-  const { data, isLoading, dataUpdatedAt } = useQuery({
+  const canSeeUsers = useAuthStore(s => s.hasPerm("users.manage"));
+
+  const { data, isLoading, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ["audit-log"],
-    queryFn: async () => (await api.get("/audit-log?limit=500")).data,
+    queryFn: async () => (await api.get("/audit-log?limit=500")).data ?? [],
     refetchInterval: 15000,
+  });
+  const { data: usersData } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => (await api.get("/users")).data ?? [],
+    enabled: canSeeUsers, staleTime: 60_000, retry: false,
   });
 
   const raw: any[] = data ?? [];
+  const userMap = useMemo(() => {
+    const m = new Map<number, UserLite>();
+    (usersData ?? []).forEach((u: any) => m.set(u.id, u));
+    return m;
+  }, [usersData]);
+  const actorName = (uid: number | null) => {
+    if (uid == null) return "System";
+    const u = userMap.get(uid);
+    return u?.name || u?.email || `User #${uid}`;
+  };
 
-  /* Derive action summary counts */
   const actionCounts = useMemo(() => {
     const map: Record<string, number> = {};
     raw.forEach(e => { map[e.action] = (map[e.action] ?? 0) + 1; });
     return map;
   }, [raw]);
+  const allActions = useMemo(() => Object.keys(actionCounts).sort((a, b) => actionCounts[b] - actionCounts[a]), [actionCounts]);
 
-  /* Top 4 actions by count for stat chips */
-  const topActions = useMemo(() =>
-    Object.entries(actionCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4),
-    [actionCounts]
-  );
+  /* stats */
+  const now = Date.now();
+  const stats = useMemo(() => {
+    const day = now - 86400e3;
+    const actors = new Set<number>();
+    let today = 0, security = 0;
+    raw.forEach(e => {
+      if (e.user_id != null) actors.add(e.user_id);
+      if (new Date(e.created_at).getTime() >= day) today++;
+      const a = (e.action || "").toLowerCase();
+      if (a.includes("delete") || a.includes("remove") || a.includes("uninstall") || a.includes("regen") || a.includes("role")) security++;
+    });
+    return { total: raw.length, today, actors: actors.size, security };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw]);
 
-  /* All unique actions for filter dropdown */
-  const allActions = useMemo(() => Array.from(new Set(raw.map(e => e.action))).sort(), [raw]);
-
-  /* Filtered list */
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
+    const cutoff = range === "all" ? 0 : now - (RANGES.find(r => r.key === range)?.ms ?? 0);
     return raw.filter(e => {
       if (filterAction !== "all" && e.action !== filterAction) return false;
+      if (cutoff && new Date(e.created_at).getTime() < cutoff) return false;
       if (!q) return true;
-      return (
-        String(e.user_id ?? "").includes(q) ||
-        (e.action ?? "").toLowerCase().includes(q) ||
-        (e.resource ?? "").toLowerCase().includes(q) ||
-        String(e.resource_id ?? "").toLowerCase().includes(q) ||
-        (e.details ?? "").toLowerCase().includes(q)
-      );
+      return String(e.user_id ?? "").includes(q) || actorName(e.user_id ?? null).toLowerCase().includes(q) ||
+        (e.action ?? "").toLowerCase().includes(q) || (e.resource ?? "").toLowerCase().includes(q) ||
+        String(e.resource_id ?? "").toLowerCase().includes(q) || (e.details ?? "").toLowerCase().includes(q);
     });
-  }, [raw, search, filterAction]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw, search, filterAction, range, userMap]);
 
-  /* Pagination */
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  /* Group by day for separators */
   const rows: Array<{ type: "day"; date: string } | { type: "row"; e: any }> = [];
   let lastDay = "";
   for (const e of paginated) {
@@ -359,127 +296,85 @@ export default function AuditLogPage() {
     rows.push({ type: "row", e });
   }
 
-  const lastUpdated = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-    : "—";
+  const anyFilter = !!search || filterAction !== "all" || range !== "all";
+  const clearAll = () => { setSearch(""); setFilter("all"); setRange("all"); setPage(1); };
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
 
-  if (isLoading) return <Skeleton />;
+  const exportCSV = () => {
+    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [["id", "timestamp", "actor", "action", "resource", "resource_id", "details"].join(",")];
+    filtered.forEach(e => lines.push([e.id, new Date(e.created_at).toISOString(), actorName(e.user_id ?? null), e.action, e.resource, e.resource_id ?? "", e.details ?? ""].map(esc).join(",")));
+    const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `honeybee-audit-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="animate-fade-up" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-      {/* ── Header ─────────────────────────────────────────── */}
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
           <p className="page-label">Security</p>
-          <h1 className="page-title">Audit Log</h1>
-          <p style={{ fontSize: 11, color: "#94A3B8", marginTop: 3 }}>
-            <span style={{ color: "#F59E0B", fontWeight: 700 }}>{raw.length.toLocaleString()}</span> total entries &nbsp;·&nbsp;
-            <span style={{ color: "#475569", fontWeight: 600 }}>{filtered.length.toLocaleString()}</span> shown &nbsp;·&nbsp;
-            updated {lastUpdated}
+          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            Audit Log
+            <span className="status-dot status-dot-green" title="Live · 15s" style={{ width: 7, height: 7, opacity: isFetching ? 1 : 0.5, transition: "opacity .2s" }} />
+          </h1>
+          <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 5 }}>
+            Every privileged action is recorded. <span style={{ color: "var(--text-faint)" }}>Updated {lastUpdated}</span>
           </p>
         </div>
-        {/* Live indicator */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "5px 12px", borderRadius: 20,
-          background: "#F0FDF4", border: "1px solid #86EFAC",
-          fontSize: 11, fontWeight: 700, color: "#15803D",
-        }}>
-          <span className="dot-online" style={{ width: 6, height: 6 }} />
-          Live · 15s refresh
-        </div>
+        <button onClick={exportCSV} disabled={filtered.length === 0} className="btn btn-secondary" style={{ gap: 6 }}>
+          <Icon d={Icons.install} size={14} color="var(--text-muted)" /> Export CSV
+        </button>
       </div>
 
-      {/* ── Filters ─────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {/* Search row */}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 220px", position: "relative" }}>
-            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#94A3B8" strokeWidth="2"
-              style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-              <circle cx="8" cy="8" r="5" /><path d="M17 17l-4-4" />
-            </svg>
-            <input
-              className="input"
-              placeholder="Search user, action, resource, details…"
-              value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1); }}
-              style={{ paddingLeft: 30, fontSize: 13 }}
-            />
+      {/* Stat tiles */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+        <StatTile color="#F59E0B" label="Total entries" value={stats.total} icon={Icons.clipboard} />
+        <StatTile color="#3B82F6" label="Last 24h" value={stats.today} icon={Icons.clock} />
+        <StatTile color="#7C3AED" label="Unique actors" value={stats.actors} icon={Icons.users} />
+        <StatTile color="#EF4444" label="Security events" value={stats.security} icon={Icons.shield} />
+      </div>
+
+      {/* Toolbar */}
+      <div className="card" style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ position: "relative", flex: "1 1 220px", minWidth: 200 }}>
+            <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+              <Icon d={Icons.search} size={14} color="var(--text-faint)" />
+            </div>
+            <input className="input" placeholder="Search actor, action, resource, details…" value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }} style={{ paddingLeft: 36, width: "100%", boxSizing: "border-box" }} />
           </div>
-          {(search || filterAction !== "all") && (
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => { setSearch(""); setFilter("all"); setPage(1); }}
-              style={{ alignSelf: "center" }}
-            >
-              ✕ Clear filters
-            </button>
-          )}
+          <div className="segmented">
+            {RANGES.map(r => (
+              <button key={r.key} className={range === r.key ? "is-active" : ""} aria-selected={range === r.key} onClick={() => { setRange(r.key); setPage(1); }}>{r.label}</button>
+            ))}
+          </div>
+          {anyFilter && <button className="btn btn-secondary btn-sm" onClick={clearAll} style={{ gap: 5 }}><Icon d={Icons.close} size={12} color="var(--text-muted)" /> Clear</button>}
         </div>
 
-        {/* Action filter pills */}
+        {/* Action filter chips */}
         {allActions.length > 0 && (
-          <div style={{
-            display: "flex", flexWrap: "wrap", gap: 6,
-            padding: "10px 14px",
-            background: "#F8FAFC",
-            borderRadius: 12,
-            border: "1px solid rgba(15,23,42,0.07)",
-          }}>
-            <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94A3B8", alignSelf: "center", marginRight: 4 }}>Filter:</span>
-            {/* All button */}
-            <button
-              onClick={() => { setFilter("all"); setPage(1); }}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 5,
-                padding: "4px 11px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                cursor: "pointer", border: "1.5px solid",
-                transition: "all 0.15s",
-                background: filterAction === "all" ? "#0F172A" : "#1E293B",
-                color: "#fff",
-                borderColor: filterAction === "all" ? "#0F172A" : "#334155",
-                boxShadow: filterAction === "all" ? "0 2px 6px rgba(15,23,42,0.35)" : "0 1px 3px rgba(15,23,42,0.25)",
-                opacity: filterAction === "all" ? 1 : 0.72,
-              }}
-            >
-              <span style={{ fontSize: 10, opacity: 0.7 }}>⊞</span>
-              All
-              <span style={{
-                background: "rgba(255,255,255,0.18)",
-                color: "#fff",
-                padding: "1px 6px", borderRadius: 10, fontSize: 10, fontWeight: 800,
-              }}>{raw.length}</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+            <button onClick={() => { setFilter("all"); setPage(1); }} style={{
+              display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, cursor: "pointer",
+              border: "1.5px solid", transition: "all .15s",
+              background: filterAction === "all" ? "var(--text)" : "var(--surface)", color: filterAction === "all" ? "var(--surface)" : "var(--text-muted)",
+              borderColor: filterAction === "all" ? "var(--text)" : "var(--border-2)" }}>
+              All <span style={{ padding: "1px 6px", borderRadius: 999, fontSize: 10, fontWeight: 800, background: filterAction === "all" ? "rgba(255,255,255,0.2)" : "var(--bg-2)" }}>{raw.length}</span>
             </button>
-            {/* Per-action pill buttons */}
             {allActions.map(a => {
-              const m = getActionMeta(a);
-              const isActive = filterAction === a;
+              const m = getActionMeta(a); const t = TONE[m.tone]; const active = filterAction === a;
               return (
-                <button
-                  key={a}
-                  onClick={() => { setFilter(f => f === a ? "all" : a); setPage(1); }}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 5,
-                    padding: "4px 11px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                    cursor: "pointer", border: "1.5px solid",
-                    transition: "all 0.15s",
-                    background: isActive ? m.fg : "#fff",
-                    color: isActive ? "#fff" : m.fg,
-                    borderColor: isActive ? m.fg : m.border,
-                    boxShadow: isActive ? `0 2px 8px ${m.border}88` : "none",
-                    transform: isActive ? "translateY(-1px)" : "none",
-                  }}
-                >
-                  <span style={{ fontSize: 12 }}>{m.icon}</span>
-                  {m.label}
-                  <span style={{
-                    background: isActive ? "rgba(255,255,255,0.28)" : m.bg,
-                    color: isActive ? "#fff" : m.fg,
-                    padding: "1px 6px", borderRadius: 10, fontSize: 10, fontWeight: 800,
-                    border: isActive ? "none" : `1px solid ${m.border}`,
-                  }}>{actionCounts[a] ?? 0}</span>
+                <button key={a} onClick={() => { setFilter(f => f === a ? "all" : a); setPage(1); }} style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, cursor: "pointer",
+                  border: "1.5px solid", transition: "all .15s",
+                  background: active ? t.fg : t.bg, color: active ? "#fff" : t.fg, borderColor: active ? t.fg : t.border,
+                  boxShadow: active ? `0 2px 8px color-mix(in srgb, ${t.fg} 45%, transparent)` : "none", transform: active ? "translateY(-1px)" : "none" }}>
+                  <Icon d={m.icon} size={11} color={active ? "#fff" : t.fg} /> {m.label}
+                  <span style={{ padding: "1px 6px", borderRadius: 999, fontSize: 10, fontWeight: 800, background: active ? "rgba(255,255,255,0.25)" : "var(--surface)", color: active ? "#fff" : t.fg }}>{actionCounts[a] ?? 0}</span>
                 </button>
               );
             })}
@@ -487,95 +382,64 @@ export default function AuditLogPage() {
         )}
       </div>
 
-      {/* ── Table ───────────────────────────────────────────── */}
+      {/* Table */}
       <div className="card" style={{ overflow: "hidden" }}>
-        {/* Table header */}
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
             <thead>
-              <tr style={{ background: "#F8FAFC" }}>
-                <th style={{ width: 28, padding: "10px 8px 10px 16px", borderBottom: "1px solid rgba(15,23,42,0.07)" }} />
-                {["Time", "User", "Action", "Resource", "ID", "Details"].map(h => (
-                  <th key={h} style={{
-                    padding: "10px 14px", textAlign: "left", whiteSpace: "nowrap",
-                    fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                    letterSpacing: "0.09em", color: "#94A3B8",
-                    borderBottom: "1px solid rgba(15,23,42,0.07)",
-                  }}>{h}</th>
-                ))}
+              <tr>
+                <th className="th" style={{ width: 28, padding: "10px 8px 10px 16px" }} />
+                {["Time", "Actor", "Action", "Resource", "ID", "Details"].map(h => <th key={h} className="th" style={{ padding: "10px 14px" }}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} style={{ padding: "48px 24px", textAlign: "center" }}>
-                    <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: "#475569" }}>No entries match your filters</p>
-                    <p style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}>Try adjusting your search or filter</p>
-                  </td>
-                </tr>
-              )}
-              {rows.map((row, i) =>
+              {isLoading ? (
+                [...Array(8)].map((_, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td className="td" /><td className="td"><div className="skeleton" style={{ height: 12, width: 90 }} /></td>
+                    <td className="td"><div className="skeleton" style={{ height: 12, width: 110 }} /></td>
+                    <td className="td"><div className="skeleton" style={{ height: 18, width: 80, borderRadius: 99 }} /></td>
+                    <td className="td"><div className="skeleton" style={{ height: 12, width: 70 }} /></td>
+                    <td className="td"><div className="skeleton" style={{ height: 12, width: 40 }} /></td>
+                    <td className="td"><div className="skeleton" style={{ height: 12, width: "70%" }} /></td>
+                  </tr>
+                ))
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={7} style={{ padding: 0 }}>
+                  <div className="empty-state">
+                    <div className="empty-icon"><Icon d={anyFilter ? Icons.search : Icons.clipboard} size={26} color="var(--text-faint)" /></div>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{anyFilter ? "No entries match your filters" : "No audit entries yet"}</p>
+                    <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{anyFilter ? "Try adjusting your search, range, or action filter." : "Privileged actions will appear here as they happen."}</p>
+                    {anyFilter && <button onClick={clearAll} className="btn btn-secondary btn-sm" style={{ marginTop: 4 }}>Clear filters</button>}
+                  </div>
+                </td></tr>
+              ) : rows.map((row, i) =>
                 row.type === "day"
                   ? <DaySeparator key={`day-${i}`} date={row.date} />
-                  : <AuditRow
-                      key={row.e.id}
-                      e={row.e}
-                      expanded={expanded === row.e.id}
-                      onToggle={() => setExpanded(p => p === row.e.id ? null : row.e.id)}
-                    />
+                  : <AuditRow key={row.e.id} e={row.e} user={row.e.user_id != null ? userMap.get(row.e.user_id) : undefined}
+                      actorName={actorName(row.e.user_id ?? null)} expanded={expanded === row.e.id}
+                      onToggle={() => setExpanded(p => p === row.e.id ? null : row.e.id)} />
               )}
             </tbody>
           </table>
         </div>
 
-        {/* ── Pagination ──────────────────────────────────────── */}
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div style={{
-            padding: "12px 18px", borderTop: "1px solid rgba(15,23,42,0.06)",
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            background: "#FAFAFA", flexWrap: "wrap", gap: 8,
-          }}>
-            <p style={{ fontSize: 12, color: "#64748B" }}>
-              Showing <strong>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)}</strong> of{" "}
-              <strong>{filtered.length}</strong> entries
+          <div style={{ padding: "12px 18px", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-2)", flexWrap: "wrap", gap: 8 }}>
+            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Showing <strong>{(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)}</strong> of <strong>{filtered.length}</strong>
             </p>
-            <div style={{ display: "flex", gap: 4 }}>
-              <button
-                className="btn btn-secondary btn-xs"
-                disabled={page === 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-              >← Prev</button>
-
-              {/* Page number buttons (show up to 7) */}
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <button className="btn btn-secondary btn-xs" disabled={safePage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>← Prev</button>
               {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
-                .reduce<(number | "…")[]>((acc, p, i, arr) => {
-                  if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push("…");
-                  acc.push(p); return acc;
-                }, [])
-                .map((p, i) =>
-                  p === "…"
-                    ? <span key={`ellipsis-${i}`} style={{ padding: "4px 8px", fontSize: 12, color: "#94A3B8" }}>…</span>
-                    : <button
-                        key={p}
-                        className="btn btn-xs"
-                        onClick={() => setPage(p as number)}
-                        style={{
-                          background: page === p ? "#F59E0B" : "#fff",
-                          color: page === p ? "#fff" : "#475569",
-                          border: `1px solid ${page === p ? "#F59E0B" : "rgba(15,23,42,0.12)"}`,
-                          fontWeight: 700,
-                        }}
-                      >{p}</button>
-                )
-              }
-
-              <button
-                className="btn btn-secondary btn-xs"
-                disabled={page === totalPages}
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              >Next →</button>
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 2)
+                .reduce<(number | "…")[]>((acc, p, i, arr) => { if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push("…"); acc.push(p); return acc; }, [])
+                .map((p, i) => p === "…"
+                  ? <span key={`e-${i}`} style={{ padding: "4px 8px", fontSize: 12, color: "var(--text-faint)" }}>…</span>
+                  : <button key={p} className="btn btn-xs" onClick={() => setPage(p as number)}
+                      style={{ background: safePage === p ? "var(--accent)" : "var(--surface)", color: safePage === p ? "#fff" : "var(--text-muted)", border: `1px solid ${safePage === p ? "var(--accent)" : "var(--border-2)"}`, fontWeight: 700 }}>{p}</button>)}
+              <button className="btn btn-secondary btn-xs" disabled={safePage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next →</button>
             </div>
           </div>
         )}

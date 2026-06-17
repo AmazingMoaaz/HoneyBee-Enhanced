@@ -19,8 +19,10 @@ import (
 	"github.com/honeybee-enhanced/core/internal/config"
 	"github.com/honeybee-enhanced/core/internal/loganalyzer"
 	"github.com/honeybee-enhanced/core/internal/nodeserver"
+	"github.com/honeybee-enhanced/core/internal/notify"
 	"github.com/honeybee-enhanced/core/internal/potstore"
 	"github.com/honeybee-enhanced/core/internal/store"
+	"github.com/honeybee-enhanced/shared/models"
 )
 
 // Build constructs the chi router with all routes.
@@ -30,6 +32,8 @@ func Build(
 	ns *nodeserver.Server,
 	ps *potstore.Client,
 	hub *ws.Hub,
+	bc ws.Broadcaster,
+	notifier *notify.Notifier,
 	la *loganalyzer.Client,
 	logger *slog.Logger,
 ) http.Handler {
@@ -57,11 +61,13 @@ func Build(
 	sessH := handlers.NewSessionsHandler(st)
 	psH := handlers.NewPotStoreHandler(ps)
 	usersH := handlers.NewUsersHandler(st)
+	rolesH := handlers.NewRolesHandler(st)
 	cmdH := handlers.NewCommandsHandler(st, ns)
-	sysH := handlers.NewSystemHandler(st, ns, "1.0.0")
+	sysH := handlers.NewSystemHandler(st, ns, la, ps, "1.0.0")
 	analyticsH := handlers.NewAnalyticsHandler(st)
-	alertsH := handlers.NewAlertsHandler(st, hub)
+	alertsH := handlers.NewAlertsHandler(st, bc)
 	auditH := handlers.NewAuditHandler(st)
+	telegramH := handlers.NewTelegramHandler(st, notifier)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -164,16 +170,17 @@ func Build(
 			r.Get("/nodes/{id}", nodesH.Get)
 			r.Get("/integrations/log-analyzer", nodesH.LogAnalyzerInfo)
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireOperator)
+				r.Use(middleware.RequirePermission(models.PermNodesManage))
 				r.Post("/nodes", nodesH.Create)
 				r.Delete("/nodes/{id}", nodesH.Delete)
 				r.Post("/nodes/{id}/uninstall", nodesH.Uninstall)
 				r.Post("/nodes/{id}/regenerate-token", nodesH.RegenerateToken)
 				r.Post("/nodes/{id}/command", cmdH.SendNodeCommand)
-				r.Post("/nodes/{id}/deployments", depsH.CreateForNode)
 				r.Put("/nodes/{id}/log-analyzer", nodesH.EnableLogAnalyzer)
 				r.Delete("/nodes/{id}/log-analyzer", nodesH.DisableLogAnalyzer)
 			})
+			r.With(middleware.RequirePermission(models.PermPotsDeploy)).
+				Post("/nodes/{id}/deployments", depsH.CreateForNode)
 
 			// Node Metrics
 			r.Get("/nodes/{id}/metrics", analyticsH.NodeMetrics)
@@ -182,7 +189,7 @@ func Build(
 			r.Get("/deployments", depsH.List)
 			r.Get("/deployments/{id}/logs", depsH.Logs)
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireOperator)
+				r.Use(middleware.RequirePermission(models.PermPotsDeploy))
 				r.Post("/deployments/{id}/start", depsH.Action("start"))
 				r.Post("/deployments/{id}/stop", depsH.Action("stop"))
 				r.Post("/deployments/{id}/restart", depsH.Action("restart"))
@@ -207,10 +214,8 @@ func Build(
 
 			// PotStore
 			r.Get("/potstore", psH.List)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireAdmin)
-				r.Post("/potstore/sync", psH.Sync)
-			})
+			r.With(middleware.RequirePermission(models.PermPotstoreSync)).
+				Post("/potstore/sync", psH.Sync)
 
 			// System Check
 			r.Get("/system/check", sysH.Check)
@@ -219,7 +224,7 @@ func Build(
 			r.Get("/alerts", alertsH.ListAlerts)
 			r.Get("/alerts/count", alertsH.CountUnacknowledged)
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireOperator)
+				r.Use(middleware.RequirePermission(models.PermAlertsManage))
 				r.Post("/alerts", alertsH.CreateAlert)
 				r.Post("/alerts/{id}/acknowledge", alertsH.Acknowledge)
 				r.Delete("/alerts/{id}", alertsH.DeleteAlert)
@@ -228,7 +233,7 @@ func Build(
 			// Alert Rules
 			r.Get("/alert-rules", alertsH.ListRules)
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireAdmin)
+				r.Use(middleware.RequirePermission(models.PermAlertRulesManage))
 				r.Post("/alert-rules", alertsH.CreateRule)
 				r.Put("/alert-rules/{id}", alertsH.UpdateRule)
 				r.Delete("/alert-rules/{id}", alertsH.DeleteRule)
@@ -238,19 +243,34 @@ func Build(
 			r.Get("/audit-log", auditH.List)
 
 			// Broadcast
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireOperator)
-				r.Post("/broadcast/command", cmdH.Broadcast)
-			})
+			r.With(middleware.RequirePermission(models.PermBroadcast)).
+				Post("/broadcast/command", cmdH.Broadcast)
 
-			// Users (admin)
+			// Users & roles (requires the users.manage permission)
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireAdmin)
+				r.Use(middleware.RequirePermission(models.PermUsersManage))
 				r.Get("/users", usersH.List)
 				r.Post("/users", usersH.Create)
 				r.Get("/users/{id}", usersH.Get)
 				r.Patch("/users/{id}", usersH.Update)
 				r.Delete("/users/{id}", usersH.Delete)
+
+				r.Get("/roles", rolesH.List)
+				r.Get("/roles/catalog", rolesH.Catalog)
+				r.Post("/roles", rolesH.Create)
+				r.Put("/roles/{id}", rolesH.Update)
+				r.Delete("/roles/{id}", rolesH.Delete)
+			})
+
+			// Telegram notification bots (requires notifications.manage)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(models.PermNotificationsManage))
+				r.Get("/telegram-bots", telegramH.List)
+				r.Post("/telegram-bots", telegramH.Create)
+				r.Put("/telegram-bots/{id}", telegramH.Update)
+				r.Delete("/telegram-bots/{id}", telegramH.Delete)
+				r.Post("/telegram-bots/{id}/toggle", telegramH.Toggle)
+				r.Post("/telegram-bots/{id}/test", telegramH.Test)
 			})
 		})
 	})

@@ -3,11 +3,11 @@ import api from "../api/client";
 import { useState } from "react";
 
 const SEV_COLORS: Record<string, { bg: string; fg: string }> = {
-  critical: { bg: "#FEE2E2", fg: "#991B1B" },
-  high:     { bg: "#FEF3C7", fg: "#92400E" },
-  medium:   { bg: "#DBEAFE", fg: "#1E40AF" },
-  low:      { bg: "#F1F5F9", fg: "#475569" },
-  info:     { bg: "#ECFDF5", fg: "#065F46" },
+  critical: { bg: "var(--danger-bg)", fg: "var(--danger)" },
+  high:     { bg: "var(--warn-bg)", fg: "var(--warn)" },
+  medium:   { bg: "var(--info-bg)", fg: "var(--info)" },
+  low:      { bg: "var(--bg-2)", fg: "var(--text-muted)" },
+  info:     { bg: "var(--ok-bg)", fg: "var(--ok)" },
 };
 
 function fmtTime(iso: string) {
@@ -50,21 +50,21 @@ export default function AlertsPage() {
         </div>
         {unacked > 0 && (
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold"
-               style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B" }}>
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+               style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger)" }}>
+            <span className="status-dot status-dot-red" />
             {unacked} unacknowledged
           </div>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-lg" style={{ background: "#F1F5F9", width: "fit-content" }}>
+      <div className="segmented">
         <button onClick={() => setTab("alerts")}
-                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition ${tab === "alerts" ? "bg-white shadow-sm text-amber-700" : "text-slate-500"}`}>
+                className={tab === "alerts" ? "is-active" : ""}>
           Alerts ({list.length})
         </button>
         <button onClick={() => setTab("rules")}
-                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition ${tab === "rules" ? "bg-white shadow-sm text-amber-700" : "text-slate-500"}`}>
+                className={tab === "rules" ? "is-active" : ""}>
           Rules ({ruleList.length})
         </button>
       </div>
@@ -72,7 +72,7 @@ export default function AlertsPage() {
       {tab === "alerts" && (
         <div className="space-y-3">
           {list.length === 0 && (
-            <div className="card p-8 text-center" style={{ color: "#94A3B8" }}>
+            <div className="card p-8 text-center" style={{ color: "var(--text-faint)" }}>
               <p className="text-sm">No alerts yet — your honeypots are quiet 🍯</p>
             </div>
           )}
@@ -84,9 +84,9 @@ export default function AlertsPage() {
                   {a.severity}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm" style={{ color: "#0F172A" }}>{a.title}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>{a.message}</p>
-                  <div className="flex items-center gap-3 mt-2 text-[11px]" style={{ color: "#94A3B8" }}>
+                  <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>{a.title}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{a.message}</p>
+                  <div className="flex items-center gap-3 mt-2 text-[11px]" style={{ color: "var(--text-faint)" }}>
                     <span>{fmtTime(a.created_at)}</span>
                     {a.source && <span>Source: {a.source}</span>}
                     {a.source_ref && <span className="font-mono">{a.source_ref}</span>}
@@ -96,13 +96,13 @@ export default function AlertsPage() {
                   {!a.acknowledged && (
                     <button onClick={() => ackMut.mutate(a.id)}
                             className="px-3 py-1.5 rounded-lg text-xs font-semibold transition"
-                            style={{ background: "#F0FDF4", color: "#15803D", border: "1px solid #86EFAC" }}>
+                            style={{ background: "var(--ok-bg)", color: "var(--ok)", border: "1px solid var(--ok-border)" }}>
                       Acknowledge
                     </button>
                   )}
                   <button onClick={() => delMut.mutate(a.id)}
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold transition"
-                          style={{ background: "#FEF2F2", color: "#991B1B", border: "1px solid #FECACA" }}>
+                          style={{ background: "var(--danger-bg)", color: "var(--danger)", border: "1px solid var(--danger-border)" }}>
                     Delete
                   </button>
                 </div>
@@ -127,7 +127,7 @@ export default function AlertsPage() {
             </thead>
             <tbody>
               {ruleList.length === 0 && (
-                <tr className="tr"><td className="td" colSpan={6} style={{ textAlign: "center", color: "#94A3B8" }}>No alert rules configured</td></tr>
+                <tr className="tr"><td className="td" colSpan={6} style={{ textAlign: "center", color: "var(--text-faint)" }}>No alert rules configured</td></tr>
               )}
               {ruleList.map((r: any) => {
                 const sev = SEV_COLORS[r.severity] ?? SEV_COLORS.medium;
@@ -138,7 +138,7 @@ export default function AlertsPage() {
                     <td className="td"><span className="px-2 py-0.5 rounded text-xs font-bold" style={{ background: sev.bg, color: sev.fg }}>{r.severity}</span></td>
                     <td className="td"><span className={`badge ${r.enabled ? "badge-online" : "badge-stopped"}`}>{r.enabled ? "Active" : "Disabled"}</span></td>
                     <td className="td font-mono" style={{ fontSize: 12 }}>{r.cooldown_secs}s</td>
-                    <td className="td" style={{ fontSize: 12, color: "#94A3B8" }}>{r.last_fired ? fmtTime(r.last_fired) : "—"}</td>
+                    <td className="td" style={{ fontSize: 12, color: "var(--text-faint)" }}>{r.last_fired ? fmtTime(r.last_fired) : "—"}</td>
                   </tr>
                 );
               })}

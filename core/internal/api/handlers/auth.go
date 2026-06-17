@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"regexp"
 	"strings"
@@ -42,6 +43,7 @@ type tokenResp struct {
 	Role         models.Role `json:"role"`
 	Email        string      `json:"email"`
 	Name         string      `json:"name"`
+	Permissions  []string    `json:"permissions"`
 }
 
 var slugRE = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -80,24 +82,29 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "create org")
 		return
 	}
+	// Seed the built-in roles for the new org before signing tokens.
+	if err := h.Store.EnsureSystemRoles(r.Context(), orgID); err != nil {
+		writeError(w, http.StatusInternalServerError, "seed roles")
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "hash password")
 		return
 	}
-	uid, err := h.Store.CreateUser(r.Context(), orgID, req.Email, string(hash), req.Name, models.RoleAdmin)
+	uid, err := h.Store.CreateUser(r.Context(), orgID, req.Email, string(hash), req.Name, models.RoleAdmin, "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "create user")
 		return
 	}
-	access, refresh, err := h.signPair(uid, orgID, models.RoleAdmin)
+	access, refresh, perms, err := h.signPair(r.Context(), uid, orgID, models.RoleAdmin)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "sign tokens")
 		return
 	}
 	writeJSON(w, http.StatusCreated, tokenResp{
 		AccessToken: access, RefreshToken: refresh,
-		UserID: uid, OrgID: orgID, Role: models.RoleAdmin, Email: req.Email, Name: req.Name,
+		UserID: uid, OrgID: orgID, Role: models.RoleAdmin, Email: req.Email, Name: req.Name, Permissions: perms,
 	})
 }
 
@@ -117,14 +124,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
-	access, refresh, err := h.signPair(u.ID, u.OrgID, u.Role)
+	access, refresh, perms, err := h.signPair(r.Context(), u.ID, u.OrgID, u.Role)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "sign tokens")
 		return
 	}
 	writeJSON(w, http.StatusOK, tokenResp{
 		AccessToken: access, RefreshToken: refresh,
-		UserID: u.ID, OrgID: u.OrgID, Role: u.Role, Email: u.Email, Name: u.Name,
+		UserID: u.ID, OrgID: u.OrgID, Role: u.Role, Email: u.Email, Name: u.Name, Permissions: perms,
 	})
 }
 
@@ -142,14 +149,21 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid refresh token")
 		return
 	}
-	access, refresh, err := h.signPair(c.UserID, c.OrgID, c.Role)
+	// Reload the user so role changes (and the permissions they imply) take
+	// effect on the next refresh rather than requiring a full re-login.
+	role := c.Role
+	email, name := "", ""
+	if u, err := h.Store.GetUser(r.Context(), c.UserID); err == nil {
+		role, email, name = u.Role, u.Email, u.Name
+	}
+	access, refresh, perms, err := h.signPair(r.Context(), c.UserID, c.OrgID, role)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "sign tokens")
 		return
 	}
 	writeJSON(w, http.StatusOK, tokenResp{
 		AccessToken: access, RefreshToken: refresh,
-		UserID: c.UserID, OrgID: c.OrgID, Role: c.Role,
+		UserID: c.UserID, OrgID: c.OrgID, Role: role, Email: email, Name: name, Permissions: perms,
 	})
 }
 
@@ -158,7 +172,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// Me returns the currently authenticated user.
+// Me returns the currently authenticated user plus their effective permissions.
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	uid := middleware.UserID(r.Context())
 	u, err := h.Store.GetUser(r.Context(), uid)
@@ -166,19 +180,24 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "user")
 		return
 	}
-	writeJSON(w, http.StatusOK, u)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id": u.ID, "org_id": u.OrgID, "email": u.Email, "name": u.Name,
+		"role": u.Role, "avatar": u.Avatar, "created_at": u.CreatedAt, "updated_at": u.UpdatedAt,
+		"permissions": h.Store.ResolvePerms(r.Context(), u.OrgID, string(u.Role)),
+	})
 }
 
-func (h *AuthHandler) signPair(userID, orgID int64, role models.Role) (string, string, error) {
-	access, err := h.JWT.SignAccess(userID, orgID, role, h.Cfg.JWT.AccessTTL.Duration)
+func (h *AuthHandler) signPair(ctx context.Context, userID, orgID int64, role models.Role) (string, string, []string, error) {
+	perms := h.Store.ResolvePerms(ctx, orgID, string(role))
+	access, err := h.JWT.SignAccess(userID, orgID, role, perms, h.Cfg.JWT.AccessTTL.Duration)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
-	refresh, err := h.JWT.SignRefresh(userID, orgID, role, h.Cfg.JWT.RefreshTTL.Duration)
+	refresh, err := h.JWT.SignRefresh(userID, orgID, role, perms, h.Cfg.JWT.RefreshTTL.Duration)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
-	return access, refresh, nil
+	return access, refresh, perms, nil
 }
 
 

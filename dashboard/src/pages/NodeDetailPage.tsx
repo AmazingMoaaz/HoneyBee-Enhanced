@@ -38,12 +38,12 @@ const I = {
 
 /* ── Status config ─────────────────────────────── */
 const STATUS: Record<string, { bg: string; color: string; border: string; label: string; dot: string }> = {
-  running:    { bg: "rgba(34,197,94,0.1)",    color: "#16A34A", border: "rgba(34,197,94,0.3)",    label: "Running",    dot: "#22C55E" },
-  failed:     { bg: "rgba(239,68,68,0.1)",    color: "#DC2626", border: "rgba(239,68,68,0.3)",    label: "Failed",     dot: "#EF4444" },
-  pending:    { bg: "rgba(245,158,11,0.1)",   color: "#B45309", border: "rgba(245,158,11,0.3)",   label: "Pending",    dot: "#F59E0B" },
-  installing: { bg: "rgba(59,130,246,0.1)",   color: "#1D4ED8", border: "rgba(59,130,246,0.3)",   label: "Installing", dot: "#3B82F6" },
-  stopped:    { bg: "rgba(100,116,139,0.08)", color: "#64748B", border: "rgba(100,116,139,0.2)",  label: "Stopped",    dot: "#94A3B8" },
-  removed:    { bg: "rgba(100,116,139,0.05)", color: "#94A3B8", border: "rgba(100,116,139,0.12)", label: "Removed",    dot: "#CBD5E1" },
+  running:    { bg: "rgba(34,197,94,0.1)",    color: "var(--ok)", border: "rgba(34,197,94,0.3)",    label: "Running",    dot: "var(--ok)" },
+  failed:     { bg: "rgba(239,68,68,0.1)",    color: "var(--danger)", border: "rgba(239,68,68,0.3)",    label: "Failed",     dot: "var(--danger)" },
+  pending:    { bg: "rgba(245,158,11,0.1)",   color: "var(--accent)", border: "rgba(245,158,11,0.3)",   label: "Pending",    dot: "var(--accent)" },
+  installing: { bg: "rgba(59,130,246,0.1)",   color: "var(--info)", border: "rgba(59,130,246,0.3)",   label: "Installing", dot: "var(--info)" },
+  stopped:    { bg: "rgba(100,116,139,0.08)", color: "var(--text-muted)", border: "rgba(100,116,139,0.2)",  label: "Stopped",    dot: "var(--text-faint)" },
+  removed:    { bg: "rgba(100,116,139,0.05)", color: "var(--text-faint)", border: "rgba(100,116,139,0.12)", label: "Removed",    dot: "var(--border-2)" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -119,35 +119,35 @@ function DeployModal({
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
-        background: "#FFFFFF", borderRadius: 20, width: "100%", maxWidth: 480,
-        boxShadow: "0 32px 96px rgba(15,23,42,0.28)", border: "1px solid rgba(15,23,42,0.06)",
+        background: "var(--surface)", borderRadius: 20, width: "100%", maxWidth: 480,
+        boxShadow: "0 32px 96px var(--shadow)", border: "1px solid var(--border)",
         overflow: "hidden",
       }}>
         <div style={{ height: 4, background: "linear-gradient(90deg,#FCD34D,#F59E0B,#D97706)" }} />
         <div style={{
-          padding: "18px 22px", borderBottom: "1px solid rgba(15,23,42,0.07)",
+          padding: "18px 22px", borderBottom: "1px solid var(--border)",
           display: "flex", alignItems: "center", justifyContent: "space-between",
           background: "rgba(245,158,11,0.06)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Ico d={I.honey} size={22} color="#D97706" sw={1.8} />
+            <Ico d={I.honey} size={22} color="var(--accent)" sw={1.8} />
             <div>
-              <p style={{ fontWeight: 800, fontSize: 15, color: "#0F172A" }}>Deploy a Honeypot</p>
-              <p style={{ fontSize: 12, color: "#B45309", fontWeight: 600 }}>Pick a type — instance ID is assigned automatically</p>
+              <p style={{ fontWeight: 800, fontSize: 15, color: "var(--text)" }}>Deploy a Honeypot</p>
+              <p style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>Pick a type — instance ID is assigned automatically</p>
             </div>
           </div>
           <button onClick={onClose} style={{
             background: "none", border: "none", cursor: "pointer",
             width: 30, height: 30, borderRadius: 8, display: "grid", placeItems: "center",
           }}>
-            <Ico d={I.close} size={15} color="#94A3B8" />
+            <Ico d={I.close} size={15} color="var(--text-faint)" />
           </button>
         </div>
 
         <div style={{ padding: "22px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
-              <label style={{ fontSize: 11.5, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 Honeypot Type
               </label>
               <select
@@ -161,7 +161,7 @@ function DeployModal({
                 ))}
               </select>
               {selected?.description && (
-                <p style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 6, lineHeight: 1.5 }}>
+                <p style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 6, lineHeight: 1.5 }}>
                   {selected.description}
                 </p>
               )}
@@ -175,14 +175,14 @@ function DeployModal({
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
               <div>
-                <p style={{ fontSize: 10.5, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                <p style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
                   Instance ID (auto)
                 </p>
-                <code style={{ fontSize: 14, fontWeight: 800, color: "#0F172A", fontFamily: "ui-monospace, monospace" }}>
+                <code style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", fontFamily: "ui-monospace, monospace" }}>
                   {predictedID}
                 </code>
               </div>
-              <span style={{ fontSize: 11, color: "#B45309", fontWeight: 600, maxWidth: 170, textAlign: "right", lineHeight: 1.4 }}>
+              <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600, maxWidth: 170, textAlign: "right", lineHeight: 1.4 }}>
                 Sequential per node · per type
               </span>
             </div>
@@ -191,7 +191,7 @@ function DeployModal({
           {deploy.isError && (
             <div style={{
               marginTop: 14, padding: "10px 14px", borderRadius: 9, fontSize: 13,
-              background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#DC2626",
+              background: "var(--danger-bg)", border: "1px solid rgba(239,68,68,0.2)", color: "var(--danger)",
             }}>
               {(() => {
                 const e: any = deploy.error;
@@ -260,23 +260,23 @@ function OfflineBanner({
       {/* Header */}
       <div style={{
         padding: "14px 20px",
-        background: "linear-gradient(135deg,rgba(254,242,242,0.9),rgba(255,255,255,0.95))",
+        background: "linear-gradient(135deg,var(--danger-bg),var(--glass-strong))",
         borderBottom: "1px solid rgba(239,68,68,0.12)",
         display: "flex", alignItems: "center", gap: 12,
       }}>
         <div style={{
           width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
-          background: "rgba(239,68,68,0.1)", border: "1.5px solid rgba(239,68,68,0.28)",
+          background: "var(--danger-bg)", border: "1.5px solid rgba(239,68,68,0.28)",
         }}>
-          <Ico d={I.warn} size={17} color="#DC2626" />
+          <Ico d={I.warn} size={17} color="var(--danger)" />
         </div>
         <div>
-          <p style={{ fontWeight: 800, fontSize: 14, color: "#991B1B", margin: 0 }}>
+          <p style={{ fontWeight: 800, fontSize: 14, color: "var(--danger)", margin: 0 }}>
             Agent Disconnected
           </p>
-          <p style={{ fontSize: 12, color: "#B45309", margin: "2px 0 0", lineHeight: 1.4 }}>
+          <p style={{ fontSize: 12, color: "var(--accent)", margin: "2px 0 0", lineHeight: 1.4 }}>
             {wasConnected
-              ? <>Last connected from <strong style={{ color: "#0F172A" }}>{node.hostname}</strong> · {relTime(node.last_heartbeat)}</>
+              ? <>Last connected from <strong style={{ color: "var(--text)" }}>{node.hostname}</strong> · {relTime(node.last_heartbeat)}</>
               : "This node has never connected to the server."}
           </p>
         </div>
@@ -285,7 +285,7 @@ function OfflineBanner({
       <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
         {wasConnected ? (
           <>
-            <p style={{ fontSize: 13, color: "#475569", margin: 0, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
               The agent process may have stopped or the machine lost network. Run one of these commands <strong>on {node.hostname}</strong> to restart it:
             </p>
 
@@ -294,10 +294,10 @@ function OfflineBanner({
               {rows.map(({ plat, label, restart, status }) => (
                 <div key={plat} style={{
                   padding: "13px 14px", borderRadius: 10,
-                  background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.09)",
+                  background: "var(--bg-2)", border: "1px solid var(--border)",
                 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
-                    <Ico d={plat === "windows" ? I.windows : I.linux} size={12} color="#64748B" />
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+                    <Ico d={plat === "windows" ? I.windows : I.linux} size={12} color="var(--text-muted)" />
                     {label}
                   </p>
                   {[{ l: "Restart agent", cmd: restart }, { l: "Check status", cmd: status }].map(({ l, cmd }) => {
@@ -305,11 +305,11 @@ function OfflineBanner({
                     return (
                       <div key={l} style={{ display: "flex", gap: 6, marginBottom: 7, alignItems: "center" }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, flex: 1 }}>
-                          <span style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.07em" }}>{l}</span>
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{l}</span>
                           <code style={{
                             fontSize: 11.5, fontFamily: "ui-monospace,'Cascadia Code',monospace",
-                            color: "#1E293B", background: "rgba(15,23,42,0.05)",
-                            padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(15,23,42,0.07)",
+                            color: "var(--text)", background: "var(--bg-2)",
+                            padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)",
                             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block",
                           }}>{cmd}</code>
                         </div>
@@ -318,16 +318,16 @@ function OfflineBanner({
                           title="Copy"
                           style={{
                             flexShrink: 0, padding: "5px 9px", borderRadius: 7,
-                            border: "1.5px solid rgba(15,23,42,0.12)",
-                            background: copied === k ? "#F59E0B" : "#FFFFFF",
-                            cursor: "pointer", color: copied === k ? "#1C0A00" : "#64748B",
+                            border: "1.5px solid var(--border-2)",
+                            background: copied === k ? "#F59E0B" : "var(--surface-2)",
+                            cursor: "pointer", color: copied === k ? "#1C0A00" : "var(--text-muted)",
                             fontSize: 11, fontWeight: 700,
                             display: "flex", alignItems: "center", gap: 4,
                           }}
                         >
                           {copied === k
                             ? <><Ico d={I.check} size={11} color="#1C0A00" /> Copied</>
-                            : <><Ico d={I.copy}  size={11} color="#64748B" /> Copy</>}
+                            : <><Ico d={I.copy}  size={11} color="var(--text-muted)" /> Copy</>}
                         </button>
                       </div>
                     );
@@ -341,16 +341,16 @@ function OfflineBanner({
               display: "flex", alignItems: "flex-start", gap: 8,
               padding: "10px 14px", borderRadius: 9,
               background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)",
-              fontSize: 12.5, color: "#92400E", lineHeight: 1.6,
+              fontSize: 12.5, color: "var(--accent)", lineHeight: 1.6,
             }}>
-              <Ico d={I.warn} size={13} color="#D97706" />
+              <Ico d={I.warn} size={13} color="var(--accent)" />
               <span>
                 If the service was uninstalled from the machine, go to{" "}
                 <button
                   onClick={onInstallTab}
                   style={{
                     background: "none", border: "none", cursor: "pointer",
-                    color: "#B45309", fontWeight: 800, padding: 0,
+                    color: "var(--accent)", fontWeight: 800, padding: 0,
                     textDecoration: "underline", fontSize: 12.5,
                   }}
                 >
@@ -362,7 +362,7 @@ function OfflineBanner({
           </>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "8px 0 4px" }}>
-            <p style={{ fontSize: 13, color: "#64748B", margin: 0, textAlign: "center", lineHeight: 1.6 }}>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0, textAlign: "center", lineHeight: 1.6 }}>
               Install the agent on the target machine to bring this node online.
             </p>
             <button onClick={onInstallTab} className="btn btn-primary" style={{ display: "inline-flex", gap: 8 }}>
@@ -384,6 +384,7 @@ export default function NodeDetailPage() {
   const [activeDeployID,   setActiveDeployID]   = useState<number | null>(null);
   const [showDeployModal,  setShowDeployModal]  = useState(false);
   const [confirmUninstall,    setConfirmUninstall]    = useState(false);
+  const [setupPlat,           setSetupPlat]           = useState<"linux" | "windows">("linux");
 
   const [copied,              setCopied]              = useState<string | null>(null);
   const [pendingAction,       setPendingAction]       = useState<string | null>(null);
@@ -461,13 +462,13 @@ export default function NodeDetailPage() {
   if (isLoading) return (
     <div style={{ textAlign: "center", padding: "80px 0" }}>
       <div style={{ marginBottom: 12, opacity: 0.4, display: "flex", justifyContent: "center" }}>
-        <Ico d={I.honey} size={36} color="#94A3B8" sw={1.6} />
+        <Ico d={I.honey} size={36} color="var(--text-faint)" sw={1.6} />
       </div>
-      <p style={{ color: "#94A3B8", fontWeight: 600 }}>Loading node…</p>
+      <p style={{ color: "var(--text-faint)", fontWeight: 600 }}>Loading node…</p>
     </div>
   );
   if (!data) return (
-    <div style={{ textAlign: "center", padding: "80px 0", color: "#EF4444" }}>Node not found.</div>
+    <div style={{ textAlign: "center", padding: "80px 0", color: "var(--danger)" }}>Node not found.</div>
   );
 
   const node    = data.node;
@@ -483,14 +484,14 @@ export default function NodeDetailPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }} className="animate-fade-up">
 
-      {actionToast && (
+      {actionToast && createPortal(
         <div
           role="status"
           style={{
-            position: "fixed", top: 20, right: 20, zIndex: 9999,
-            minWidth: 300, maxWidth: 420,
+            position: "fixed", bottom: 24, left: "50%", zIndex: 9999,
+            minWidth: 300, maxWidth: "min(420px, 92vw)",
             padding: "14px 16px 14px 16px",
-            borderRadius: 14,
+            borderRadius: 14, overflow: "hidden",
             background: actionToast.kind === "error"
               ? "linear-gradient(135deg, rgba(30,8,8,0.97) 0%, rgba(60,10,10,0.97) 100%)"
               : actionToast.kind === "queued"
@@ -506,7 +507,7 @@ export default function NodeDetailPage() {
               : "rgba(16,185,129,0.1)"}`,
             backdropFilter: "blur(16px)",
             display: "flex", alignItems: "flex-start", gap: 12,
-            animation: "toast-slide-in 0.25s cubic-bezier(0.34,1.56,0.64,1)",
+            animation: "toast-up 0.28s cubic-bezier(0.34,1.56,0.64,1) both",
           }}
         >
           {/* Left accent bar */}
@@ -556,17 +557,18 @@ export default function NodeDetailPage() {
             onClick={() => setActionToast(null)}
             style={{
               flexShrink: 0, background: "none", border: "none", cursor: "pointer",
-              padding: 4, borderRadius: 6, color: "#64748B",
+              padding: 4, borderRadius: 6, color: "#94A3B8",
               display: "flex", alignItems: "center", justifyContent: "center",
               transition: "color 0.15s, background 0.15s",
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#F8FAFC"; (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.08)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#64748B"; (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#F1F5F9"; (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.08)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#94A3B8"; (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
             aria-label="Dismiss"
           >
             <Ico d={I.close} size={14} color="currentColor" sw={2.5} />
           </button>
-        </div>
+        </div>,
+        document.body
       )}
 
       {showDeployModal && (
@@ -582,17 +584,17 @@ export default function NodeDetailPage() {
 
 
       {/* ── Breadcrumb ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#94A3B8" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-faint)" }}>
         <Link
           to="/nodes"
-          style={{ display: "flex", alignItems: "center", gap: 5, color: "#64748B", textDecoration: "none", fontWeight: 600 }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#B45309"}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#64748B"}
+          style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--text-muted)", textDecoration: "none", fontWeight: 600 }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "var(--accent)"}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"}
         >
           <Ico d={I.back} size={14} /> Node Manager
         </Link>
-        <Ico d={I.chevron} size={13} color="#CBD5E1" />
-        <span style={{ color: "#0F172A", fontWeight: 700 }}>{node.name}</span>
+        <Ico d={I.chevron} size={13} color="var(--text-faint)" />
+        <span style={{ color: "var(--text)", fontWeight: 700 }}>{node.name}</span>
       </div>
 
       {/* ── Hero ── */}
@@ -612,16 +614,16 @@ export default function NodeDetailPage() {
               fontWeight: 900, fontSize: 26, flexShrink: 0,
               background: online
                 ? "linear-gradient(135deg,#FCD34D 0%,#F59E0B 100%)"
-                : "linear-gradient(135deg,#E2E8F0 0%,#CBD5E1 100%)",
-              color: online ? "#1C0A00" : "#64748B",
-              boxShadow: online ? "0 6px 22px rgba(245,158,11,0.36)" : "0 2px 8px rgba(0,0,0,0.07)",
+                : "var(--bg-2)",
+              color: online ? "#1C0A00" : "var(--text-muted)",
+              boxShadow: online ? "0 6px 22px rgba(245,158,11,0.36)" : "0 2px 8px var(--shadow)",
             }}>
               {(node.name ?? "?").charAt(0).toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               {/* Name + status row */}
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-                <h1 style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", margin: 0, letterSpacing: "-0.02em" }}>
+                <h1 style={{ fontSize: 22, fontWeight: 900, color: "var(--text)", margin: 0, letterSpacing: "-0.02em" }}>
                   {node.name}
                 </h1>
                 {/* Online badge */}
@@ -632,22 +634,22 @@ export default function NodeDetailPage() {
                 }}>
                   <span style={{
                     width: 7, height: 7, borderRadius: "50%",
-                    background: online ? "#22C55E" : agentOfflineButPotsRunning ? "#F59E0B" : "#94A3B8",
+                    background: online ? "var(--ok)" : agentOfflineButPotsRunning ? "var(--accent)" : "var(--text-faint)",
                     animation: online ? "pulse-green 2s infinite" : "none",
                     boxShadow: online ? "0 0 0 2px rgba(34,197,94,0.2)" : "none",
                     display: "inline-block", flexShrink: 0,
                   }} />
-                  <span style={{ fontSize: 12, fontWeight: 800, color: online ? "#16A34A" : agentOfflineButPotsRunning ? "#B45309" : "#64748B" }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: online ? "var(--ok)" : agentOfflineButPotsRunning ? "var(--accent)" : "var(--text-muted)" }}>
                     {online ? "Online" : agentOfflineButPotsRunning ? "Agent Offline" : "Offline"}
                   </span>
                 </div>
                 {agentOfflineButPotsRunning && (
                   <div style={{
                     display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 99,
-                    background: "rgba(34,197,94,0.08)", border: "1.5px solid rgba(34,197,94,0.28)",
-                    fontSize: 12, fontWeight: 700, color: "#16A34A",
+                    background: "var(--ok-bg)", border: "1.5px solid rgba(34,197,94,0.28)",
+                    fontSize: 12, fontWeight: 700, color: "var(--ok)",
                   }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22C55E", animation: "pulse-green 2s infinite", display: "inline-block" }} />
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ok)", animation: "pulse-green 2s infinite", display: "inline-block" }} />
                     {runningCount} honeypot{runningCount !== 1 ? "s" : ""} running
                   </div>
                 )}
@@ -662,12 +664,12 @@ export default function NodeDetailPage() {
                 {/* Node ID */}
                 <div style={{
                   padding: "9px 13px", borderRadius: 10,
-                  background: "rgba(15,23,42,0.03)", border: "1px solid rgba(15,23,42,0.08)",
+                  background: "var(--bg-2)", border: "1px solid var(--border)",
                 }}>
-                  <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 4px" }}>
+                  <p style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 4px" }}>
                     Node ID
                   </p>
-                  <p style={{ fontFamily: "ui-monospace, monospace", fontSize: 13.5, fontWeight: 800, color: "#0F172A", margin: 0 }}>
+                  <p style={{ fontFamily: "ui-monospace, monospace", fontSize: 13.5, fontWeight: 800, color: "var(--text)", margin: 0 }}>
                     {node.id}
                   </p>
                 </div>
@@ -675,20 +677,20 @@ export default function NodeDetailPage() {
                 {/* Last Heartbeat */}
                 <div style={{
                   padding: "9px 13px", borderRadius: 10,
-                  background: online ? "rgba(239,68,68,0.04)" : "rgba(15,23,42,0.03)",
-                  border: `1px solid ${online ? "rgba(239,68,68,0.15)" : "rgba(15,23,42,0.08)"}`,
+                  background: online ? "rgba(239,68,68,0.04)" : "var(--bg-2)",
+                  border: `1px solid ${online ? "rgba(239,68,68,0.15)" : "var(--border)"}`,
                 }}>
-                  <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 5px" }}>
+                  <p style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 5px" }}>
                     Last Heartbeat
                   </p>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                     <span style={{
                       width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                      background: online ? "#EF4444" : "#94A3B8",
+                      background: online ? "var(--danger)" : "var(--text-faint)",
                       display: "inline-block",
                       animation: online ? "heartbeat 1.4s ease-in-out infinite" : "hb-offline 2s ease-in-out infinite",
                     }} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: online ? "#DC2626" : "#64748B" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: online ? "var(--danger)" : "var(--text-muted)" }}>
                       {relTime(node.last_heartbeat)}
                     </span>
                   </div>
@@ -700,10 +702,10 @@ export default function NodeDetailPage() {
                     padding: "9px 13px", borderRadius: 10,
                     background: "rgba(59,130,246,0.04)", border: "1px solid rgba(59,130,246,0.14)",
                   }}>
-                    <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 4px" }}>
+                    <p style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 4px" }}>
                       IP Address
                     </p>
-                    <p style={{ fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 800, color: "#1D4ED8", margin: 0 }}>
+                    <p style={{ fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 800, color: "var(--info)", margin: 0 }}>
                       {node.ip_address}
                     </p>
                   </div>
@@ -715,14 +717,14 @@ export default function NodeDetailPage() {
                     padding: "9px 13px", borderRadius: 10,
                     background: "rgba(245,158,11,0.04)", border: "1px solid rgba(245,158,11,0.14)",
                   }}>
-                    <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 5px" }}>
+                    <p style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 5px" }}>
                       Platform
                     </p>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Ico d={node.os.toLowerCase() === "windows" ? I.windows : I.linux} size={13} color="#D97706" />
-                      <span style={{ fontSize: 12.5, fontWeight: 800, color: "#92400E" }}>
+                      <Ico d={node.os.toLowerCase() === "windows" ? I.windows : I.linux} size={13} color="var(--accent)" />
+                      <span style={{ fontSize: 12.5, fontWeight: 800, color: "var(--accent)" }}>
                         <span style={{ textTransform: "capitalize" }}>{node.os}</span>
-                        <span style={{ color: "#D97706", margin: "0 3px" }}>·</span>
+                        <span style={{ color: "var(--accent)", margin: "0 3px" }}>·</span>
                         <span style={{ fontFamily: "ui-monospace, monospace" }}>{node.arch}</span>
                       </span>
                     </div>
@@ -735,10 +737,10 @@ export default function NodeDetailPage() {
                     padding: "9px 13px", borderRadius: 10,
                     background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.14)",
                   }}>
-                    <p style={{ fontSize: 9.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 4px" }}>
+                    <p style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 4px" }}>
                       Hostname
                     </p>
-                    <p style={{ fontSize: 13, fontWeight: 800, color: "#5B21B6", margin: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: "var(--violet)", margin: 0 }}>
                       {node.hostname}
                     </p>
                   </div>
@@ -752,13 +754,13 @@ export default function NodeDetailPage() {
             {/* Mini stats */}
             <div style={{ display: "flex", gap: 12 }}>
               <div style={{ textAlign: "center" }}>
-                <p style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", lineHeight: 1 }}>{activeCount}</p>
-                <p style={{ fontSize: 10.5, color: "#94A3B8", fontWeight: 600, marginTop: 2 }}>Deployments</p>
+                <p style={{ fontSize: 22, fontWeight: 900, color: "var(--text)", lineHeight: 1 }}>{activeCount}</p>
+                <p style={{ fontSize: 10.5, color: "var(--text-faint)", fontWeight: 600, marginTop: 2 }}>Deployments</p>
               </div>
-              <div style={{ width: 1, background: "rgba(15,23,42,0.08)" }} />
+              <div style={{ width: 1, background: "var(--border)" }} />
               <div style={{ textAlign: "center" }}>
-                <p style={{ fontSize: 22, fontWeight: 900, color: runningCount > 0 ? "#16A34A" : "#94A3B8", lineHeight: 1 }}>{runningCount}</p>
-                <p style={{ fontSize: 10.5, color: "#94A3B8", fontWeight: 600, marginTop: 2 }}>Running</p>
+                <p style={{ fontSize: 22, fontWeight: 900, color: runningCount > 0 ? "var(--ok)" : "var(--text-faint)", lineHeight: 1 }}>{runningCount}</p>
+                <p style={{ fontSize: 10.5, color: "var(--text-faint)", fontWeight: 600, marginTop: 2 }}>Running</p>
               </div>
             </div>
 
@@ -789,56 +791,56 @@ export default function NodeDetailPage() {
         <div className="card animate-fade-up" style={{ overflow: "hidden" }}>
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "12px 18px", borderBottom: "1px solid rgba(15,23,42,0.07)",
-            background: "#EEF2F6",
+            padding: "12px 18px", borderBottom: "1px solid var(--border)",
+            background: "var(--bg-2)",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{
                 width: 28, height: 28, borderRadius: 7, display: "grid", placeItems: "center",
                 background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)",
               }}>
-                <Ico d={I.logs} size={13} color="#D97706" />
+                <Ico d={I.logs} size={13} color="var(--accent)" />
               </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
                 {activeDep?.pot_id ?? `Deployment #${activeDeployID}`} — Live Log
               </span>
               {activeDep && <StatusBadge status={activeDep.status} />}
               {!depDone && (
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#F59E0B", display: "flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#F59E0B", animation: "pulse-green 1.2s infinite" }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", animation: "pulse-green 1.2s infinite" }} />
                   Live
                 </span>
               )}
             </div>
             <button
               onClick={() => setActiveDeployID(null)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#94A3B8", padding: "4px 8px", borderRadius: 6 }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "#475569"}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "#94A3B8"}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-faint)", padding: "4px 8px", borderRadius: 6 }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "var(--text-muted)"}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--text-faint)"}
             >
               <Ico d={I.close} size={15} color="currentColor" />
             </button>
           </div>
           <div style={{
-            height: 280, overflowY: "auto", padding: "14px 16px", background: "#EEF2F6",
-            border: "1px solid rgba(15,23,42,0.07)",
+            height: 280, overflowY: "auto", padding: "14px 16px", background: "var(--bg-2)",
+            border: "1px solid var(--border)",
             fontFamily: "ui-monospace, 'Cascadia Code', 'SF Mono', monospace", fontSize: 12.5, lineHeight: 1.75,
           }}>
             {(installLogs ?? []).length === 0 ? (
-              <span style={{ color: "#94A3B8" }}>⏳ Waiting for logs…</span>
+              <span style={{ color: "var(--text-faint)" }}>⏳ Waiting for logs…</span>
             ) : (installLogs ?? []).map((entry: any) => {
               let line = entry.data;
               try { line = JSON.parse(entry.data)?.line ?? entry.data; } catch { /* raw */ }
               const ts = new Date(entry.logged_at).toLocaleTimeString();
               const t  = entry.log_type ?? "";
-              const color = t.includes("error")    ? "#DC2626"
-                          : t.includes("warning")  ? "#D97706"
-                          : t.includes("complete") ? "#16A34A"
-                          : t.includes("start")    ? "#2563EB"
-                          : "#475569";
+              const color = t.includes("error")    ? "var(--danger)"
+                          : t.includes("warning")  ? "var(--accent)"
+                          : t.includes("complete") ? "var(--ok)"
+                          : t.includes("start")    ? "var(--info)"
+                          : "var(--text-muted)";
               return (
                 <div key={entry.id} style={{ display: "flex", gap: 16, alignItems: "baseline" }}>
-                  <span style={{ color: "#334155", minWidth: 72, flexShrink: 0, fontSize: 11 }}>{ts}</span>
+                  <span style={{ color: "var(--text-muted)", minWidth: 72, flexShrink: 0, fontSize: 11 }}>{ts}</span>
                   <span style={{ color }}>{line}</span>
                 </div>
               );
@@ -849,7 +851,7 @@ export default function NodeDetailPage() {
       )}
 
       {/* ── Tab bar ── */}
-      <div style={{ display: "flex", gap: 2, borderBottom: "2px solid rgba(15,23,42,0.07)" }}>
+      <div style={{ display: "flex", gap: 2, borderBottom: "2px solid var(--border)" }}>
         {([
           { key: "deployments", label: `Deployments`, count: deps.length },
           { key: "metrics",     label: "Performance",          count: null },
@@ -860,8 +862,8 @@ export default function NodeDetailPage() {
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: "9px 18px", fontSize: 13.5, fontWeight: 700, cursor: "pointer",
             background: "none", border: "none",
-            color: tab === t.key ? "#B45309" : "#64748B",
-            borderBottom: `2px solid ${tab === t.key ? "#F59E0B" : "transparent"}`,
+            color: tab === t.key ? "var(--accent)" : "var(--text-muted)",
+            borderBottom: `2px solid ${tab === t.key ? "var(--accent)" : "transparent"}`,
             marginBottom: -2,
             display: "flex", alignItems: "center", gap: 6,
           }}>
@@ -869,8 +871,8 @@ export default function NodeDetailPage() {
             {t.count !== null && (
               <span style={{
                 padding: "1px 7px", borderRadius: 99, fontSize: 11, fontWeight: 800,
-                background: tab === t.key ? "rgba(245,158,11,0.2)" : "rgba(15,23,42,0.06)",
-                color: tab === t.key ? "#92400E" : "#94A3B8",
+                background: tab === t.key ? "rgba(245,158,11,0.2)" : "var(--bg-2)",
+                color: tab === t.key ? "var(--accent)" : "var(--text-faint)",
               }}>{t.count}</span>
             )}
           </button>
@@ -883,10 +885,10 @@ export default function NodeDetailPage() {
           {deps.length === 0 ? (
             <div className="card" style={{ padding: "56px 24px", textAlign: "center" }}>
               <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
-                <Ico d={I.honey} size={36} color="#F59E0B" sw={1.6} />
+                <Ico d={I.honey} size={36} color="var(--accent)" sw={1.6} />
               </div>
-              <p style={{ fontWeight: 800, fontSize: 15, color: "#0F172A", marginBottom: 6 }}>No deployments yet</p>
-              <p style={{ fontSize: 13, color: "#64748B", marginBottom: 20 }}>
+              <p style={{ fontWeight: 800, fontSize: 15, color: "var(--text)", marginBottom: 6 }}>No deployments yet</p>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>
                 Deploy your first honeypot on this node.
               </p>
               <button onClick={() => setShowDeployModal(true)} className="btn btn-primary" style={{ display: "inline-flex" }}>
@@ -912,14 +914,14 @@ export default function NodeDetailPage() {
                     </div>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontWeight: 800, fontSize: 14.5, color: "#0F172A" }}>{d.pot_id}</span>
+                        <span style={{ fontWeight: 800, fontSize: 14.5, color: "var(--text)" }}>{d.pot_id}</span>
                         <StatusBadge status={d.status} />
                       </div>
                       <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
                         <span style={{
-                          fontSize: 11.5, color: "#94A3B8",
-                          background: "rgba(15,23,42,0.04)", padding: "1px 7px", borderRadius: 5,
-                          border: "1px solid rgba(15,23,42,0.07)", fontWeight: 600,
+                          fontSize: 11.5, color: "var(--text-faint)",
+                          background: "var(--bg-2)", padding: "1px 7px", borderRadius: 5,
+                          border: "1px solid var(--border)", fontWeight: 600,
                         }}>{d.honeypot_type}</span>
                       </div>
                     </div>
@@ -927,7 +929,7 @@ export default function NodeDetailPage() {
                 </div>
 
                 {/* Divider */}
-                <div style={{ height: 1, background: "rgba(15,23,42,0.06)", margin: "0 18px" }} />
+                <div style={{ height: 1, background: "var(--border)", margin: "0 18px" }} />
 
                 {/* Actions */}
                 {(() => {
@@ -949,9 +951,9 @@ export default function NodeDetailPage() {
                         onClick={() => setActiveDeployID(isActive ? null : d.id)}
                         style={{
                           padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                          background: isActive ? "rgba(245,158,11,0.15)" : "#EEF2F6",
-                          border: `1.5px solid ${isActive ? "rgba(245,158,11,0.4)" : "rgba(15,23,42,0.12)"}`,
-                          color: isActive ? "#B45309" : "#64748B",
+                          background: isActive ? "rgba(245,158,11,0.15)" : "var(--bg-2)",
+                          border: `1.5px solid ${isActive ? "rgba(245,158,11,0.4)" : "var(--border-2)"}`,
+                          color: isActive ? "var(--accent)" : "var(--text-muted)",
                           display: "flex", alignItems: "center", gap: 5,
                         }}
                       >
@@ -969,14 +971,14 @@ export default function NodeDetailPage() {
                             style={{
                               padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700,
                               cursor: busy ? "default" : "pointer",
-                              background: isThis ? "rgba(34,197,94,0.14)" : busy ? "rgba(15,23,42,0.03)" : "rgba(34,197,94,0.08)",
-                              border: `1.5px solid ${isThis ? "rgba(34,197,94,0.4)" : busy ? "rgba(15,23,42,0.07)" : "rgba(34,197,94,0.25)"}`,
-                              color: isThis ? "#16A34A" : busy ? "#CBD5E1" : "#16A34A",
+                              background: isThis ? "var(--ok-bg)" : busy ? "var(--bg-2)" : "rgba(34,197,94,0.08)",
+                              border: `1.5px solid ${isThis ? "rgba(34,197,94,0.4)" : busy ? "var(--border)" : "rgba(34,197,94,0.25)"}`,
+                              color: isThis ? "var(--ok)" : busy ? "var(--border-2)" : "var(--ok)",
                               display: "flex", alignItems: "center", gap: 5,
                               opacity: busy && !isThis ? 0.4 : 1, transition: "opacity 0.2s",
                             }}
                           >
-                            {isThis ? <><Spinner color="#16A34A" /> Starting…</> : <><Ico d={I.play} size={11} color="currentColor" /> Start</>}
+                            {isThis ? <><Spinner color="#22C55E" /> Starting…</> : <><Ico d={I.play} size={11} color="currentColor" /> Start</>}
                           </button>
                         );
                       })()}
@@ -992,14 +994,14 @@ export default function NodeDetailPage() {
                               style={{
                                 padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700,
                                 cursor: busy ? "default" : "pointer",
-                                background: isStop ? "rgba(100,116,139,0.14)" : busy ? "rgba(15,23,42,0.03)" : "rgba(100,116,139,0.08)",
-                                border: `1.5px solid ${isStop ? "rgba(100,116,139,0.35)" : busy ? "rgba(15,23,42,0.07)" : "rgba(100,116,139,0.2)"}`,
-                                color: isStop ? "#475569" : busy ? "#CBD5E1" : "#64748B",
+                                background: isStop ? "rgba(100,116,139,0.14)" : busy ? "var(--bg-2)" : "rgba(100,116,139,0.08)",
+                                border: `1.5px solid ${isStop ? "rgba(100,116,139,0.35)" : busy ? "var(--border)" : "rgba(100,116,139,0.2)"}`,
+                                color: isStop ? "var(--text-muted)" : busy ? "var(--border-2)" : "var(--text-muted)",
                                 display: "flex", alignItems: "center", gap: 5,
                                 opacity: busy && !isStop ? 0.4 : 1, transition: "opacity 0.2s",
                               }}
                             >
-                              {isStop ? <><Spinner color="#64748B" /> Stopping…</> : <><Ico d={I.stop} size={11} color="currentColor" /> Stop</>}
+                              {isStop ? <><Spinner color="#94A3B8" /> Stopping…</> : <><Ico d={I.stop} size={11} color="currentColor" /> Stop</>}
                             </button>
                             <button
                               onClick={() => action.mutate({ depID: d.id, act: "restart" })}
@@ -1007,14 +1009,14 @@ export default function NodeDetailPage() {
                               style={{
                                 padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700,
                                 cursor: busy ? "default" : "pointer",
-                                background: isRestart ? "rgba(245,158,11,0.14)" : busy ? "rgba(15,23,42,0.03)" : "rgba(245,158,11,0.08)",
-                                border: `1.5px solid ${isRestart ? "rgba(245,158,11,0.4)" : busy ? "rgba(15,23,42,0.07)" : "rgba(245,158,11,0.25)"}`,
-                                color: isRestart ? "#B45309" : busy ? "#CBD5E1" : "#B45309",
+                                background: isRestart ? "rgba(245,158,11,0.14)" : busy ? "var(--bg-2)" : "rgba(245,158,11,0.08)",
+                                border: `1.5px solid ${isRestart ? "rgba(245,158,11,0.4)" : busy ? "var(--border)" : "rgba(245,158,11,0.25)"}`,
+                                color: isRestart ? "var(--accent)" : busy ? "var(--border-2)" : "var(--accent)",
                                 display: "flex", alignItems: "center", gap: 5,
                                 opacity: busy && !isRestart ? 0.4 : 1, transition: "opacity 0.2s",
                               }}
                             >
-                              {isRestart ? <><Spinner color="#B45309" /> Restarting…</> : <><Ico d={I.restart} size={11} color="currentColor" /> Restart</>}
+                              {isRestart ? <><Spinner color="#F59E0B" /> Restarting…</> : <><Ico d={I.restart} size={11} color="currentColor" /> Restart</>}
                             </button>
                           </>
                         );
@@ -1029,14 +1031,14 @@ export default function NodeDetailPage() {
                             style={{
                               padding: "5px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700,
                               cursor: busy ? "default" : "pointer",
-                              background: isThis ? "rgba(239,68,68,0.14)" : busy ? "rgba(15,23,42,0.03)" : "rgba(254,242,242,0.8)",
-                              border: `1.5px solid ${isThis ? "rgba(239,68,68,0.4)" : busy ? "rgba(15,23,42,0.07)" : "rgba(239,68,68,0.2)"}`,
-                              color: isThis ? "#EF4444" : busy ? "#CBD5E1" : "#EF4444",
+                              background: isThis ? "rgba(239,68,68,0.14)" : busy ? "var(--bg-2)" : "var(--danger-bg)",
+                              border: `1.5px solid ${isThis ? "rgba(239,68,68,0.4)" : busy ? "var(--border)" : "rgba(239,68,68,0.2)"}`,
+                              color: isThis ? "var(--danger)" : busy ? "var(--border-2)" : "var(--danger)",
                               display: "flex", alignItems: "center", gap: 5,
                               opacity: busy && !isThis ? 0.4 : 1, transition: "opacity 0.2s",
                             }}
                             onMouseEnter={e => { if (!busy) (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.12)"; }}
-                            onMouseLeave={e => { if (!busy) (e.currentTarget as HTMLElement).style.background = "rgba(254,242,242,0.8)"; }}
+                            onMouseLeave={e => { if (!busy) (e.currentTarget as HTMLElement).style.background = "var(--danger-bg)"; }}
                           >
                             {isThis ? <><Spinner color="#EF4444" /> Removing…</> : <><Ico d={I.trash} size={11} color="currentColor" /> Remove</>}
                           </button>
@@ -1057,11 +1059,21 @@ export default function NodeDetailPage() {
       {/* ── INSTALL tab ── */}
       {tab === "install" && (
         <div className="card" style={{ padding: "24px 26px", display: "flex", flexDirection: "column", gap: 22 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(245,158,11,0.1)", display: "grid", placeItems: "center", border: "1.5px solid rgba(245,158,11,0.25)" }}>
-              <Ico d={I.install} size={18} color="#F59E0B" />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(245,158,11,0.1)", display: "grid", placeItems: "center", border: "1.5px solid rgba(245,158,11,0.25)" }}>
+                <Ico d={I.install} size={18} color="var(--accent)" />
+              </div>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>Agent Setup</h3>
             </div>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Agent Setup</h3>
+            <div className="segmented">
+              {(["linux", "windows"] as const).map(p => (
+                <button key={p} className={setupPlat === p ? "is-active" : ""} aria-selected={setupPlat === p} onClick={() => setSetupPlat(p)}
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Ico d={p === "linux" ? I.linux : I.windows} size={13} color="currentColor" /> {p === "linux" ? "Linux / macOS" : "Windows"}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* ── Reconnect section (already installed) ── */}
@@ -1071,8 +1083,8 @@ export default function NodeDetailPage() {
               background: "linear-gradient(135deg,rgba(59,130,246,0.06),rgba(99,102,241,0.04))",
               border: "1px solid rgba(59,130,246,0.2)",
             }}>
-              <p style={{ fontSize: 12.5, fontWeight: 800, color: "#1D4ED8", marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
-                <Ico d={I.restart} size={13} color="#1D4ED8" />
+              <p style={{ fontSize: 12.5, fontWeight: 800, color: "var(--info)", marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+                <Ico d={I.restart} size={13} color="var(--info)" />
                 Already installed on <code style={{ fontFamily: "monospace", background: "rgba(59,130,246,0.1)", padding: "1px 6px", borderRadius: 4 }}>{node.hostname}</code> — just restart the service:
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 10 }}>
@@ -1080,28 +1092,28 @@ export default function NodeDetailPage() {
                   { plat: "linux",   label: "Linux / macOS (root)",       cmd: "sudo systemctl restart honeybee-node" },
                   { plat: "linux-user", label: "Linux (non-root)",          cmd: "systemctl --user restart honeybee-node" },
                   { plat: "windows", label: "Windows (Admin PS)",          cmd: `Stop-ScheduledTask "HoneyBeeNode"; Start-ScheduledTask "HoneyBeeNode"` },
-                ] as const).map(({ plat, label, cmd }) => {
+                ] as const).filter(c => setupPlat === "windows" ? c.plat === "windows" : c.plat !== "windows").map(({ plat, label, cmd }) => {
                   const k = `reconnect-${plat}`;
                   return (
                     <div key={plat}>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
-                        <Ico d={plat === "windows" ? I.windows : I.linux} size={12} color="#64748B" />{label}
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
+                        <Ico d={plat === "windows" ? I.windows : I.linux} size={12} color="var(--text-muted)" />{label}
                       </p>
                       <div style={{ display: "flex", gap: 7 }}>
                         <code style={{
                           flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 12,
-                          fontFamily: "ui-monospace,monospace", background: "#E2E8F0",
-                          color: "#1E293B", border: "1px solid rgba(15,23,42,0.08)",
+                          fontFamily: "ui-monospace,monospace", background: "var(--bg-2)",
+                          color: "var(--text)", border: "1px solid var(--border)",
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         }}>{cmd}</code>
                         <button onClick={() => copyText(cmd, k)} style={{
                           padding: "8px 13px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                          background: copied === k ? "#F59E0B" : "#EEF2F6",
-                          border: "1.5px solid rgba(15,23,42,0.12)",
-                          color: copied === k ? "#1C0A00" : "#64748B",
+                          background: copied === k ? "#F59E0B" : "var(--bg-2)",
+                          border: "1.5px solid var(--border-2)",
+                          color: copied === k ? "#1C0A00" : "var(--text-muted)",
                           display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
                         }}>
-                          {copied === k ? <><Ico d={I.check} size={12} color="#1C0A00" /> Copied</> : <><Ico d={I.copy} size={12} color="#64748B" /> Copy</>}
+                          {copied === k ? <><Ico d={I.check} size={12} color="#1C0A00" /> Copied</> : <><Ico d={I.copy} size={12} color="var(--text-muted)" /> Copy</>}
                         </button>
                       </div>
                     </div>
@@ -1113,48 +1125,48 @@ export default function NodeDetailPage() {
 
           {/* ── Divider ── */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ flex: 1, height: 1, background: "rgba(15,23,42,0.07)" }} />
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: "#94A3B8", whiteSpace: "nowrap" }}>{node.hostname ? "OR — FRESH INSTALL" : "INSTALL THE AGENT"}</span>
-            <div style={{ flex: 1, height: 1, background: "rgba(15,23,42,0.07)" }} />
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-faint)", whiteSpace: "nowrap" }}>{node.hostname ? "OR — FRESH INSTALL" : "INSTALL THE AGENT"}</span>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
           </div>
 
-          <p style={{ fontSize: 13, color: "#64748B", margin: 0, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
             Run one of these commands as <strong>root / admin</strong> on the target machine. The agent will connect back and appear online within seconds.
           </p>
 
-          {(["linux", "windows"] as const).map(plat => {
+          {([setupPlat] as const).map(plat => {
             const cmd = plat === "linux"
               ? `curl -fsSL "${base}/api/v1/nodes/${id}/install?token=YOUR_TOKEN" | bash`
               : `irm "${base}/api/v1/nodes/${id}/install?platform=windows&token=YOUR_TOKEN" | iex`;
             const key = `install-${plat}`;
             return (
               <div key={plat} style={{ marginBottom: 16 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: "#64748B", marginBottom: 7, display: "flex", alignItems: "center", gap: 6 }}>
-                  <Ico d={plat === "linux" ? I.linux : I.windows} size={14} color="#64748B" />
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 7, display: "flex", alignItems: "center", gap: 6 }}>
+                  <Ico d={plat === "linux" ? I.linux : I.windows} size={14} color="var(--text-muted)" />
                   {plat === "linux" ? "Linux / macOS" : "Windows — PowerShell (Admin)"}
                 </p>
                 <div style={{ display: "flex", gap: 8 }}>
                   <code style={{
                     flex: 1, padding: "11px 14px", borderRadius: 9, fontSize: 12, fontFamily: "monospace",
-                    background: "#E2E8F0", color: "#475569", wordBreak: "break-all", lineHeight: 1.65,
-                    border: "1px solid rgba(15,23,42,0.08)",
+                    background: "var(--bg-2)", color: "var(--text-muted)", wordBreak: "break-all", lineHeight: 1.65,
+                    border: "1px solid var(--border)",
                   }}>
-                    <span style={{ color: "#B45309" }}>{cmd.split(" ")[0]}</span>
+                    <span style={{ color: "var(--accent)" }}>{cmd.split(" ")[0]}</span>
                     {" " + cmd.slice(cmd.indexOf(" ") + 1)}
                   </code>
                   <button
                     onClick={() => copyText(cmd, key)}
                     style={{
                       padding: "11px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      background: copied === key ? "#F59E0B" : "#EEF2F6",
-                      border: "1.5px solid rgba(15,23,42,0.12)",
-                      color: copied === key ? "#1C0A00" : "#64748B",
+                      background: copied === key ? "#F59E0B" : "var(--bg-2)",
+                      border: "1.5px solid var(--border-2)",
+                      color: copied === key ? "#1C0A00" : "var(--text-muted)",
                       display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
                     }}
                   >
                     {copied === key
                       ? <><Ico d={I.check} size={13} color="#1C0A00" /> Copied</>
-                      : <><Ico d={I.copy}  size={13} color="#64748B" /> Copy</>}
+                      : <><Ico d={I.copy}  size={13} color="var(--text-muted)" /> Copy</>}
                   </button>
                 </div>
               </div>
@@ -1164,7 +1176,7 @@ export default function NodeDetailPage() {
           <div style={{
             padding: "12px 16px", borderRadius: 10, marginTop: 8,
             background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.25)",
-            fontSize: 12.5, color: "#92400E", lineHeight: 1.6,
+            fontSize: 12.5, color: "var(--accent)", lineHeight: 1.6,
           }}>
             <strong>Note:</strong> Replace <code style={{ background: "rgba(245,158,11,0.15)", padding: "1px 5px", borderRadius: 4 }}>YOUR_TOKEN</code> with the token shown when this node was registered. Lost it? Delete the node and re-register.
           </div>
@@ -1176,11 +1188,11 @@ export default function NodeDetailPage() {
         <div className="card" style={{ padding: "24px 26px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(100,116,139,0.08)", display: "grid", placeItems: "center", border: "1.5px solid rgba(100,116,139,0.2)" }}>
-              <Ico d={I.trash} size={18} color="#64748B" />
+              <Ico d={I.trash} size={18} color="var(--text-muted)" />
             </div>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Uninstall Agent</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>Uninstall Agent</h3>
           </div>
-          <p style={{ fontSize: 13, color: "#64748B", marginBottom: 22, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 22, lineHeight: 1.6 }}>
             Run one of these commands as <strong>root / admin</strong> on the target machine to stop the scheduled task/service, remove the binary, and wipe local data. This <em>does not</em> delete the node from the dashboard — use <strong>Danger Zone</strong> for that.
           </p>
 
@@ -1191,32 +1203,32 @@ export default function NodeDetailPage() {
             const key = `uninstall-${plat}`;
             return (
               <div key={plat} style={{ marginBottom: 16 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: "#64748B", marginBottom: 7, display: "flex", alignItems: "center", gap: 6 }}>
-                  <Ico d={plat === "linux" ? I.linux : I.windows} size={14} color="#64748B" />
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 7, display: "flex", alignItems: "center", gap: 6 }}>
+                  <Ico d={plat === "linux" ? I.linux : I.windows} size={14} color="var(--text-muted)" />
                   {plat === "linux" ? "Linux / macOS" : "Windows — PowerShell (Admin)"}
                 </p>
                 <div style={{ display: "flex", gap: 8 }}>
                   <code style={{
                     flex: 1, padding: "11px 14px", borderRadius: 9, fontSize: 12, fontFamily: "monospace",
-                    background: "#E2E8F0", color: "#475569", wordBreak: "break-all", lineHeight: 1.65,
-                    border: "1px solid rgba(15,23,42,0.08)",
+                    background: "var(--bg-2)", color: "var(--text-muted)", wordBreak: "break-all", lineHeight: 1.65,
+                    border: "1px solid var(--border)",
                   }}>
-                    <span style={{ color: "#B45309" }}>{cmd.split(" ")[0]}</span>
+                    <span style={{ color: "var(--accent)" }}>{cmd.split(" ")[0]}</span>
                     {" " + cmd.slice(cmd.indexOf(" ") + 1)}
                   </code>
                   <button
                     onClick={() => copyText(cmd, key)}
                     style={{
                       padding: "11px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      background: copied === key ? "#F59E0B" : "#EEF2F6",
-                      border: "1.5px solid rgba(15,23,42,0.12)",
-                      color: copied === key ? "#1C0A00" : "#64748B",
+                      background: copied === key ? "#F59E0B" : "var(--bg-2)",
+                      border: "1.5px solid var(--border-2)",
+                      color: copied === key ? "#1C0A00" : "var(--text-muted)",
                       display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
                     }}
                   >
                     {copied === key
                       ? <><Ico d={I.check} size={13} color="#1C0A00" /> Copied</>
-                      : <><Ico d={I.copy}  size={13} color="#64748B" /> Copy</>}
+                      : <><Ico d={I.copy}  size={13} color="var(--text-muted)" /> Copy</>}
                   </button>
                 </div>
               </div>
@@ -1226,7 +1238,7 @@ export default function NodeDetailPage() {
           <div style={{
             padding: "12px 16px", borderRadius: 10, marginTop: 8,
             background: "rgba(100,116,139,0.06)", border: "1px solid rgba(100,116,139,0.2)",
-            fontSize: 12.5, color: "#475569", lineHeight: 1.6,
+            fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.6,
           }}>
             <strong>What it removes:</strong> the scheduled task / systemd service, the <code>hb-node</code> binary, and the local <code>HoneyBeeNode/</code> data folder (including any installed honeypots). Server-side deployment history is preserved.
           </div>
@@ -1238,20 +1250,20 @@ export default function NodeDetailPage() {
         <div className="card" style={{ padding: "24px 26px", borderColor: "rgba(239,68,68,0.25)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(239,68,68,0.08)", display: "grid", placeItems: "center", border: "1.5px solid rgba(239,68,68,0.2)" }}>
-              <Ico d={I.warn} size={18} color="#DC2626" />
+              <Ico d={I.warn} size={18} color="var(--danger)" />
             </div>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: "#DC2626" }}>Danger Zone</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--danger)" }}>Danger Zone</h3>
           </div>
 
           {/* What will happen — always visible */}
           <div style={{
             padding: "16px 18px", borderRadius: 12, marginBottom: 20,
-            background: "rgba(254,242,242,0.6)", border: "1px solid rgba(239,68,68,0.2)",
+            background: "var(--danger-bg)", border: "1px solid rgba(239,68,68,0.2)",
           }}>
-            <p style={{ fontSize: 12.5, fontWeight: 800, color: "#991B1B", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <p style={{ fontSize: 12.5, fontWeight: 800, color: "var(--danger)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>
               What will happen when you delete this node:
             </p>
-            <ul style={{ margin: 0, padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: 6, fontSize: 13, color: "#7F1D1D", lineHeight: 1.55 }}>
+            <ul style={{ margin: 0, padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: 6, fontSize: 13, color: "var(--danger)", lineHeight: 1.55 }}>
               <li>A <strong>remote uninstall command</strong> is sent to the agent on the machine — it will stop the service and remove itself.</li>
               <li>All <strong>{runningCount > 0 ? `${runningCount} running honeypot${runningCount !== 1 ? "s" : ""}` : "running honeypots"}</strong> on this node will be <strong>stopped</strong> and their containers removed.</li>
               <li>The node record and all <strong>{deps.length} deployment{deps.length !== 1 ? "s" : ""}</strong> will be <strong>permanently deleted</strong> from the dashboard.</li>
@@ -1262,9 +1274,9 @@ export default function NodeDetailPage() {
               <div style={{
                 marginTop: 12, padding: "10px 12px", borderRadius: 8,
                 background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
-                fontSize: 12.5, color: "#92400E", display: "flex", alignItems: "flex-start", gap: 8,
+                fontSize: 12.5, color: "var(--accent)", display: "flex", alignItems: "flex-start", gap: 8,
               }}>
-                <Ico d={I.warn} size={14} color="#D97706" />
+                <Ico d={I.warn} size={14} color="var(--accent)" />
                 <span><strong>Node is currently offline.</strong> The remote uninstall command may not be delivered. The agent and any honeypots on the machine will continue running until the machine is reachable or manually cleaned up.</span>
               </div>
             )}
@@ -1272,15 +1284,15 @@ export default function NodeDetailPage() {
 
           {!confirmUninstall ? (
             <button onClick={() => setConfirmUninstall(true)} className="btn btn-danger" style={{ display: "inline-flex", gap: 7 }}>
-              <Ico d={I.trash} size={14} color="#FFFFFF" /> Uninstall agent &amp; delete node
+              <Ico d={I.trash} size={14} color="var(--danger)" /> Uninstall agent &amp; delete node
             </button>
           ) : (
             <div style={{
               padding: "20px 22px", borderRadius: 14,
-              background: "#FEF2F2", border: "1.5px solid #FECACA",
+              background: "rgba(239,68,68,0.13)", border: "1.5px solid rgba(239,68,68,0.35)",
             }}>
-              <p style={{ fontWeight: 800, color: "#DC2626", fontSize: 14, marginBottom: 6 }}>Are you absolutely sure?</p>
-              <p style={{ fontSize: 13, color: "#B91C1C", marginBottom: 18, lineHeight: 1.55 }}>
+              <p style={{ fontWeight: 800, color: "var(--danger)", fontSize: 14, marginBottom: 6 }}>Are you absolutely sure?</p>
+              <p style={{ fontSize: 13, color: "var(--danger)", marginBottom: 18, lineHeight: 1.55 }}>
                 Node <strong>{node.name}</strong> and all <strong>{deps.length} deployment(s)</strong> will be permanently deleted.
               </p>
               <div style={{ display: "flex", gap: 10 }}>
@@ -1350,18 +1362,18 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(245,158,11,0.1)", display: "grid", placeItems: "center", border: "1.5px solid rgba(245,158,11,0.25)" }}>
-              <Ico d={I.shield} size={18} color="#F59E0B" />
+              <Ico d={I.shield} size={18} color="var(--accent)" />
             </div>
             <div>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0F172A", margin: 0 }}>Performance Metrics</h3>
-              <p style={{ fontSize: 12, color: "#94A3B8", margin: 0 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", margin: 0 }}>Performance Metrics</h3>
+              <p style={{ fontSize: 12, color: "var(--text-faint)", margin: 0 }}>
                 {online ? "Real-time monitoring" : "Last known values"}
               </p>
             </div>
           </div>
           <div style={{
             display: "inline-flex", alignItems: "center", padding: 4,
-            background: "#F8FAFC", border: "1px solid #E2E8F0",
+            background: "var(--bg-2)", border: "1px solid var(--border)",
             borderRadius: 12, gap: 4,
             boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)"
           }}>
@@ -1371,7 +1383,7 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
               onChange={(e) => setRefreshInterval(Number(e.target.value))}
               style={{ 
                 padding: "6px 26px 6px 12px", fontSize: 12.5, minWidth: 120, height: 30, 
-                background: "transparent", border: "none", boxShadow: "none", color: "#475569", fontWeight: 600
+                background: "transparent", border: "none", boxShadow: "none", color: "var(--text-muted)", fontWeight: 600
               }}
             >
               <option value={0}>Manual Refresh</option>
@@ -1380,7 +1392,7 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
               <option value={900000}>Every 15 mins</option>
             </select>
             
-            <div style={{ width: 1, height: 16, background: "#CBD5E1", margin: "0 2px" }} />
+            <div style={{ width: 1, height: 16, background: "var(--border-2)", margin: "0 2px" }} />
             
             <select
               className="input"
@@ -1388,7 +1400,7 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
               onChange={(e) => setHours(Number(e.target.value))}
               style={{ 
                 padding: "6px 26px 6px 12px", fontSize: 12.5, minWidth: 110, height: 30, 
-                background: "transparent", border: "none", boxShadow: "none", color: "#475569", fontWeight: 600
+                background: "transparent", border: "none", boxShadow: "none", color: "var(--text-muted)", fontWeight: 600
               }}
             >
               <option value={1}>Last 1 hour</option>
@@ -1402,8 +1414,8 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
               disabled={isFetching || isCommandPending}
               style={{
                 padding: "0 14px", height: 30, borderRadius: 8, fontSize: 12.5, fontWeight: 700,
-                background: "#FFFFFF", border: "1px solid #E2E8F0",
-                color: (isFetching || isCommandPending) ? "#94A3B8" : "#0F172A",
+                background: "var(--surface)", border: "1px solid var(--border)",
+                color: (isFetching || isCommandPending) ? "var(--text-faint)" : "var(--text)",
                 cursor: (isFetching || isCommandPending) ? "not-allowed" : "pointer",
                 display: "flex", alignItems: "center", gap: 6,
                 boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
@@ -1414,17 +1426,17 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
                 animation: (isFetching || isCommandPending) ? "spin 1s linear infinite" : "none",
                 display: "inline-flex"
               }}>
-                <Ico d={I.restart} size={13} color={(isFetching || isCommandPending) ? "#94A3B8" : "#B45309"} />
+                <Ico d={I.restart} size={13} color={(isFetching || isCommandPending) ? "var(--text-faint)" : "var(--accent)"} />
               </span>
               {(isFetching || isCommandPending) ? "Refreshing…" : "Refresh"}
             </button>
             {refreshInterval > 0 && (
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 5, padding: "0 10px", height: 30,
-                borderRadius: 8, background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)",
-                fontSize: 11.5, fontWeight: 700, color: "#16A34A",
+                borderRadius: 8, background: "var(--ok-bg)", border: "1px solid rgba(34,197,94,0.25)",
+                fontSize: 11.5, fontWeight: 700, color: "var(--ok)",
               }}>
-                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22C55E", animation: "pulse-green 2s infinite" }} />
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--ok)", animation: "pulse-green 2s infinite" }} />
                 Auto
               </div>
             )}
@@ -1437,9 +1449,9 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
             <MetricGauge label="CPU" value={latest.cpu_pct} color="#F59E0B" />
             <MetricGauge label="Memory" value={latest.mem_pct} color="#3B82F6" />
             <MetricGauge label="Disk" value={latest.disk_pct} color="#10B981" />
-            <div style={{ padding: 12, borderRadius: 10, background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.07)", textAlign: "center" }}>
-              <p style={{ fontSize: 10.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Uptime</p>
-              <p style={{ fontSize: 18, fontWeight: 900, color: "#0F172A" }}>{formatUptime(latest.uptime_secs)}</p>
+            <div style={{ padding: 12, borderRadius: 10, background: "var(--bg-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+              <p style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Uptime</p>
+              <p style={{ fontSize: 18, fontWeight: 900, color: "var(--text)" }}>{formatUptime(latest.uptime_secs)}</p>
             </div>
           </div>
         )}
@@ -1449,7 +1461,7 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
             <div style={{ width: 24, height: 24, borderRadius: "50%", border: "3px solid #F59E0B", borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
           </div>
         ) : history.length === 0 ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
+          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>
             No metrics data available yet. Metrics are recorded with each heartbeat.
           </div>
         ) : (
@@ -1458,7 +1470,7 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
               <div style={{
                 position: "absolute", inset: 0, zIndex: 10,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                background: "rgba(255,255,255,0.55)", borderRadius: 8,
+                background: "var(--glass)", borderRadius: 8,
               }}>
                 <div style={{ width: 20, height: 20, borderRadius: "50%", border: "3px solid #F59E0B", borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
               </div>
@@ -1479,10 +1491,10 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
                     <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-                <XAxis dataKey="recorded_at" tickFormatter={fmtTime} tick={{ fontSize: 11 }} stroke="#94A3B8" />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="#94A3B8" tickFormatter={(v: number) => `${v}%`} />
-                <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12 }} formatter={(v: any) => `${Number(v).toFixed(1)}%`} labelFormatter={(label: any) => fmtTime(String(label))} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="recorded_at" tickFormatter={fmtTime} tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={(v: number) => `${v}%`} />
+                <Tooltip contentStyle={{ background: "var(--surface)", borderRadius: 8, border: "1px solid var(--border)", color: "var(--text)", fontSize: 12 }} formatter={(v: any) => `${Number(v).toFixed(1)}%`} labelFormatter={(label: any) => fmtTime(String(label))} />
                 <Legend />
                 <Area type="monotone" dataKey="cpu_pct" stroke="#F59E0B" strokeWidth={2} fill="url(#cpuGrad)" name="CPU %" />
                 <Area type="monotone" dataKey="mem_pct" stroke="#3B82F6" strokeWidth={2} fill="url(#memGrad)" name="Memory %" />
@@ -1499,10 +1511,10 @@ function NodeMetricsPanel({ nodeId, online }: { nodeId: string; online: boolean 
 function MetricGauge({ label, value, color }: { label: string; value: number; color: string }) {
   const pct = Math.min(value, 100);
   return (
-    <div style={{ padding: 12, borderRadius: 10, background: "#F8FAFC", border: "1px solid rgba(15,23,42,0.07)", textAlign: "center" }}>
-      <p style={{ fontSize: 10.5, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{label}</p>
+    <div style={{ padding: 12, borderRadius: 10, background: "var(--bg-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+      <p style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{label}</p>
       <p style={{ fontSize: 22, fontWeight: 900, color, marginBottom: 6 }}>{pct.toFixed(1)}%</p>
-      <div style={{ height: 5, borderRadius: 3, background: "rgba(15,23,42,0.06)" }}>
+      <div style={{ height: 5, borderRadius: 3, background: "var(--bg-2)" }}>
         <div style={{ height: 5, borderRadius: 3, background: color, width: `${pct}%`, transition: "width 0.5s ease" }} />
       </div>
     </div>

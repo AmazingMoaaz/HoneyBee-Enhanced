@@ -20,6 +20,10 @@ var migrationFS embed.FS
 // Store is the central database handle.
 type Store struct {
 	DB *sqlx.DB
+	// AuditHook, if set, is invoked after every successful LogAudit write so
+	// integrations (e.g. Telegram notifications) can react. Optional, nil-safe,
+	// and called inline — keep implementations fast / fire-and-forget.
+	AuditHook func(orgID int64, userID *int64, action, resource string)
 }
 
 // Open dials MySQL, auto-creates the database if it does not exist,

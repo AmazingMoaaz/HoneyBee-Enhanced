@@ -19,8 +19,11 @@ import (
 	"github.com/honeybee-enhanced/core/internal/config"
 	"github.com/honeybee-enhanced/core/internal/loganalyzer"
 	"github.com/honeybee-enhanced/core/internal/nodeserver"
+	"github.com/honeybee-enhanced/core/internal/notify"
 	"github.com/honeybee-enhanced/core/internal/potstore"
 	"github.com/honeybee-enhanced/core/internal/store"
+	"github.com/honeybee-enhanced/core/internal/telegram"
+	"github.com/honeybee-enhanced/shared/clog"
 )
 
 func main() {
@@ -32,7 +35,8 @@ func main() {
 		panic(err)
 	}
 
-	logger := newLogger(cfg.Log.Level)
+	print(clog.Banner("core", "dev"))
+	logger := clog.New(cfg.Log.Level)
 	if cfg.JWT.Secret == "change-me" {
 		logger.Warn("SECURITY: JWT_SECRET is set to the insecure default 'change-me' — set the JWT_SECRET environment variable before deploying")
 	}
@@ -53,6 +57,11 @@ func main() {
 	if err := st.Migrate(rootCtx); err != nil {
 		logger.Error("migrate", slog.Any("err", err))
 		os.Exit(1)
+	}
+	// Ensure every existing org has the built-in roles seeded (admin/operator/
+	// viewer) now that roles are first-class rows backing custom permissions.
+	if err := st.SeedSystemRolesAllOrgs(rootCtx); err != nil {
+		logger.Warn("seed system roles", slog.Any("err", err))
 	}
 	if err := st.MarkAllNodesOffline(rootCtx); err != nil {
 		logger.Warn("mark nodes offline", slog.Any("err", err))
@@ -93,11 +102,19 @@ func main() {
 			slog.String("url", cfg.LogAnalyzer.URL),
 			slog.Int("retention_days", cfg.LogAnalyzer.RetentionDays))
 	}
+	// Telegram notifications: wrap the WS hub so every broadcast signal is also
+	// dispatched (fire-and-forget) to subscribed Telegram bots. The wrapper is
+	// passed wherever a ws.Broadcaster is needed; the concrete hub is still used
+	// for the /ws upgrade handler.
+	tgNotifier := notify.New(st, telegram.New(logger), logger)
+	st.AuditHook = tgNotifier.AuditHook
+	notifyBC := notify.NewBroadcaster(hub, tgNotifier)
+
 	ns := nodeserver.NewServer(nodeserver.Config{
 		Addr:      cfg.Server.NodeAddr,
 		TLSConfig: tlsCfg,
 	}, st, logger)
-	ns.SetBroadcaster(hub)
+	ns.SetBroadcaster(notifyBC)
 	ns.SetLogAnalyzer(laClient)
 
 	go func() {
@@ -106,7 +123,7 @@ func main() {
 		}
 	}()
 
-	router := api.Build(cfg, st, ns, psClient, hub, laClient, logger)
+	router := api.Build(cfg, st, ns, psClient, hub, notifyBC, tgNotifier, laClient, logger)
 	srv := &http.Server{
 		Addr:              cfg.Server.HTTPAddr,
 		Handler:           router,
@@ -125,21 +142,6 @@ func main() {
 	shutCtx, cancelShut := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancelShut()
 	_ = srv.Shutdown(shutCtx)
-}
-
-func newLogger(level string) *slog.Logger {
-	var l slog.Level
-	switch level {
-	case "debug":
-		l = slog.LevelDebug
-	case "warn":
-		l = slog.LevelWarn
-	case "error":
-		l = slog.LevelError
-	default:
-		l = slog.LevelInfo
-	}
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: l}))
 }
 
 func signalCtx() (context.Context, context.CancelFunc) {

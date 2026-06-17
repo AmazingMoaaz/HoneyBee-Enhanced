@@ -14,6 +14,7 @@ import (
 	"github.com/honeybee-enhanced/node/internal/eventfwd"
 	"github.com/honeybee-enhanced/node/internal/honeypot"
 	"github.com/honeybee-enhanced/node/internal/session"
+	"github.com/honeybee-enhanced/shared/clog"
 )
 
 // Version is set at build time via -ldflags "-X main.Version=v1.2.3".
@@ -27,7 +28,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	logger := newLogger(cfg.Log.Level)
+	print(clog.Banner("node", Version))
+	logger := clog.New(cfg.Log.Level)
 	logger.Info("starting honeybee-enhanced node",
 		slog.String("version", Version),
 		slog.String("server", cfg.Server.Address),
@@ -64,19 +66,4 @@ func main() {
 	if err := a.Run(ctx); err != nil && ctx.Err() == nil {
 		logger.Error("agent stopped", slog.Any("err", err))
 	}
-}
-
-func newLogger(level string) *slog.Logger {
-	var l slog.Level
-	switch level {
-	case "debug":
-		l = slog.LevelDebug
-	case "warn":
-		l = slog.LevelWarn
-	case "error":
-		l = slog.LevelError
-	default:
-		l = slog.LevelInfo
-	}
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: l}))
 }
