@@ -269,3 +269,12 @@ ALTER TABLE nodes ADD COLUMN la_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE nodes ADD COLUMN la_workspace_id VARCHAR(64) NOT NULL DEFAULT '';
 ALTER TABLE nodes ADD COLUMN la_workspace_name VARCHAR(255) NOT NULL DEFAULT '';
 ALTER TABLE nodes ADD COLUMN la_ingest_token VARCHAR(255) NOT NULL DEFAULT '';
+
+-- ── GeoIP enrichment on events (live attack map) ────────────────────────────
+-- Populated server-side from MaxMind GeoLite2-City. DOUBLE matches the Go
+-- float64 lat/lon fields without precision loss. Keep comments semicolon-free
+-- so the naive statement splitter does not break on them.
+ALTER TABLE events ADD COLUMN country_code VARCHAR(2)   NOT NULL DEFAULT '';
+ALTER TABLE events ADD COLUMN city         VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE events ADD COLUMN lat          DOUBLE       NOT NULL DEFAULT 0;
+ALTER TABLE events ADD COLUMN lon          DOUBLE       NOT NULL DEFAULT 0;

@@ -95,6 +95,26 @@ func main() {
 		tlsCfg = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13}
 	}
 
+	// Optional GeoIP enrichment: load the MaxMind GeoLite2-City DB if present.
+	// A relative path is resolved against the config file's directory (matching
+	// the potstore file:// handling above) so the DB is found regardless of the
+	// process working directory. If it can't be opened, lookups return empty and
+	// the system runs without geolocation.
+	if cfg.Server.GeoDBPath != "" {
+		geoPath := cfg.Server.GeoDBPath
+		if !filepath.IsAbs(geoPath) {
+			cfgAbs, _ := filepath.Abs(*cfgPath)
+			geoPath = filepath.Join(filepath.Dir(cfgAbs), geoPath)
+		}
+		if err := nodeserver.InitGeoIP(geoPath); err != nil {
+			logger.Warn("geoip database not loaded — attack map will be empty",
+				slog.String("path", geoPath), slog.Any("err", err))
+		} else {
+			logger.Info("geoip database loaded", slog.String("path", geoPath))
+			defer nodeserver.CloseGeoIP()
+		}
+	}
+
 	hub := ws.NewHub(logger, cfg.Server.AllowedOrigins)
 	laClient := loganalyzer.New(cfg.LogAnalyzer, logger)
 	if laClient.Enabled() {

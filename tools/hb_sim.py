@@ -222,12 +222,44 @@ USER_AGENTS = ["curl/7.88", "python-requests/2.31", "Mozilla/5.0", "Go-http-clie
 HTTP_METHODS = ["GET", "POST", "PUT", "HEAD"]
 
 
+# Real, allocated public /16 prefixes spread across ~30 countries so the live
+# attack map populates with geolocatable dots worldwide. MaxMind resolves these
+# to a country/city; private/reserved/RFC5737 doc ranges do NOT geolocate, so we
+# deliberately avoid them — otherwise the map would stay half-empty.
+PUBLIC_PREFIXES = [
+    "8.8", "4.2", "23.20", "50.16", "104.16", "63.10",          # USA
+    "142.0", "24.48", "70.48",                                   # Canada
+    "77.0", "85.10", "91.0", "217.0",                            # Germany
+    "79.0", "93.32", "151.0",                                    # Italy
+    "80.24", "83.32", "88.0",                                    # Spain
+    "90.0", "176.0", "194.0", "92.0",                            # France
+    "51.0", "81.0", "86.0", "212.0",                             # UK
+    "31.0", "82.0", "145.0",                                     # Netherlands
+    "78.64", "81.224", "194.71",                                 # Sweden
+    "95.0", "178.0", "5.45", "188.0",                            # Russia
+    "31.40", "46.118", "176.36",                                 # Ukraine
+    "5.172", "151.236",                                          # Poland
+    "78.160", "88.224", "176.232",                               # Turkey
+    "1.2", "14.0", "27.0", "61.0", "114.114", "123.0",           # China
+    "126.0", "133.0", "153.0", "210.0",                          # Japan
+    "1.16", "112.0", "175.192", "211.32",                        # South Korea
+    "49.0", "59.0", "117.0", "182.0",                            # India
+    "36.64", "114.4", "180.240",                                 # Indonesia
+    "14.160", "113.160", "123.16",                               # Vietnam
+    "1.120", "27.32", "139.130",                                 # Australia
+    "177.0", "187.0", "200.0", "201.0",                          # Brazil
+    "187.128", "189.128", "201.128",                             # Mexico
+    "2.48", "94.200", "217.165",                                 # UAE
+    "5.42", "37.16", "94.56",                                    # Saudi Arabia
+    "2.144", "5.106", "91.98",                                   # Iran
+    "41.32", "156.160", "197.32",                                # Egypt
+    "41.0", "105.0", "196.0", "102.0",                           # Africa (misc)
+]
+
+
 def random_ip():
-    pools = [(203, 0, 113), (198, 51, 100), (192, 0, 2)]  # RFC5737 doc ranges
-    if random.random() < 0.45:
-        a, b, c = random.choice(pools)
-        return f"{a}.{b}.{c}.{random.randint(1, 254)}"
-    return ".".join(str(random.randint(1, 254)) for _ in range(4))
+    pre = random.choice(PUBLIC_PREFIXES)
+    return f"{pre}.{random.randint(0, 255)}.{random.randint(1, 254)}"
 
 
 def rand_sha():

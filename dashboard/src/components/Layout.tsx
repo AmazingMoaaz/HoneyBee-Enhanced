@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { to: "/nodes",     label: "Nodes",      icon: Icons.server,    group: "Operations", desc: "Honeypot hosts" },
   { to: "/potstore",  label: "Store",      icon: Icons.honeypot,  group: "Operations", desc: "Browse & deploy" },
   { to: "/events",    label: "Events",     icon: Icons.activity,  group: "Monitoring", desc: "Attacker activity" },
+  { to: "/attack-map", label: "Attack Map", icon: Icons.globe,    group: "Monitoring", desc: "Live threat origins" },
   { to: "/analytics", label: "Analytics",  icon: Icons.chart,     group: "Monitoring", desc: "Trends & insights" },
   { to: "/alerts",    label: "Alerts",     icon: Icons.bell,      group: "Monitoring", desc: "Security alerts" },
   { to: "/audit-log", label: "Audit Log",  icon: Icons.clipboard, group: "Security",   desc: "Activity history" },
@@ -36,6 +37,7 @@ function getPageTitle(pathname: string): string {
   if (pathname === "/")                  return "Dashboard";
   if (pathname.startsWith("/nodes"))     return "Node Manager";
   if (pathname.startsWith("/events"))    return "Event Stream";
+  if (pathname.startsWith("/attack-map")) return "Attack Map";
   if (pathname.startsWith("/analytics")) return "Attack Analytics";
   if (pathname.startsWith("/alerts"))    return "Alerts";
   if (pathname.startsWith("/audit-log")) return "Audit Log";
@@ -52,6 +54,7 @@ function getPageBreadcrumb(pathname: string): string[] {
   if (pathname.startsWith("/nodes/"))     return ["Fleet", "Node detail"];
   if (pathname.startsWith("/nodes"))      return ["Fleet"];
   if (pathname.startsWith("/events"))     return ["Telemetry"];
+  if (pathname.startsWith("/attack-map")) return ["Telemetry"];
   if (pathname.startsWith("/analytics"))  return ["Intelligence"];
   if (pathname.startsWith("/alerts"))     return ["Security"];
   if (pathname.startsWith("/audit-log"))  return ["Security"];
@@ -137,6 +140,50 @@ function SideItem({ item, expanded, active, delay, badge, animate }: {
         </span>
       )}
     </NavLink>
+  );
+}
+
+/* Floating launcher (bottom-right) that opens the external Log Analyzer in a
+   new tab. Renders only when the integration is enabled and a public URL is
+   configured — otherwise it stays hidden. Uses LA's violet identity. */
+function LogAnalyzerFab() {
+  const [hover, setHover] = useState(false);
+  const { data } = useQuery({
+    queryKey: ["integrations", "log-analyzer"],
+    queryFn: async () => (await api.get("/integrations/log-analyzer")).data,
+    staleTime: 60_000,
+  });
+  if (!data?.enabled || !data?.public_url) return null;
+  // Compact circular launcher that expands to a labelled pill on hover, so it
+  // keeps a small footprint and doesn't blanket page content in the corner.
+  return (
+    <a
+      href={data.public_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Open Log Analyzer in a new tab"
+      className="fixed z-40 flex items-center animate-fade-in"
+      style={{
+        right: 22, bottom: 22, height: 50,
+        width: hover ? 192 : 50,
+        justifyContent: hover ? "flex-start" : "center",
+        paddingLeft: hover ? 16 : 0, paddingRight: hover ? 18 : 0, gap: 10,
+        borderRadius: 25, overflow: "hidden", whiteSpace: "nowrap",
+        background: "linear-gradient(135deg, #A78BFA 0%, #7C3AED 58%, #6D28D9 100%)",
+        color: "#fff", textDecoration: "none", fontWeight: 700, fontSize: 13.5,
+        boxShadow: hover
+          ? "0 18px 44px rgba(124,58,237,0.55), inset 0 1px 0 rgba(255,255,255,0.3)"
+          : "0 10px 26px rgba(124,58,237,0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
+        transition: "width .26s cubic-bezier(.2,.8,.2,1), padding .26s, box-shadow .2s",
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <span className="grid place-items-center shrink-0" style={{ width: 22 }}><Icon d={Icons.search} size={19} sw={2.2} /></span>
+      <span style={{ display: "flex", alignItems: "center", gap: 7, opacity: hover ? 1 : 0, transition: "opacity .18s" }}>
+        Log Analyzer <Icon d={Icons.external} size={13} sw={2.2} />
+      </span>
+    </a>
   );
 }
 
@@ -481,10 +528,13 @@ export default function Layout() {
           screens, centered within the available area. */}
       <main className="bg-layer pt-16 min-h-screen animate-fade-in"
             style={{ paddingLeft: padLeft, paddingRight: PAD_X, transition: "padding-left .28s cubic-bezier(.2,.8,.2,1)" }}>
-        <div className="py-7 max-w-[1400px] mx-auto">
+        <div className="py-7 max-w-[1400px] mx-auto" style={{ paddingBottom: 96 }}>
           <Outlet />
         </div>
       </main>
+
+      {/* Floating Log Analyzer launcher (bottom-right) — hidden when LA is off */}
+      <LogAnalyzerFab />
     </div>
   );
 }

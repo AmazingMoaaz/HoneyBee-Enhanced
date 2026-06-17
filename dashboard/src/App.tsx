@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage";
 import NodesPage from "./pages/NodesPage";
 import NodeDetailPage from "./pages/NodeDetailPage";
 import EventsPage from "./pages/EventsPage";
+import AttackMapPage from "./pages/AttackMapPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import AlertsPage from "./pages/AlertsPage";
 import AuditLogPage from "./pages/AuditLogPage";
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/nodes" element={<NodesPage />} />
         <Route path="/nodes/:id" element={<NodeDetailPage />} />
         <Route path="/events" element={<EventsPage />} />
+        <Route path="/attack-map" element={<AttackMapPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/audit-log" element={<AuditLogPage />} />

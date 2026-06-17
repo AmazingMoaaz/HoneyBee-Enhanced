@@ -67,6 +67,7 @@ type ServerConfig struct {
 	NodePublicAddr string   `yaml:"node_public_addr" json:"node_public_addr"`
 	PublicHTTPAddr string   `yaml:"public_http_addr" json:"public_http_addr"`
 	AllowedOrigins []string `yaml:"allowed_origins" json:"allowed_origins"`
+	GeoDBPath      string   `yaml:"geo_db_path"     json:"geo_db_path"` // MaxMind GeoLite2-City.mmdb path (optional)
 }
 
 // DatabaseConfig holds MySQL connection details.
@@ -149,6 +150,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("NODE_ADDR"); v != "" {
 		cfg.Server.NodeAddr = v
 	}
+	if v := os.Getenv("GEO_DB_PATH"); v != "" {
+		cfg.Server.GeoDBPath = v
+	}
 	if v := os.Getenv("DB_DSN"); v != "" {
 		cfg.Database.DSN = v
 	}
@@ -178,6 +182,7 @@ func defaultConfig() *Config {
 			HTTPAddr:       "0.0.0.0:5400",
 			NodeAddr:       "0.0.0.0:9001",
 			AllowedOrigins: nil, // nil = auto-allow loopback + RFC1918 LAN origins
+			GeoDBPath:      "GeoLite2-City.mmdb",
 		},
 		Database: DatabaseConfig{
 			DSN:     "root:password@tcp(127.0.0.1:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4",

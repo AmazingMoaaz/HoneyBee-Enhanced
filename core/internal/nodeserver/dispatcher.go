@@ -169,6 +169,7 @@ func (d *Dispatcher) handlePotEvent(ctx context.Context, sess *Session, env *pro
 	if dep != nil {
 		depID = &dep.ID
 	}
+	geo := LookupIP(pe.SourceIP) // GeoIP enrichment (empty if DB unloaded / private IP)
 	ev := &models.Event{
 		OrgID:        sess.orgID,
 		NodeID:       sess.nodeID,
@@ -180,6 +181,10 @@ func (d *Dispatcher) handlePotEvent(ctx context.Context, sess *Session, env *pro
 		SourcePort:   pe.SourcePort,
 		DestPort:     pe.DestPort,
 		Data:         dataStr,
+		CountryCode:  geo.CountryCode,
+		City:         geo.City,
+		Lat:          geo.Lat,
+		Lon:          geo.Lon,
 		EventTime:    pe.EventTime,
 	}
 	if _, err := d.store.InsertEvent(ctx, ev); err != nil {

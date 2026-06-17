@@ -210,6 +210,10 @@ type Event struct {
 	SourcePort   int       `json:"source_port" db:"source_port"`
 	DestPort     int       `json:"dest_port" db:"dest_port"`
 	Data         string    `json:"data" db:"data"` // raw JSON
+	CountryCode  string    `json:"country_code" db:"country_code"` // GeoIP enrichment
+	City         string    `json:"city" db:"city"`
+	Lat          float64   `json:"lat" db:"lat"`
+	Lon          float64   `json:"lon" db:"lon"`
 	EventTime    time.Time `json:"event_time" db:"event_time"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
