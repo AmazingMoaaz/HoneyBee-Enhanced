@@ -544,19 +544,31 @@ echo "Done. Node '$NODE_NAME' (ID $NODE_ID) → $HB_ADDR"
 // nodePublicAddr resolves the TCP address that node agents should dial.
 // Prefers cfg.Server.NodePublicAddr; falls back to the resolved public host + node port.
 func (h *NodesHandler) nodePublicAddr(r *http.Request) string {
+	_, port, _ := net.SplitHostPort(h.Cfg.Server.NodeAddr)
+	if port == "" {
+		port = "9001"
+	}
 	if h.Cfg.Server.NodePublicAddr != "" {
-		return h.Cfg.Server.NodePublicAddr
+		// Operators may configure just a host (e.g. "node.example.com"). The
+		// agent dials raw TCP and REQUIRES a host:port, so when the configured
+		// value omits a port we append the node listener's port automatically.
+		return withDefaultPort(h.Cfg.Server.NodePublicAddr, port)
 	}
 	hostport := resolvePublicHost(r)
 	hostname := hostport
 	if host, _, err := net.SplitHostPort(hostport); err == nil {
 		hostname = host
 	}
-	_, port, _ := net.SplitHostPort(h.Cfg.Server.NodeAddr)
-	if port == "" {
-		port = "9001"
-	}
 	return net.JoinHostPort(hostname, port)
+}
+
+// withDefaultPort returns addr unchanged when it already includes a port,
+// otherwise appends ":port". Handles bare hosts and IPv6 literals.
+func withDefaultPort(addr, port string) string {
+	if _, _, err := net.SplitHostPort(addr); err == nil {
+		return addr // already host:port
+	}
+	return net.JoinHostPort(addr, port)
 }
 
 // resolvePublicHost returns the host:port to use in generated scripts.
