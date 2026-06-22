@@ -19,12 +19,6 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    // Hostnames allowed to reach the dev server (behind the h0neybee.online
-    // reverse proxy). Without this, Vite returns "Blocked request. This host is
-    // not allowed." for the public domain. localhost and bare IPs bypass this
-    // check automatically, so LAN access still works. The leading-dot entry
-    // also allows any subdomain (www., etc.). Add more domains as needed.
-    allowedHosts: ["h0neybee.online", ".h0neybee.online"],
     port: 5300,
     proxy: {
       "/api": {

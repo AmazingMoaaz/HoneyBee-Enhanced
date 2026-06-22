@@ -179,8 +179,8 @@ class Rest:
             return "register"
         raise SystemExit(f"auth failed (login + register both failed): {j}")
 
-    def register_node(self, name):
-        st, j = self.call("POST", "/nodes", {"name": name, "record_logs": False})
+    def register_node(self, name, record_logs=False):
+        st, j = self.call("POST", "/nodes", {"name": name, "record_logs": record_logs})
         if st in (200, 201) and j.get("token"):
             return j["id"], j["token"]
         raise RuntimeError(f"register node '{name}' failed: {st} {j}")
@@ -598,6 +598,9 @@ def main():
     ap.add_argument("--tls", action="store_true", help="use TLS for the node socket")
     ap.add_argument("--insecure", action="store_true", help="skip TLS cert verification (node + https REST)")
     ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--log-analyzer", action="store_true",
+                    help="create nodes with record_logs=True so their events/pot_logs forward to the Log Analyzer "
+                         "(requires the LA backend reachable at core's log_analyzer.url)")
     ap.add_argument("--verbose", action="store_true")
     cfg = ap.parse_args()
     if cfg.seed is not None:
@@ -628,9 +631,9 @@ def main():
     nodes = []
     for i in range(1, cfg.nodes + 1):
         try:
-            nid, tok = rest.register_node(f"sim-node-{i}")
+            nid, tok = rest.register_node(f"sim-node-{i}", record_logs=cfg.log_analyzer)
             nodes.append(NodeState(f"sim-node-{i}", nid, tok))
-            vlog(cfg.verbose, f"  registered sim-node-{i} (id={nid})")
+            vlog(cfg.verbose, f"  registered sim-node-{i} (id={nid}, log_analyzer={cfg.log_analyzer})")
         except Exception as e:
             log(f"  ! {e}")
     if not nodes:

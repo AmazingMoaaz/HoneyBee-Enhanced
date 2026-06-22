@@ -2,13 +2,9 @@
   "server": {
     "http_addr": "0.0.0.0:5400",
     "node_addr": "0.0.0.0:9001",
-    "node_public_addr": "node.0xnight-fury.me:9001",
+    "node_public_addr": "127.0.0.1:9001",
     "public_http_addr": "",
-    "allowed_origins": [
-      "https://h0neybee.online",
-      "https://www.h0neybee.online",
-      "http://localhost:5300"
-    ]
+    "allowed_origins": []
   },
   "database": {
     "dsn": "Moaaz:2591367@tcp(localhost:3306)/honeybee_enhanced?parseTime=true&charset=utf8mb4",
@@ -39,7 +35,7 @@
   },
   "log_analyzer": {
     "enabled": true,
-    "url": "http://localhost:8080",
+    "url": "http://localhost:9000",
     "public_url": "http://localhost:9005",
     "retention_days": 30
   }
